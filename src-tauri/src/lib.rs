@@ -1,8 +1,30 @@
+/// Walk the GTK widget tree under `container` and return the first descendant                                                                                            
+/// whose type name starts with `WebKitWebView` (the webkit2gtk webview widget).                                                                                          
+#[cfg(target_os = "linux")]
+fn find_webview_descendant(container: &gtk::Container) -> Option<gtk::Widget> {
+    use gtk::prelude::*;
+    for child in container.children() {
+        if child.type_().name().starts_with("WebKitWebView") {
+            return Some(child);
+        }
+        if let Some(inner) = child.downcast_ref::<gtk::Container>() {
+            if let Some(found) = find_webview_descendant(inner) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
 /// On Linux, Tauri's WebKitGTK webview intercepts trackpad pinch as page zoom
 /// before JS sees it. This attaches a GTK gesture controller that captures the
 /// pinch in the `Capture` phase and claims it (preventing WebKit from also
 /// handling it), then emits Tauri events that the frontend re-dispatches as
 /// synthetic Ctrl+wheel events.
+///                                                                                                                                                                       
+/// The gesture is attached to the WebKit webview widget (not the top-level GTK                                                                                           
+/// window) so `bounding_box_center()` returns coordinates in webview-local                                                                                               
+/// space, usable directly as `WheelEvent.clientX/clientY`.                                                                                                              
 #[cfg(target_os = "linux")]
 fn setup_linux_pinch(window: &tauri::WebviewWindow) {
     use gtk::prelude::*;
@@ -10,9 +32,11 @@ fn setup_linux_pinch(window: &tauri::WebviewWindow) {
     use tauri::{Emitter, Manager};
 
     let gtk_window = window.gtk_window().expect("gtk window");
+    let webview_widget = find_webview_descendant(gtk_window.upcast_ref())
+        .expect("WebKitWebView widget not found in gtk window");
     let app_handle = window.app_handle().clone();
 
-    let gesture = gtk::GestureZoom::new(&gtk_window);
+    let gesture = gtk::GestureZoom::new(&webview_widget);
     gesture.set_propagation_phase(PropagationPhase::Capture);
 
     let ah = app_handle.clone();
@@ -28,7 +52,7 @@ fn setup_linux_pinch(window: &tauri::WebviewWindow) {
     });
 
     unsafe {
-        gtk_window.set_data("zoom-gesture", gesture);
+        webview_widget.set_data("zoom-gesture", gesture);
     }
 }
 
