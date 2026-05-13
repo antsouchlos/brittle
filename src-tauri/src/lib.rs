@@ -1,3 +1,7 @@
+use std::fmt::Display;
+
+use log::error;
+
 /// Walk the GTK widget tree under `container` and return the first descendant                                                                                            
 /// whose type name starts with `WebKitWebView` (the webkit2gtk webview widget).                                                                                          
 #[cfg(target_os = "linux")]
@@ -16,6 +20,23 @@ fn find_webview_descendant(container: &gtk::Container) -> Option<gtk::Widget> {
     None
 }
 
+#[derive(Debug)]
+enum Error {
+    WebViewError,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl From<tauri::Error> for Error {
+    fn from(_: tauri::Error) -> Self {
+        Error::WebViewError
+    }
+}
+
 /// On Linux, Tauri's WebKitGTK webview intercepts trackpad pinch as page zoom
 /// before JS sees it. This attaches a GTK gesture controller that captures the
 /// pinch in the `Capture` phase and claims it (preventing WebKit from also
@@ -26,14 +47,14 @@ fn find_webview_descendant(container: &gtk::Container) -> Option<gtk::Widget> {
 /// window) so `bounding_box_center()` returns coordinates in webview-local                                                                                               
 /// space, usable directly as `WheelEvent.clientX/clientY`.                                                                                                              
 #[cfg(target_os = "linux")]
-fn setup_linux_pinch(window: &tauri::WebviewWindow) {
+fn setup_linux_pinch(window: &tauri::WebviewWindow) -> Result<(), Error> {
     use gtk::prelude::*;
     use gtk::{EventSequenceState, PropagationPhase};
     use tauri::{Emitter, Manager};
 
-    let gtk_window = window.gtk_window().expect("gtk window");
-    let webview_widget = find_webview_descendant(gtk_window.upcast_ref())
-        .expect("WebKitWebView widget not found in gtk window");
+    let gtk_window = window.gtk_window()?;
+    let webview_widget =
+        find_webview_descendant(gtk_window.upcast_ref()).ok_or(Error::WebViewError)?;
     let app_handle = window.app_handle().clone();
 
     let gesture = gtk::GestureZoom::new(&webview_widget);
@@ -51,34 +72,54 @@ fn setup_linux_pinch(window: &tauri::WebviewWindow) {
         let _ = ah.emit("pinch-scale", scale);
     });
 
+    // Keep the gesture alive for the lifetime of the webview widget by stashing
+    // it as widget data.
+    //
+    // `set_data` is `unsafe` because the key/type pairing isn't checked; we
+    // never read this slot back, and the gesture is dropped when the widget
+    // is destroyed at app shutdown.
     unsafe {
         webview_widget.set_data("zoom-gesture", gesture);
     }
+
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let result = tauri::Builder::default()
         .setup(|app| {
             #[cfg(target_os = "linux")]
             {
                 use tauri::Manager;
-                let window = app.get_webview_window("main").unwrap();
-                setup_linux_pinch(&window);
+                match app.get_webview_window("main") {
+                    Some(window) => {
+                        if let Err(e) = setup_linux_pinch(&window) {
+                            error!("Error while initializing touchpad pinch zoom events: {}", e);
+                        }
+                    }
+                    None => error!(
+                        "Failed to get WebView window, skipping touchpad pinch \
+                         zoom event initialization"
+                    ),
+                };
             }
-            #[cfg(debug_assertions)]
-            {
-                use tauri::Manager;
-                if let Some(win) = app.get_webview_window("main") {
-                    win.open_devtools();
-                }
-            }
+            // #[cfg(debug_assertions)]
+            // {
+            //     use tauri::Manager;
+            //     if let Some(win) = app.get_webview_window("main") {
+            //         win.open_devtools();
+            //     }
+            // }
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![greet])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+
+    if let Err(e) = result {
+        error!("Error while running tauri application: {}", e);
+    }
 }
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
