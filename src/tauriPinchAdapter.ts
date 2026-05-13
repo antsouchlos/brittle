@@ -3,11 +3,16 @@
  * before JS sees it. The Rust side captures the gesture and emits Tauri events;
  * this adapter re-dispatches them as synthetic Ctrl+wheel events so frontend
  * code can handle pinch the same way browsers natively report it.
+ *
+ * Returns a teardown fn that removes the Tauri event listeners. Needed so HMR
+ * reloads don't stack duplicate listeners across module reloads; the caller
+ * should invoke it from `import.meta.hot.dispose`.
  */
-export async function setupTauriPinchAdapter() {
+// TODO: Make zoom factor configurable (factor 100 on deltaY)
+export async function setupTauriPinchAdapter(): Promise<() => void> {
     // Bail out if not running inside Tauri
     if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
-        return;
+        return () => { };
     }
 
     // Dynamic import so the @tauri-apps/api code isn't even loaded in the browser
@@ -17,14 +22,14 @@ export async function setupTauriPinchAdapter() {
     let pinchOriginY = 0;
     let lastScale = 1;
 
-    await listen<[number, number]>('pinch-begin', (event) => {
+    const unlistenBegin = await listen<[number, number]>('pinch-begin', (event) => {
         const [x, y] = event.payload;
         pinchOriginX = x;
         pinchOriginY = y;
         lastScale = 1;
     });
 
-    await listen<number>('pinch-scale', (event) => {
+    const unlistenScale = await listen<number>('pinch-scale', (event) => {
         const currentScale = event.payload;
         const scaleRatio = currentScale / lastScale;
         lastScale = currentScale;
@@ -44,6 +49,11 @@ export async function setupTauriPinchAdapter() {
 
         target.dispatchEvent(wheelEvent);
     });
+
+    return () => {
+        unlistenBegin();
+        unlistenScale();
+    };
 }
 
 // `document.elementFromPoint` only sees light-DOM elements; the embed-pdf viewer
