@@ -30,7 +30,7 @@ export async function setupTauriPinchAdapter() {
         lastScale = currentScale;
 
         const deltaY = -Math.log(scaleRatio) * 100;
-        const target = document.elementFromPoint(pinchOriginX, pinchOriginY) ?? document.body;
+        const target = deepElementFromPoint(pinchOriginX, pinchOriginY) ?? document.body;
 
         const wheelEvent = new WheelEvent('wheel', {
             deltaY,
@@ -39,8 +39,22 @@ export async function setupTauriPinchAdapter() {
             clientY: pinchOriginY,
             bubbles: true,
             cancelable: true,
+            composed: true,
         });
 
         target.dispatchEvent(wheelEvent);
     });
+}
+
+// `document.elementFromPoint` only sees light-DOM elements; the embed-pdf viewer
+// renders inside a shadow root, so we recurse into shadow roots to find the
+// deepest element at the given viewport coordinates.
+function deepElementFromPoint(x: number, y: number): Element | null {
+    let el = document.elementFromPoint(x, y);
+    while (el && el.shadowRoot) {
+        const inner = el.shadowRoot.elementFromPoint(x, y);
+        if (!inner || inner === el) break;
+        el = inner;
+    }
+    return el;
 }
