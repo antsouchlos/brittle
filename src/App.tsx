@@ -4,10 +4,10 @@ import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 
-import ThreePaneLayout from './ThreePaneLayout';
+import TabbedShell from './TabbedShell';
 
 function App() {
-    return <ThreePaneLayout />;
+    return <TabbedShell />;
 }
 
 // function App() {
