@@ -1,5 +1,5 @@
 import ThreePaneLayout from './ThreePaneLayout';
-import { useLibrary, usePanels, useStore, useTreeState } from './store';
+import { useLibrary, usePanels, useStore, useTreeState } from '../store';
 
 /**
  * Adapter between the store and the (purely presentational) ThreePaneLayout.

@@ -1,5 +1,5 @@
 import { PDFViewer } from '@embedpdf/react-pdf-viewer';
-import { useDocument, type DocumentId, type ViewerState } from './store';
+import { useDocument, type DocumentId, type ViewerState } from '../store';
 
 interface PdfTabProps {
     documentId: DocumentId;

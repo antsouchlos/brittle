@@ -1,5 +1,7 @@
-import type { LibraryDto, UiStateDto } from './store';
-import { serializeUi, useStore } from './store';
+import { useEffect, useState } from 'react';
+import { useStore } from '../store';
+import { serializeUi } from './serialization';
+import type { LibraryDto, UiStateDto } from './dtos';
 
 const SAVE_DEBOUNCE_MS = 300;
 
@@ -69,6 +71,38 @@ export function subscribeAndSave(): () => void {
             timer = null;
         }
     };
+}
+
+/**
+ * Loads library + persisted UI state from Rust and hydrates the store before
+ * first render of the shell. Wires save-on-change subscription, with HMR-safe
+ * teardown to avoid stacking subscribers across module reloads.
+ */
+export function useHydration(): boolean {
+    const [ready, setReady] = useState(false);
+    const hydrate = useStore((s) => s.hydrate);
+
+    useEffect(() => {
+        let teardown: (() => void) | undefined;
+        let cancelled = false;
+        loadInitialState()
+            .then(({ libraryDto, uiDto }) => {
+                if (cancelled) return;
+                hydrate(libraryDto, uiDto);
+                teardown = subscribeAndSave();
+                setReady(true);
+            })
+            .catch((err) => {
+                console.error('initial state load failed', err);
+                if (!cancelled) setReady(true); // still render; store has defaults
+            });
+        return () => {
+            cancelled = true;
+            teardown?.();
+        };
+    }, [hydrate]);
+
+    return ready;
 }
 
 function browserFallbackLibrary(): LibraryDto {
