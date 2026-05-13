@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 import ThreePaneLayout from './ThreePaneLayout';
+import styles from './TabbedShell.module.css';
 
 type Tab =
     | { id: 'library'; kind: 'library'; title: string }
@@ -40,18 +41,14 @@ export default function TabbedShell() {
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <div className={styles.root}>
             <TabBar tabs={tabs} activeId={activeId} onActivate={activate} onClose={closeTab} />
-            <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+            <div className={styles.body}>
                 {tabs.map((t) =>
                     mountedIds.has(t.id) ? (
                         <div
                             key={t.id}
-                            style={{
-                                position: 'absolute',
-                                inset: 0,
-                                display: t.id === activeId ? 'block' : 'none',
-                            }}
+                            className={`${styles.pane} ${t.id === activeId ? '' : styles.paneHidden}`}
                         >
                             {t.kind === 'library' ? (
                                 <ThreePaneLayout />
@@ -92,60 +89,39 @@ interface TabBarProps {
 
 function TabBar({ tabs, activeId, onActivate, onClose }: TabBarProps) {
     return (
-        <div
-            style={{
-                display: 'flex',
-                alignItems: 'stretch',
-                background: '#f3f4f6',
-                borderBottom: '1px solid #e5e7eb',
-                fontFamily: 'system-ui, -apple-system, sans-serif',
-                fontSize: 13,
-                userSelect: 'none',
-            }}
-        >
+        <div className={styles.tabBar}>
             {tabs.map((t) => {
                 const isActive = t.id === activeId;
                 const closable = t.kind !== 'library';
                 return (
                     <div
                         key={t.id}
+                        className={styles.tab}
+                        data-active={isActive}
+                        tabIndex={0}
+                        role="tab"
+                        aria-selected={isActive}
                         onClick={() => onActivate(t.id)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                onActivate(t.id);
+                            } else if ((e.key === 'Delete' || e.key === 'Backspace') && closable) {
+                                e.preventDefault();
+                                onClose(t.id);
+                            }
+                        }}
                         onAuxClick={(e) => {
                             if (e.button === 1 && closable) onClose(t.id);
                         }}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '8px 12px',
-                            cursor: 'pointer',
-                            background: isActive ? '#ffffff' : 'transparent',
-                            borderRight: '1px solid #e5e7eb',
-                            borderBottom: isActive ? '2px solid #3b82f6' : '2px solid transparent',
-                            color: isActive ? '#1f2937' : '#6b7280',
-                            maxWidth: 220,
-                        }}
                     >
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {t.title}
-                        </span>
+                        <span className={styles.tabTitle}>{t.title}</span>
                         {closable && (
                             <button
+                                className={styles.closeButton}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onClose(t.id);
-                                }}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    width: 16,
-                                    height: 16,
-                                    border: 'none',
-                                    background: 'transparent',
-                                    cursor: 'pointer',
-                                    color: 'inherit',
-                                    padding: 0,
                                 }}
                                 aria-label={`Close ${t.title}`}
                             >
