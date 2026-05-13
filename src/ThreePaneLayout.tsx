@@ -1,158 +1,87 @@
-import { useState } from 'react';
-import { ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder as FolderIcon, FileText } from 'lucide-react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
+import type {
+    DocumentId,
+    Folder,
+    FolderId,
+    Library,
+    PanelSizes,
+} from './store';
 import styles from './ThreePaneLayout.module.css';
 
-interface TreeNodeData {
-    id: string;
-    name: string;
-    children?: TreeNodeData[];
-    type?: string;
-    description?: string;
-    status?: string;
+interface ThreePaneLayoutProps {
+    library: Library;
+    expandedFolderIds: Set<FolderId>;
+    selectedId: DocumentId | FolderId | null;
+    panelSizes: PanelSizes;
+    onToggleExpand(folderId: FolderId): void;
+    onSelect(id: DocumentId | FolderId): void;
+    onOpenDocument(id: DocumentId): void;
+    onPanelResize(sizes: PanelSizes): void;
 }
 
-interface TreeNodeProps {
-    node: TreeNodeData;
-    depth: number;
-    selectedId: string | undefined;
-    onSelect: (node: TreeNodeData) => void;
-    expandedIds: Set<string>;
-    toggleExpand: (id: string) => void;
-}
+export default function ThreePaneLayout({
+    library,
+    expandedFolderIds,
+    selectedId,
+    panelSizes,
+    onToggleExpand,
+    onSelect,
+    onOpenDocument,
+    onPanelResize,
+}: ThreePaneLayoutProps) {
+    const rootFolder = library.folders[library.rootFolderId];
+    const selectedFolder = selectedId ? library.folders[selectedId] : undefined;
+    const selectedDoc = selectedId ? library.documents[selectedId] : undefined;
 
-interface PropertyRowProps {
-    label: string;
-    value: string;
-}
-
-const initialTree: TreeNodeData[] = [
-    {
-        id: '1',
-        name: 'Projects',
-        children: [
-            {
-                id: '1-1',
-                name: 'Website Redesign',
-                children: [
-                    { id: '1-1-1', name: 'Homepage', type: 'page', description: 'Main landing page', status: 'In progress' },
-                    { id: '1-1-2', name: 'About', type: 'page', description: 'About us page', status: 'Done' },
-                ],
-            },
-            {
-                id: '1-2',
-                name: 'Mobile App',
-                children: [
-                    { id: '1-2-1', name: 'Login Flow', type: 'flow', description: 'User authentication', status: 'In review' },
-                ],
-            },
-        ],
-    },
-    {
-        id: '2',
-        name: 'Archived',
-        children: [
-            { id: '2-1', name: 'Old Logo Concepts', type: 'asset', description: 'Legacy brand work', status: 'Archived' },
-        ],
-    },
-];
-
-function TreeNode({ node, depth, selectedId, onSelect, expandedIds, toggleExpand }: TreeNodeProps) {
-    const hasChildren = !!node.children && node.children.length > 0;
-    const isExpanded = expandedIds.has(node.id);
-    const isSelected = selectedId === node.id;
-
-    return (
-        <div>
-            <div
-                className={styles.treeRow}
-                data-selected={isSelected}
-                tabIndex={0}
-                role="treeitem"
-                aria-expanded={hasChildren ? isExpanded : undefined}
-                aria-selected={isSelected}
-                style={{ paddingLeft: 8 + depth * 16 }}
-                onClick={() => {
-                    onSelect(node);
-                    if (hasChildren) toggleExpand(node.id);
-                }}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onSelect(node);
-                        if (hasChildren) toggleExpand(node.id);
-                    }
-                }}
-            >
-                {hasChildren ? (
-                    isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
-                ) : (
-                    <span className={styles.treeChevronSpacer} />
-                )}
-                {hasChildren ? <Folder size={14} /> : <FileText size={14} />}
-                <span>{node.name}</span>
-            </div>
-            {hasChildren && isExpanded && node.children!.map((child) => (
-                <TreeNode
-                    key={child.id}
-                    node={child}
-                    depth={depth + 1}
-                    selectedId={selectedId}
-                    onSelect={onSelect}
-                    expandedIds={expandedIds}
-                    toggleExpand={toggleExpand}
-                />
-            ))}
-        </div>
-    );
-}
-
-export default function ThreePaneLayout() {
-    const [selected, setSelected] = useState<TreeNodeData | null>(null);
-    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(['1', '1-1']));
-
-    const toggleExpand = (id: string) => {
-        setExpandedIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    };
+    const middleSize = Math.max(10, 100 - panelSizes.left - panelSizes.right);
 
     return (
         <div className={styles.root}>
-            <Group orientation="horizontal" className={styles.group}>
-                <Panel defaultSize="20%" minSize="10%" maxSize="40%">
+            <Group
+                orientation="horizontal"
+                className={styles.group}
+                onLayoutChange={(sizes) => {
+                    if (sizes.length >= 3) {
+                        onPanelResize({ left: sizes[0], right: sizes[2] });
+                    }
+                }}
+            >
+                <Panel defaultSize={`${panelSizes.left}%`} minSize="10%" maxSize="40%">
                     <aside className={styles.sidebar}>
                         <div className={styles.sectionHeader}>Explorer</div>
-                        {initialTree.map((node) => (
-                            <TreeNode
-                                key={node.id}
-                                node={node}
-                                depth={0}
-                                selectedId={selected?.id}
-                                onSelect={setSelected}
-                                expandedIds={expandedIds}
-                                toggleExpand={toggleExpand}
-                            />
-                        ))}
+                        <FolderNode
+                            folder={rootFolder}
+                            depth={0}
+                            library={library}
+                            expandedFolderIds={expandedFolderIds}
+                            selectedId={selectedId}
+                            onToggleExpand={onToggleExpand}
+                            onSelect={onSelect}
+                            onOpenDocument={onOpenDocument}
+                            isRoot
+                        />
                     </aside>
                 </Panel>
 
                 <Separator className={styles.separator} />
 
-                <Panel defaultSize="60%" minSize="30%">
+                <Panel defaultSize={`${middleSize}%`} minSize="30%">
                     <main className={styles.main}>
-                        {selected ? (
+                        {selectedDoc ? (
                             <>
-                                <h1 className={styles.title}>{selected.name}</h1>
-                                <p className={styles.description}>
-                                    {selected.description || 'No description available.'}
-                                </p>
+                                <h1 className={styles.title}>{selectedDoc.title}</h1>
+                                <p className={styles.description}>{selectedDoc.path}</p>
                                 <div className={styles.contentBox}>
-                                    Center content goes here. Drop in an editor, viewer, or whatever this node represents.
+                                    Double-click the document in the tree (or press Enter) to open it in a new tab.
                                 </div>
+                            </>
+                        ) : selectedFolder ? (
+                            <>
+                                <h1 className={styles.title}>{selectedFolder.name}</h1>
+                                <p className={styles.description}>
+                                    {selectedFolder.documentIds.length} document(s)
+                                </p>
                             </>
                         ) : (
                             <div className={styles.empty}>Select an item from the tree to view it.</div>
@@ -162,15 +91,27 @@ export default function ThreePaneLayout() {
 
                 <Separator className={styles.separator} />
 
-                <Panel defaultSize="20%" minSize="10%" maxSize="40%">
+                <Panel defaultSize={`${panelSizes.right}%`} minSize="10%" maxSize="40%">
                     <aside className={styles.sidebarPadded}>
                         <div className={styles.sectionHeaderTight}>Properties</div>
-                        {selected ? (
+                        {selectedDoc ? (
                             <div className={styles.properties}>
-                                <PropertyRow label="ID" value={selected.id} />
-                                <PropertyRow label="Name" value={selected.name} />
-                                <PropertyRow label="Type" value={selected.type || 'folder'} />
-                                <PropertyRow label="Status" value={selected.status || '—'} />
+                                <PropertyRow label="ID" value={selectedDoc.id} />
+                                <PropertyRow label="Title" value={selectedDoc.title} />
+                                <PropertyRow label="Path" value={selectedDoc.path} />
+                                {selectedDoc.tags && selectedDoc.tags.length > 0 && (
+                                    <PropertyRow label="Tags" value={selectedDoc.tags.join(', ')} />
+                                )}
+                            </div>
+                        ) : selectedFolder ? (
+                            <div className={styles.properties}>
+                                <PropertyRow label="ID" value={selectedFolder.id} />
+                                <PropertyRow label="Name" value={selectedFolder.name} />
+                                <PropertyRow label="Type" value="folder" />
+                                <PropertyRow
+                                    label="Documents"
+                                    value={String(selectedFolder.documentIds.length)}
+                                />
                             </div>
                         ) : (
                             <div className={styles.emptySmall}>Nothing selected.</div>
@@ -182,7 +123,120 @@ export default function ThreePaneLayout() {
     );
 }
 
-function PropertyRow({ label, value }: PropertyRowProps) {
+interface FolderNodeProps {
+    folder: Folder;
+    depth: number;
+    library: Library;
+    expandedFolderIds: Set<FolderId>;
+    selectedId: DocumentId | FolderId | null;
+    onToggleExpand(folderId: FolderId): void;
+    onSelect(id: DocumentId | FolderId): void;
+    onOpenDocument(id: DocumentId): void;
+    isRoot?: boolean;
+}
+
+function FolderNode({
+    folder,
+    depth,
+    library,
+    expandedFolderIds,
+    selectedId,
+    onToggleExpand,
+    onSelect,
+    onOpenDocument,
+    isRoot,
+}: FolderNodeProps) {
+    const childFolderIds = library.childFolderIdsByParent[folder.id] ?? [];
+    const hasChildren = childFolderIds.length > 0 || folder.documentIds.length > 0;
+    // The root folder is always expanded and not rendered as a row.
+    const isExpanded = isRoot ? true : expandedFolderIds.has(folder.id);
+    const isSelected = selectedId === folder.id;
+
+    return (
+        <div>
+            {!isRoot && (
+                <div
+                    className={styles.treeRow}
+                    data-selected={isSelected}
+                    tabIndex={0}
+                    role="treeitem"
+                    aria-expanded={hasChildren ? isExpanded : undefined}
+                    aria-selected={isSelected}
+                    style={{ paddingLeft: 8 + depth * 16 }}
+                    onClick={() => {
+                        onSelect(folder.id);
+                        if (hasChildren) onToggleExpand(folder.id);
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onSelect(folder.id);
+                            if (hasChildren) onToggleExpand(folder.id);
+                        }
+                    }}
+                >
+                    {hasChildren ? (
+                        isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+                    ) : (
+                        <span className={styles.treeChevronSpacer} />
+                    )}
+                    <FolderIcon size={14} />
+                    <span>{folder.name}</span>
+                </div>
+            )}
+            {isExpanded && (
+                <>
+                    {childFolderIds.map((cid) => (
+                        <FolderNode
+                            key={cid}
+                            folder={library.folders[cid]}
+                            depth={isRoot ? 0 : depth + 1}
+                            library={library}
+                            expandedFolderIds={expandedFolderIds}
+                            selectedId={selectedId}
+                            onToggleExpand={onToggleExpand}
+                            onSelect={onSelect}
+                            onOpenDocument={onOpenDocument}
+                        />
+                    ))}
+                    {folder.documentIds.map((docId) => {
+                        const doc = library.documents[docId];
+                        if (!doc) return null;
+                        const isDocSelected = selectedId === doc.id;
+                        return (
+                            <div
+                                key={doc.id}
+                                className={styles.treeRow}
+                                data-selected={isDocSelected}
+                                tabIndex={0}
+                                role="treeitem"
+                                aria-selected={isDocSelected}
+                                style={{ paddingLeft: 8 + (isRoot ? 0 : depth + 1) * 16 }}
+                                onClick={() => onSelect(doc.id)}
+                                onDoubleClick={() => onOpenDocument(doc.id)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        onOpenDocument(doc.id);
+                                    } else if (e.key === ' ') {
+                                        e.preventDefault();
+                                        onSelect(doc.id);
+                                    }
+                                }}
+                            >
+                                <span className={styles.treeChevronSpacer} />
+                                <FileText size={14} />
+                                <span>{doc.title}</span>
+                            </div>
+                        );
+                    })}
+                </>
+            )}
+        </div>
+    );
+}
+
+function PropertyRow({ label, value }: { label: string; value: string }) {
     return (
         <div>
             <div className={styles.propertyLabel}>{label}</div>

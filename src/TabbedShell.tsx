@@ -1,77 +1,58 @@
-import { useState } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
-import { PDFViewer } from '@embedpdf/react-pdf-viewer';
-import ThreePaneLayout from './ThreePaneLayout';
+import type { DocumentId, Tab } from './store';
+import { LIBRARY_TAB_ID, useDocument } from './store';
 import styles from './TabbedShell.module.css';
 
-type Tab =
-    | { id: 'library'; kind: 'library'; title: string }
-    | { id: string; kind: 'pdf'; title: string; src: string };
+interface TabbedShellProps {
+    tabs: Tab[];
+    activeTabId: string;
+    onActivate(id: string): void;
+    onClose(id: string): void;
+    renderLibrary(): ReactNode;
+    renderPdf(documentId: DocumentId): ReactNode;
+}
 
-const LIBRARY_TAB: Tab = { id: 'library', kind: 'library', title: 'Library' };
-
-export default function TabbedShell() {
-    const [tabs, setTabs] = useState<Tab[]>([LIBRARY_TAB]);
-    const [activeId, setActiveId] = useState<string>(LIBRARY_TAB.id);
-    const [mountedIds, setMountedIds] = useState<Set<string>>(new Set([LIBRARY_TAB.id]));
-
-    const activate = (id: string) => {
-        setActiveId(id);
-        setMountedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
-    };
-
-    const closeTab = (id: string) => {
-        if (id === LIBRARY_TAB.id) return;
-        setTabs((prev) => {
-            const idx = prev.findIndex((t) => t.id === id);
-            if (idx === -1) return prev;
-            const next = prev.filter((t) => t.id !== id);
-            if (id === activeId) {
-                const fallback = next[idx] ?? next[idx - 1] ?? LIBRARY_TAB;
-                setActiveId(fallback.id);
-            }
-            return next;
-        });
-        setMountedIds((prev) => {
-            if (!prev.has(id)) return prev;
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-        });
-    };
+/**
+ * Controlled tab shell. Inactive tabs stay mounted (hidden via `display: none`)
+ * so PDF state survives tab switches. `mountedIds` is a render optimization,
+ * not user state — we only track which tabs have ever been activated.
+ */
+export default function TabbedShell({
+    tabs,
+    activeTabId,
+    onActivate,
+    onClose,
+    renderLibrary,
+    renderPdf,
+}: TabbedShellProps) {
+    const mountedIdsRef = useRef<Set<string>>(new Set([activeTabId]));
+    if (!mountedIdsRef.current.has(activeTabId)) {
+        mountedIdsRef.current.add(activeTabId);
+    }
+    useEffect(() => {
+        const open = new Set(tabs.map((t) => t.id));
+        for (const id of mountedIdsRef.current) {
+            if (!open.has(id)) mountedIdsRef.current.delete(id);
+        }
+    }, [tabs]);
 
     return (
         <div className={styles.root}>
-            <TabBar tabs={tabs} activeId={activeId} onActivate={activate} onClose={closeTab} />
+            <TabBar
+                tabs={tabs}
+                activeTabId={activeTabId}
+                onActivate={onActivate}
+                onClose={onClose}
+            />
             <div className={styles.body}>
                 {tabs.map((t) =>
-                    mountedIds.has(t.id) ? (
+                    mountedIdsRef.current.has(t.id) ? (
                         <div
                             key={t.id}
-                            className={`${styles.pane} ${t.id === activeId ? '' : styles.paneHidden}`}
+                            className={`${styles.pane} ${t.id === activeTabId ? '' : styles.paneHidden}`}
                         >
-                            {t.kind === 'library' ? (
-                                <ThreePaneLayout />
-                            ) : (
-                                <PDFViewer
-                                    style={{ width: '100%', height: '100%' }}
-                                    config={{
-                                        src: t.src,
-                                        theme: { preference: 'dark' },
-                                        commands: {
-                                            disabledCategories: [
-                                                'zoom',
-                                                'tools',
-                                                'document',
-                                                'panel',
-                                                'page',
-                                                'selection',
-                                                'history',
-                                            ],
-                                        },
-                                    }}
-                                />
-                            )}
+                            {t.kind === 'library' ? renderLibrary() : renderPdf(t.documentId)}
                         </div>
                     ) : null,
                 )}
@@ -82,55 +63,78 @@ export default function TabbedShell() {
 
 interface TabBarProps {
     tabs: Tab[];
-    activeId: string;
+    activeTabId: string;
     onActivate: (id: string) => void;
     onClose: (id: string) => void;
 }
 
-function TabBar({ tabs, activeId, onActivate, onClose }: TabBarProps) {
+function TabBar({ tabs, activeTabId, onActivate, onClose }: TabBarProps) {
     return (
         <div className={styles.tabBar}>
             {tabs.map((t) => {
-                const isActive = t.id === activeId;
-                const closable = t.kind !== 'library';
+                const isActive = t.id === activeTabId;
+                const closable = t.id !== LIBRARY_TAB_ID;
                 return (
-                    <div
+                    <TabButton
                         key={t.id}
-                        className={styles.tab}
-                        data-active={isActive}
-                        tabIndex={0}
-                        role="tab"
-                        aria-selected={isActive}
-                        onClick={() => onActivate(t.id)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                onActivate(t.id);
-                            } else if ((e.key === 'Delete' || e.key === 'Backspace') && closable) {
-                                e.preventDefault();
-                                onClose(t.id);
-                            }
-                        }}
-                        onAuxClick={(e) => {
-                            if (e.button === 1 && closable) onClose(t.id);
-                        }}
-                    >
-                        <span className={styles.tabTitle}>{t.title}</span>
-                        {closable && (
-                            <button
-                                className={styles.closeButton}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onClose(t.id);
-                                }}
-                                aria-label={`Close ${t.title}`}
-                            >
-                                <X size={12} />
-                            </button>
-                        )}
-                    </div>
+                        tab={t}
+                        isActive={isActive}
+                        closable={closable}
+                        onActivate={onActivate}
+                        onClose={onClose}
+                    />
                 );
             })}
+        </div>
+    );
+}
+
+interface TabButtonProps {
+    tab: Tab;
+    isActive: boolean;
+    closable: boolean;
+    onActivate: (id: string) => void;
+    onClose: (id: string) => void;
+}
+
+function TabButton({ tab, isActive, closable, onActivate, onClose }: TabButtonProps) {
+    const doc = useDocument(tab.kind === 'pdf' ? tab.documentId : null);
+    const title = tab.kind === 'library' ? 'Library' : doc?.title ?? tab.documentId;
+
+    return (
+        <div
+            className={styles.tab}
+            data-active={isActive}
+            tabIndex={0}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onActivate(tab.id)}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onActivate(tab.id);
+                } else if ((e.key === 'Delete' || e.key === 'Backspace') && closable) {
+                    e.preventDefault();
+                    onClose(tab.id);
+                }
+            }}
+            onAuxClick={(e) => {
+                if (e.button === 1 && closable) onClose(tab.id);
+            }}
+        >
+            <span className={styles.tabTitle}>{title}</span>
+            {closable && (
+                <button
+                    className={styles.closeButton}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onClose(tab.id);
+                    }}
+                    aria-label={`Close ${title}`}
+                >
+                    <X size={12} />
+                </button>
+            )}
         </div>
     );
 }

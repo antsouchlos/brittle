@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use std::fmt::Display;
 
 use log::error;
+use serde::{Deserialize, Serialize};
 
 /// Walk the GTK widget tree under `container` and return the first descendant                                                                                            
 /// whose type name starts with `WebKitWebView` (the webkit2gtk webview widget).                                                                                          
@@ -104,17 +106,21 @@ pub fn run() {
                     ),
                 };
             }
-            // #[cfg(debug_assertions)]
-            // {
-            //     use tauri::Manager;
-            //     if let Some(win) = app.get_webview_window("main") {
-            //         win.open_devtools();
-            //     }
-            // }
+            #[cfg(debug_assertions)]
+            {
+                use tauri::Manager;
+                if let Some(win) = app.get_webview_window("main") {
+                    win.open_devtools();
+                }
+            }
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![
+            load_library,
+            load_ui_state,
+            save_ui_state
+        ])
         .run(tauri::generate_context!());
 
     if let Err(e) = result {
@@ -122,8 +128,142 @@ pub fn run() {
     }
 }
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
+// ---------- Library & UI-state DTOs ----------
+//
+// These mirror the TypeScript types in `src/store.ts`. `serde` renames are
+// emitted as camelCase to match the JS shape directly.
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DocumentDto {
+    id: String,
+    path: String,
+    title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tags: Option<Vec<String>>,
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FolderDto {
+    id: String,
+    name: String,
+    parent_id: Option<String>,
+    document_ids: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LibraryDto {
+    documents: Vec<DocumentDto>,
+    folders: Vec<FolderDto>,
+    root_folder_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TabDto {
+    id: String,
+    kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TreeStateDto {
+    expanded_folder_ids: Vec<String>,
+    selected_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PanelSizesDto {
+    left: f64,
+    right: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ViewerStateDto {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    page: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    zoom: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scroll_y: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UiStateDto {
+    version: u32,
+    tabs: Vec<TabDto>,
+    active_tab_id: String,
+    tree: TreeStateDto,
+    panels: PanelSizesDto,
+    viewer_states: HashMap<String, ViewerStateDto>,
+}
+
+// ---------- Commands ----------
+
+/// Returns a hardcoded sample library so the UI has something to render.
+/// Real implementation will scan disk and persist an index.
+#[tauri::command]
+fn load_library() -> LibraryDto {
+    LibraryDto {
+        root_folder_id: "root".into(),
+        folders: vec![
+            FolderDto {
+                id: "root".into(),
+                name: "Library".into(),
+                parent_id: None,
+                document_ids: vec![],
+            },
+            FolderDto {
+                id: "samples".into(),
+                name: "Samples".into(),
+                parent_id: Some("root".into()),
+                document_ids: vec!["doc-ebook".into(), "doc-ebook-2".into()],
+            },
+            FolderDto {
+                id: "archived".into(),
+                name: "Archived".into(),
+                parent_id: Some("root".into()),
+                document_ids: vec!["doc-ebook-3".into()],
+            },
+        ],
+        documents: vec![
+            DocumentDto {
+                id: "doc-ebook".into(),
+                path: "https://snippet.embedpdf.com/ebook.pdf".into(),
+                title: "Sample Ebook".into(),
+                tags: None,
+            },
+            DocumentDto {
+                id: "doc-ebook-2".into(),
+                path: "https://snippet.embedpdf.com/ebook.pdf".into(),
+                title: "Sample Ebook (copy)".into(),
+                tags: None,
+            },
+            DocumentDto {
+                id: "doc-ebook-3".into(),
+                path: "https://snippet.embedpdf.com/ebook.pdf".into(),
+                title: "Old Ebook".into(),
+                tags: Some(vec!["archived".into()]),
+            },
+        ],
+    }
+}
+
+/// Stub: always returns `None` so the frontend hydrates from defaults.
+/// Real implementation will read a versioned JSON file from `app_config_dir()`.
+#[tauri::command]
+fn load_ui_state() -> Option<UiStateDto> {
+    None
+}
+
+/// Stub: no-op. Real implementation will write atomically (temp file + rename)
+/// to `app_config_dir()/ui-state.json`.
+#[tauri::command]
+fn save_ui_state(_state: UiStateDto) {}
