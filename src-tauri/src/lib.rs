@@ -128,7 +128,7 @@ pub fn run() {
     }
 }
 
-// ---------- Library & UI-state DTOs ----------
+// ---------- Library & UI-state Data Transfer Objects (DTOs) ----------
 //
 // These mirror the TypeScript types in `src/store.ts`. `serde` renames are
 // emitted as camelCase to match the JS shape directly.

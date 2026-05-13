@@ -6,30 +6,6 @@ import PdfTab from './PdfTab';
 import { useActiveTabId, useStore, useTabs } from './store';
 import { loadInitialState, subscribeAndSave } from './persistence';
 
-function App() {
-    const hydrated = useHydration();
-    if (!hydrated) return null;
-    return <Shell />;
-}
-
-function Shell() {
-    const tabs = useTabs();
-    const activeTabId = useActiveTabId();
-    const activateTab = useStore((s) => s.activateTab);
-    const closeTab = useStore((s) => s.closeTab);
-
-    return (
-        <TabbedShell
-            tabs={tabs}
-            activeTabId={activeTabId}
-            onActivate={activateTab}
-            onClose={closeTab}
-            renderLibrary={() => <LibraryView />}
-            renderPdf={(id) => <PdfTab documentId={id} />}
-        />
-    );
-}
-
 /**
  * Loads library + persisted UI state from Rust and hydrates the store before
  * first render of the shell. Wires save-on-change subscription, with HMR-safe
@@ -61,5 +37,30 @@ function useHydration(): boolean {
 
     return ready;
 }
+
+function Shell() {
+    const tabs = useTabs();
+    const activeTabId = useActiveTabId();
+    const activateTab = useStore((s) => s.activateTab);
+    const closeTab = useStore((s) => s.closeTab);
+
+    return (
+        <TabbedShell
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onActivate={activateTab}
+            onClose={closeTab}
+            renderLibrary={() => <LibraryView />}
+            renderPdf={(id) => <PdfTab documentId={id} />}
+        />
+    );
+}
+
+function App() {
+    const hydrated = useHydration();
+    if (!hydrated) return null;
+    return <Shell />;
+}
+
 
 export default App;
