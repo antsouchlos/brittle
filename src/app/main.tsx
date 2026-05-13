@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import { setupTauriPinchAdapter } from "../pdf/tauriPinchAdapter";
+import { setupTauriPinchAdapter } from "./tauriPinchAdapter";
 
 // Re-dispatch captured touchpad zoom events as ctrl+wheel zoom events
 {
