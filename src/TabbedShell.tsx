@@ -58,7 +58,21 @@ export default function TabbedShell() {
                             ) : (
                                 <PDFViewer
                                     style={{ width: '100%', height: '100%' }}
-                                    config={{ src: t.src, theme: { preference: 'dark' } }}
+                                    config={{
+                                        src: t.src,
+                                        theme: { preference: 'dark' },
+                                        commands: {
+                                            disabledCategories: [
+                                                'zoom',
+                                                'tools',
+                                                'document',
+                                                'panel',
+                                                'page',
+                                                'selection',
+                                                'history',
+                                            ],
+                                        },
+                                    }}
                                 />
                             )}
                         </div>
