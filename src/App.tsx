@@ -4,17 +4,23 @@ import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 
+import ThreePaneLayout from './ThreePaneLayout';
+
 function App() {
-    return (
-        <PDFViewer
-            style={{ width: '100%', height: '100vh' }}
-            config={{
-                src: 'https://snippet.embedpdf.com/ebook.pdf',
-                theme: { preference: 'dark' }
-            }}
-        />
-    );
+    return <ThreePaneLayout />;
 }
+
+// function App() {
+//     return (
+//         <PDFViewer
+//             style={{ width: '100%', height: '100vh' }}
+//             config={{
+//                 src: 'https://snippet.embedpdf.com/ebook.pdf',
+//                 theme: { preference: 'dark' }
+//             }}
+//         />
+//     );
+// }
 
 // function App() {
 //   return (
