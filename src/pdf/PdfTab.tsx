@@ -1,12 +1,12 @@
 import { PDFViewer } from '@embedpdf/react-pdf-viewer';
-import { useDocument, type DocumentId, type ViewerState } from '../store';
+import { useDocument, type DocumentId, type PdfViewerState } from '../store';
 
 interface PdfTabProps {
     documentId: DocumentId;
     // Reserved for build-order step 6 (embed-pdf scroll/zoom/page plumbing).
     // Accepted now so the surrounding wiring is stable; unused this iteration.
-    initialViewerState?: ViewerState;
-    onViewerStateChange?(state: ViewerState): void;
+    initialViewerState?: PdfViewerState;
+    onViewerStateChange?(state: PdfViewerState): void;
 }
 
 const DISABLED_COMMAND_CATEGORIES = [

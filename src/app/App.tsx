@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import './App.css';
-import TabbedShell, { type ShellTab } from '../shell/TabbedShell';
-import LibraryView from '../library/LibraryView';
+import TabView, { type TabItem } from '../tabs/TabView';
+import LibraryPage from '../library/LibraryPage';
 import PdfTab from '../pdf/PdfTab';
 import {
     useActiveTabId,
@@ -9,17 +9,17 @@ import {
     useStore,
     useTabs,
     type Library,
-    type TabDescriptor,
+    type TabState,
 } from '../store';
-import { useHydration } from '../ipc/persistence';
+import { useInitialLoad } from '../ipc/persistence';
 
-function toShellTab(tab: TabDescriptor, library: Library | null): ShellTab {
+function toTabItem(tab: TabState, library: Library | null): TabItem {
     if (tab.kind === 'library') {
         return {
             id: tab.id,
             title: 'Library',
             closable: false,
-            render: () => <LibraryView />,
+            render: () => <LibraryPage />,
         };
     }
     const doc = library?.documents[tab.documentId];
@@ -31,21 +31,21 @@ function toShellTab(tab: TabDescriptor, library: Library | null): ShellTab {
     };
 }
 
-function Shell() {
+function AppTabs() {
     const tabs = useTabs();
     const library = useLibrary();
     const activeTabId = useActiveTabId();
     const activateTab = useStore((s) => s.activateTab);
     const closeTab = useStore((s) => s.closeTab);
 
-    const shellTabs = useMemo(
-        () => tabs.map((t) => toShellTab(t, library)),
+    const tabItems = useMemo(
+        () => tabs.map((t) => toTabItem(t, library)),
         [tabs, library],
     );
 
     return (
-        <TabbedShell
-            tabs={shellTabs}
+        <TabView
+            tabs={tabItems}
             activeTabId={activeTabId}
             onActivate={activateTab}
             onClose={closeTab}
@@ -54,10 +54,10 @@ function Shell() {
 }
 
 function App() {
-    const hydrated = useHydration();
-    if (!hydrated) return null;
+    const isReady = useInitialLoad();
+    if (!isReady) return null;
 
-    return <Shell />;
+    return <AppTabs />;
 }
 
 export default App;

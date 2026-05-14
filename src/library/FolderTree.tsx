@@ -1,6 +1,6 @@
 import { ChevronRight, ChevronDown, Folder as FolderIcon, FileText } from 'lucide-react';
 import type { Document, DocumentId, Folder, FolderId, Library } from '../store';
-import styles from './ThreePaneLayout.module.css';
+import styles from './LibraryLayout.module.css';
 
 interface FolderTreeProps {
     library: Library;
@@ -58,7 +58,7 @@ function FolderNode({
     onOpenDocument,
     isRoot,
 }: FolderNodeProps) {
-    const childFolderIds = library.childFolderIdsByParent[folder.id] ?? [];
+    const childFolderIds = library.folderChildren[folder.id] ?? [];
     const hasChildren = childFolderIds.length > 0 || folder.documentIds.length > 0;
     // The root folder is always expanded and not rendered as a row.
     const isExpanded = isRoot ? true : expandedFolderIds.has(folder.id);

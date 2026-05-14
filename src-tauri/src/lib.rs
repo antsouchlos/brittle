@@ -128,14 +128,14 @@ pub fn run() {
     }
 }
 
-// ---------- Library & UI-state Data Transfer Objects (DTOs) ----------
+// ---------- Serialized (wire) types ----------
 //
-// These mirror the TypeScript types in `src/store.ts`. `serde` renames are
-// emitted as camelCase to match the JS shape directly.
+// These mirror the TypeScript types in `src/ipc/wireTypes.ts`. `serde` renames
+// are emitted as camelCase to match the JS shape directly.
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct DocumentDto {
+struct SerializedDocument {
     id: String,
     path: String,
     title: String,
@@ -145,7 +145,7 @@ struct DocumentDto {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct FolderDto {
+struct SerializedFolder {
     id: String,
     name: String,
     parent_id: Option<String>,
@@ -154,15 +154,15 @@ struct FolderDto {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct LibraryDto {
-    documents: Vec<DocumentDto>,
-    folders: Vec<FolderDto>,
+struct SerializedLibrary {
+    documents: Vec<SerializedDocument>,
+    folders: Vec<SerializedFolder>,
     root_folder_id: String,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct TabDto {
+struct SerializedTab {
     id: String,
     kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -171,21 +171,21 @@ struct TabDto {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct TreeStateDto {
+struct SerializedTreeState {
     expanded_folder_ids: Vec<String>,
     selected_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PanelSizesDto {
+struct SerializedPanelSizes {
     left: f64,
     right: f64,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ViewerStateDto {
+struct SerializedPdfViewerState {
     #[serde(skip_serializing_if = "Option::is_none")]
     page: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -196,13 +196,13 @@ struct ViewerStateDto {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct UiStateDto {
+struct SerializedUiState {
     version: u32,
-    tabs: Vec<TabDto>,
+    tabs: Vec<SerializedTab>,
     active_tab_id: String,
-    tree: TreeStateDto,
-    panels: PanelSizesDto,
-    viewer_states: HashMap<String, ViewerStateDto>,
+    tree: SerializedTreeState,
+    panels: SerializedPanelSizes,
+    viewer_states: HashMap<String, SerializedPdfViewerState>,
 }
 
 // ---------- Commands ----------
@@ -210,23 +210,23 @@ struct UiStateDto {
 /// Returns a hardcoded sample library so the UI has something to render.
 /// Real implementation will scan disk and persist an index.
 #[tauri::command]
-fn load_library() -> LibraryDto {
-    LibraryDto {
+fn load_library() -> SerializedLibrary {
+    SerializedLibrary {
         root_folder_id: "root".into(),
         folders: vec![
-            FolderDto {
+            SerializedFolder {
                 id: "root".into(),
                 name: "Library".into(),
                 parent_id: None,
                 document_ids: vec![],
             },
-            FolderDto {
+            SerializedFolder {
                 id: "samples".into(),
                 name: "Samples".into(),
                 parent_id: Some("root".into()),
                 document_ids: vec!["doc-ebook".into(), "doc-ebook-2".into()],
             },
-            FolderDto {
+            SerializedFolder {
                 id: "archived".into(),
                 name: "Archived".into(),
                 parent_id: Some("root".into()),
@@ -234,19 +234,19 @@ fn load_library() -> LibraryDto {
             },
         ],
         documents: vec![
-            DocumentDto {
+            SerializedDocument {
                 id: "doc-ebook".into(),
                 path: "https://snippet.embedpdf.com/ebook.pdf".into(),
                 title: "Sample Ebook".into(),
                 tags: None,
             },
-            DocumentDto {
+            SerializedDocument {
                 id: "doc-ebook-2".into(),
                 path: "https://snippet.embedpdf.com/ebook.pdf".into(),
                 title: "Sample Ebook (copy)".into(),
                 tags: None,
             },
-            DocumentDto {
+            SerializedDocument {
                 id: "doc-ebook-3".into(),
                 path: "https://snippet.embedpdf.com/ebook.pdf".into(),
                 title: "Old Ebook".into(),
@@ -256,14 +256,14 @@ fn load_library() -> LibraryDto {
     }
 }
 
-/// Stub: always returns `None` so the frontend hydrates from defaults.
+/// Stub: always returns `None` so the frontend initializes from defaults.
 /// Real implementation will read a versioned JSON file from `app_config_dir()`.
 #[tauri::command]
-fn load_ui_state() -> Option<UiStateDto> {
+fn load_ui_state() -> Option<SerializedUiState> {
     None
 }
 
 /// Stub: no-op. Real implementation will write atomically (temp file + rename)
 /// to `app_config_dir()/ui-state.json`.
 #[tauri::command]
-fn save_ui_state(_state: UiStateDto) {}
+fn save_ui_state(_state: SerializedUiState) {}

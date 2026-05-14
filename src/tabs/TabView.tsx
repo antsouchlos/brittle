@@ -1,44 +1,44 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
-import styles from './TabbedShell.module.css';
+import styles from './TabView.module.css';
 
-export interface ShellTab {
+export interface TabItem {
     id: string;
     title: string;
     closable: boolean;
     render(): ReactNode;
 }
 
-interface TabbedShellProps {
-    tabs: ShellTab[];
+interface TabViewProps {
+    tabs: TabItem[];
     activeTabId: string;
     onActivate(id: string): void;
     onClose(id: string): void;
 }
 
 /**
- * Controlled tab shell. Inactive tabs stay mounted (hidden via `display: none`)
- * so per-tab state (e.g. PDF scroll/zoom) survives tab switches. `mountedIds`
- * is a render optimization, not user state — we only track which tabs have
- * ever been activated.
+ * Controlled tab view. Inactive tabs stay mounted (hidden via `display: none`)
+ * so per-tab state (e.g. PDF scroll/zoom) survives tab switches.
+ * `renderedTabIdsRef` is a render optimization, not user state — we only track
+ * which tabs have ever been activated.
  *
- * The shell is intentionally ignorant of what each tab renders; callers pass
+ * The view is intentionally ignorant of what each tab renders; callers pass
  * a `render()` closure per tab.
  */
-export default function TabbedShell({
+export default function TabView({
     tabs,
     activeTabId,
     onActivate,
     onClose,
-}: TabbedShellProps) {
-    const mountedIdsRef = useRef<Set<string>>(new Set([activeTabId]));
-    if (!mountedIdsRef.current.has(activeTabId)) {
-        mountedIdsRef.current.add(activeTabId);
+}: TabViewProps) {
+    const renderedTabIdsRef = useRef<Set<string>>(new Set([activeTabId]));
+    if (!renderedTabIdsRef.current.has(activeTabId)) {
+        renderedTabIdsRef.current.add(activeTabId);
     }
     useEffect(() => {
         const open = new Set(tabs.map((t) => t.id));
-        for (const id of mountedIdsRef.current) {
-            if (!open.has(id)) mountedIdsRef.current.delete(id);
+        for (const id of renderedTabIdsRef.current) {
+            if (!open.has(id)) renderedTabIdsRef.current.delete(id);
         }
     }, [tabs]);
 
@@ -50,12 +50,12 @@ export default function TabbedShell({
                 onActivate={onActivate}
                 onClose={onClose}
             />
-            <div className={styles.body}>
+            <div className={styles.content}>
                 {tabs.map((t) =>
-                    mountedIdsRef.current.has(t.id) ? (
+                    renderedTabIdsRef.current.has(t.id) ? (
                         <div
                             key={t.id}
-                            className={`${styles.pane} ${t.id === activeTabId ? '' : styles.paneHidden}`}
+                            className={`${styles.tabPanel} ${t.id === activeTabId ? '' : styles.tabPanelHidden}`}
                         >
                             {t.render()}
                         </div>
@@ -67,7 +67,7 @@ export default function TabbedShell({
 }
 
 interface TabBarProps {
-    tabs: ShellTab[];
+    tabs: TabItem[];
     activeTabId: string;
     onActivate: (id: string) => void;
     onClose: (id: string) => void;
@@ -90,7 +90,7 @@ function TabBar({ tabs, activeTabId, onActivate, onClose }: TabBarProps) {
 }
 
 interface TabButtonProps {
-    tab: ShellTab;
+    tab: TabItem;
     isActive: boolean;
     onActivate: (id: string) => void;
     onClose: (id: string) => void;

@@ -3,9 +3,9 @@ import type { DocumentId, FolderId, Library, PanelSizes } from '../store';
 import FolderTree from './FolderTree';
 import DetailPane from './DetailPane';
 import PropertiesPane from './PropertiesPane';
-import styles from './ThreePaneLayout.module.css';
+import styles from './LibraryLayout.module.css';
 
-interface ThreePaneLayoutProps {
+interface LibraryLayoutProps {
     library: Library;
     expandedFolderIds: Set<FolderId>;
     selectedId: DocumentId | FolderId | null;
@@ -16,7 +16,7 @@ interface ThreePaneLayoutProps {
     onPanelResize(sizes: PanelSizes): void;
 }
 
-export default function ThreePaneLayout({
+export default function LibraryLayout({
     library,
     expandedFolderIds,
     selectedId,
@@ -25,7 +25,7 @@ export default function ThreePaneLayout({
     onSelect,
     onOpenDocument,
     onPanelResize,
-}: ThreePaneLayoutProps) {
+}: LibraryLayoutProps) {
     const middleSize = Math.max(10, 100 - panelSizes.left - panelSizes.right);
 
     return (

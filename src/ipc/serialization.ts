@@ -1,8 +1,8 @@
 import type { DocumentId, UIState } from '../store/types';
 import { LIBRARY_TAB_ID, UI_STATE_VERSION } from '../store/defaults';
-import type { UiStateDto } from './dtos';
+import type { SerializedUiState } from './wireTypes';
 
-export function serializeUi(ui: UIState): UiStateDto {
+export function serializeUi(ui: UIState): SerializedUiState {
     return {
         version: UI_STATE_VERSION,
         tabs: ui.tabs.map((t) =>
@@ -20,19 +20,19 @@ export function serializeUi(ui: UIState): UiStateDto {
     };
 }
 
-export function dtoToUi(dto: UiStateDto): UIState {
+export function deserializeUi(wire: SerializedUiState): UIState {
     return {
-        tabs: dto.tabs.map((t) =>
+        tabs: wire.tabs.map((t) =>
             t.kind === 'library'
                 ? { id: LIBRARY_TAB_ID, kind: 'library' }
                 : { id: t.id, kind: 'pdf', documentId: t.documentId as DocumentId },
         ),
-        activeTabId: dto.activeTabId,
+        activeTabId: wire.activeTabId,
         tree: {
-            expandedFolderIds: new Set(dto.tree.expandedFolderIds),
-            selectedId: dto.tree.selectedId,
+            expandedFolderIds: new Set(wire.tree.expandedFolderIds),
+            selectedId: wire.tree.selectedId,
         },
-        panels: dto.panels,
-        viewerStates: dto.viewerStates,
+        panels: wire.panels,
+        viewerStates: wire.viewerStates,
     };
 }

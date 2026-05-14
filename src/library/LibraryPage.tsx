@@ -1,12 +1,12 @@
-import ThreePaneLayout from './ThreePaneLayout';
+import LibraryLayout from './LibraryLayout';
 import { useLibrary, usePanels, useStore, useTreeState } from '../store';
 
 /**
- * Adapter between the store and the (purely presentational) ThreePaneLayout.
+ * Adapter between the store and the (purely presentational) LibraryLayout.
  * Reads slices via selector hooks; dispatches via actions pulled from the
- * store. ThreePaneLayout itself never touches the store.
+ * store. LibraryLayout itself never touches the store.
  */
-export default function LibraryView() {
+export default function LibraryPage() {
     const library = useLibrary();
     const { expandedFolderIds, selectedId } = useTreeState();
     const panels = usePanels();
@@ -18,7 +18,7 @@ export default function LibraryView() {
     if (!library) return null;
 
     return (
-        <ThreePaneLayout
+        <LibraryLayout
             library={library}
             expandedFolderIds={expandedFolderIds}
             selectedId={selectedId}

@@ -6,14 +6,14 @@ import type {
     FolderId,
     Library,
     PanelSizes,
-    PdfTab,
+    PdfTabState,
     UIState,
-    ViewerState,
+    PdfViewerState,
 } from './types';
 import { DEFAULT_UI, LIBRARY_TAB_ID } from './defaults';
-import { filterUiAgainstLibrary, indexLibrary } from './reconcile';
-import type { LibraryDto, UiStateDto } from '../ipc/dtos';
-import { dtoToUi } from '../ipc/serialization';
+import { pruneUiToLibrary, indexLibrary } from './libraryIndex';
+import type { SerializedLibrary, SerializedUiState } from '../ipc/wireTypes';
+import { deserializeUi } from '../ipc/serialization';
 
 export type {
     Document,
@@ -21,20 +21,20 @@ export type {
     Folder,
     FolderId,
     Library,
-    LibraryTab,
+    LibraryTabState,
     PanelSizes,
-    PdfTab,
-    Tab,
+    PdfTabState,
+    TabState,
     UIState,
-    ViewerState,
+    PdfViewerState,
 } from './types';
 export { LIBRARY_TAB_ID, UI_STATE_VERSION, DEFAULT_UI } from './defaults';
 
-interface StoreState {
+interface AppStore {
     library: Library | null;
     ui: UIState;
 
-    hydrate(libraryDto: LibraryDto, uiDto: UiStateDto | null): void;
+    initialize(libraryWire: SerializedLibrary, uiWire: SerializedUiState | null): void;
 
     activateTab(id: string): void;
     closeTab(id: string): void;
@@ -44,22 +44,22 @@ interface StoreState {
     selectTreeItem(id: DocumentId | FolderId | null): void;
 
     setPanelSizes(sizes: PanelSizes): void;
-    setViewerState(documentId: DocumentId, state: ViewerState): void;
+    setViewerState(documentId: DocumentId, state: PdfViewerState): void;
 }
 
-function pdfTabIdFor(documentId: DocumentId): string {
+function makePdfTabId(documentId: DocumentId): string {
     return `pdf:${documentId}`;
 }
 
-export const useStore = create<StoreState>()(
+export const useStore = create<AppStore>()(
     subscribeWithSelector((set, get) => ({
         library: null,
         ui: DEFAULT_UI,
 
-        hydrate(libraryDto, uiDto) {
-            const library = indexLibrary(libraryDto);
-            const base = uiDto ? dtoToUi(uiDto) : DEFAULT_UI;
-            const ui = filterUiAgainstLibrary(base, library);
+        initialize(libraryWire, uiWire) {
+            const library = indexLibrary(libraryWire);
+            const base = uiWire ? deserializeUi(uiWire) : DEFAULT_UI;
+            const ui = pruneUiToLibrary(base, library);
             set({ library, ui });
         },
 
@@ -90,9 +90,9 @@ export const useStore = create<StoreState>()(
         openDocument(documentId) {
             const { ui, library } = get();
             if (!library || !library.documents[documentId]) return;
-            const tabId = pdfTabIdFor(documentId);
+            const tabId = makePdfTabId(documentId);
             const exists = ui.tabs.some((t) => t.id === tabId);
-            const tabs = exists ? ui.tabs : [...ui.tabs, { id: tabId, kind: 'pdf', documentId } as PdfTab];
+            const tabs = exists ? ui.tabs : [...ui.tabs, { id: tabId, kind: 'pdf', documentId } as PdfTabState];
             set({ ui: { ...ui, tabs, activeTabId: tabId } });
         },
 

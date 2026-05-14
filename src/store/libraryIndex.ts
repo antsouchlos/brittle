@@ -4,30 +4,30 @@ import type {
     Folder,
     FolderId,
     Library,
-    Tab,
+    TabState,
     UIState,
-    ViewerState,
+    PdfViewerState,
 } from './types';
-import type { LibraryDto } from '../ipc/dtos';
+import type { SerializedLibrary } from '../ipc/wireTypes';
 import { LIBRARY_TAB_ID } from './defaults';
 
-export function indexLibrary(dto: LibraryDto): Library {
+export function indexLibrary(wire: SerializedLibrary): Library {
     const documents: Record<DocumentId, Document> = {};
-    for (const d of dto.documents) documents[d.id] = d;
+    for (const d of wire.documents) documents[d.id] = d;
 
     const folders: Record<FolderId, Folder> = {};
-    const childFolderIdsByParent: Record<FolderId, FolderId[]> = {};
-    for (const f of dto.folders) {
+    const folderChildren: Record<FolderId, FolderId[]> = {};
+    for (const f of wire.folders) {
         folders[f.id] = f;
         if (f.parentId !== null) {
-            (childFolderIdsByParent[f.parentId] ??= []).push(f.id);
+            (folderChildren[f.parentId] ??= []).push(f.id);
         }
     }
-    return { documents, folders, rootFolderId: dto.rootFolderId, childFolderIdsByParent };
+    return { documents, folders, rootFolderId: wire.rootFolderId, folderChildren };
 }
 
-export function filterUiAgainstLibrary(ui: UIState, library: Library): UIState {
-    const validTabs: Tab[] = ui.tabs.filter((t) => {
+export function pruneUiToLibrary(ui: UIState, library: Library): UIState {
+    const validTabs: TabState[] = ui.tabs.filter((t) => {
         if (t.kind === 'library') return true;
         return !!library.documents[t.documentId];
     });
@@ -47,7 +47,7 @@ export function filterUiAgainstLibrary(ui: UIState, library: Library): UIState {
         selectedId = null;
     }
 
-    const viewerStates: Record<DocumentId, ViewerState> = {};
+    const viewerStates: Record<DocumentId, PdfViewerState> = {};
     for (const [docId, vs] of Object.entries(ui.viewerStates)) {
         if (library.documents[docId]) viewerStates[docId] = vs;
     }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store';
 import { serializeUi } from './serialization';
-import type { LibraryDto, UiStateDto } from './dtos';
+import type { SerializedLibrary, SerializedUiState } from './wireTypes';
 
 const SAVE_DEBOUNCE_MS = 300;
 
@@ -15,18 +15,18 @@ function isTauri(): boolean {
  * for UI iteration outside the desktop shell.
  */
 export async function loadInitialState(): Promise<{
-    libraryDto: LibraryDto;
-    uiDto: UiStateDto | null;
+    libraryWire: SerializedLibrary;
+    uiWire: SerializedUiState | null;
 }> {
     if (!isTauri()) {
-        return { libraryDto: browserFallbackLibrary(), uiDto: null };
+        return { libraryWire: browserFallbackLibrary(), uiWire: null };
     }
     const { invoke } = await import('@tauri-apps/api/core');
-    const [libraryDto, uiDto] = await Promise.all([
-        invoke<LibraryDto>('load_library'),
-        invoke<UiStateDto | null>('load_ui_state'),
+    const [libraryWire, uiWire] = await Promise.all([
+        invoke<SerializedLibrary>('load_library'),
+        invoke<SerializedUiState | null>('load_ui_state'),
     ]);
-    return { libraryDto, uiDto };
+    return { libraryWire, uiWire };
 }
 
 /**
@@ -36,13 +36,13 @@ export async function loadInitialState(): Promise<{
  *
  * No-op in a plain browser.
  */
-export function subscribeAndSave(): () => void {
+export function startAutoSave(): () => void {
     if (!isTauri()) return () => { };
 
     let timer: ReturnType<typeof setTimeout> | null = null;
-    let pending: UiStateDto | null = null;
+    let pending: SerializedUiState | null = null;
 
-    const flush = async () => {
+    const saveNow = async () => {
         if (!pending) return;
         const payload = pending;
         pending = null;
@@ -60,7 +60,7 @@ export function subscribeAndSave(): () => void {
         (ui) => {
             pending = serializeUi(ui);
             if (timer) clearTimeout(timer);
-            timer = setTimeout(flush, SAVE_DEBOUNCE_MS);
+            timer = setTimeout(saveNow, SAVE_DEBOUNCE_MS);
         },
     );
 
@@ -74,38 +74,38 @@ export function subscribeAndSave(): () => void {
 }
 
 /**
- * Loads library + persisted UI state from Rust and hydrates the store before
+ * Loads library + persisted UI state from Rust and initializes the store before
  * first render of the shell. Wires save-on-change subscription, with HMR-safe
  * teardown to avoid stacking subscribers across module reloads.
  */
-export function useHydration(): boolean {
-    const [ready, setReady] = useState(false);
-    const hydrate = useStore((s) => s.hydrate);
+export function useInitialLoad(): boolean {
+    const [isReady, setIsReady] = useState(false);
+    const initialize = useStore((s) => s.initialize);
 
     useEffect(() => {
         let teardown: (() => void) | undefined;
         let cancelled = false;
         loadInitialState()
-            .then(({ libraryDto, uiDto }) => {
+            .then(({ libraryWire, uiWire }) => {
                 if (cancelled) return;
-                hydrate(libraryDto, uiDto);
-                teardown = subscribeAndSave();
-                setReady(true);
+                initialize(libraryWire, uiWire);
+                teardown = startAutoSave();
+                setIsReady(true);
             })
             .catch((err) => {
                 console.error('initial state load failed', err);
-                if (!cancelled) setReady(true); // still render; store has defaults
+                if (!cancelled) setIsReady(true); // still render; store has defaults
             });
         return () => {
             cancelled = true;
             teardown?.();
         };
-    }, [hydrate]);
+    }, [initialize]);
 
-    return ready;
+    return isReady;
 }
 
-function browserFallbackLibrary(): LibraryDto {
+function browserFallbackLibrary(): SerializedLibrary {
     return {
         rootFolderId: 'root',
         folders: [

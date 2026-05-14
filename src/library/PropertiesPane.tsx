@@ -1,5 +1,5 @@
 import type { DocumentId, FolderId, Library } from '../store';
-import styles from './ThreePaneLayout.module.css';
+import styles from './LibraryLayout.module.css';
 
 interface PropertiesPaneProps {
     library: Library;
