@@ -1,63 +1,21 @@
-import { useMemo } from 'react';
+import { ReactNode, useCallback, useState } from 'react';
 import './App.css';
-import TabView, { type TabItem } from '../tabs/TabView';
-import LibraryPage from '../library/LibraryPage';
-import PdfTab from '../pdf/PdfTab';
-import {
-    useActiveTabId,
-    useLibrary,
-    useStore,
-    useTabs,
-    type Library,
-    type TabState,
-} from '../store';
-import { useInitialLoad } from '../ipc/persistence';
+import TabView from './TabView.tsx';
 
-function toTabItem(tab: TabState, library: Library | null): TabItem {
-    if (tab.kind === 'library') {
-        return {
-            id: tab.id,
-            title: 'Library',
-            closable: false,
-            render: () => <LibraryPage />,
-        };
-    }
-    const doc = library?.documents[tab.documentId];
-    return {
-        id: tab.id,
-        title: doc?.title ?? tab.documentId,
-        closable: true,
-        render: () => <PdfTab documentId={tab.documentId} />,
-    };
-}
-
-function AppTabs() {
-    const tabs = useTabs();
-    const library = useLibrary();
-    const activeTabId = useActiveTabId();
-    const activateTab = useStore((s) => s.activateTab);
-    const closeTab = useStore((s) => s.closeTab);
-
-    const tabItems = useMemo(
-        () => tabs.map((t) => toTabItem(t, library)),
-        [tabs, library],
-    );
-
-    return (
-        <TabView
-            tabs={tabItems}
-            activeTabId={activeTabId}
-            onActivate={activateTab}
-            onClose={closeTab}
-        />
-    );
-}
+const originalTabs = [
+    { id: 'tab1', label: 'Tab 1', closeable: false, content: <div>Content 1</div> },
+    { id: 'tab2', label: 'Tab 2', closeable: true, content: <div>Content 2</div> },
+    { id: 'tab3', label: 'Tab 3', closeable: true, content: <div>Content 3</div> },
+    { id: 'tab4', label: 'Tab 4', closeable: true, content: <div>Content 4</div> },
+];
 
 function App() {
-    const isReady = useInitialLoad();
-    if (!isReady) return null;
+    let [tabs, setTabs] = useState(originalTabs);
 
-    return <AppTabs />;
+    return <TabView
+        tabs={tabs}
+        onCloseTab={(id: string) => (setTabs(prev => prev.filter(t => t.id !== id)))}
+    />;
 }
 
 export default App;
