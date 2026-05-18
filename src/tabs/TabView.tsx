@@ -49,15 +49,31 @@ interface DragState {
     listRight: number;
 }
 
-// Implements pointer-driven drag-to-reorder for the tab strip. Snapshots
-// trigger rects on pointerdown, slides the dragged tab via inline transform,
-// shifts siblings to open a gap, and calls `onReorder` on release. Returns
-// per-trigger handlers and an inline style fn the renderer spreads onto each.
-function useTabDrag(
+const DRAG_THRESHOLD_PX = 4;
+
+interface TabGestureCallbacks {
+    onActivate: (id: string) => void;
+    onReorder: (fromIndex: number, toIndex: number) => void;
+}
+
+// Tab strip pointer gestures: drag-to-reorder and click-to-activate share the
+// same pointerdown, so activation has to be deferred until we know which one
+// the user meant. Radix raises `onValueChange` on mousedown; we route it
+// through `onValueChange` here, stash it as pending while a pointer gesture
+// is in progress, and on pointerup commit it as an activation (no movement)
+// or discard it in favor of a reorder (movement past the drag threshold).
+// Keyboard/Enter/Space activations skip the deferral because no pointer
+// gesture is active when they fire.
+function useTabGestures(
     listRef: RefObject<HTMLDivElement | null>,
-    onReorder: (fromIndex: number, toIndex: number) => void,
+    { onActivate, onReorder }: TabGestureCallbacks,
 ) {
     const [drag, setDrag] = useState<DragState | null>(null);
+    const gestureRef = useRef({
+        active: false,
+        moved: false,
+        pendingActivation: null as string | null,
+    });
 
     const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>, id: string) => {
         if (e.button !== 0) return;
@@ -75,6 +91,7 @@ function useTabDrag(
         if (fromIndex < 0) return;
         const last = rects[rects.length - 1];
 
+        gestureRef.current = { active: true, moved: false, pendingActivation: null };
         e.currentTarget.setPointerCapture(e.pointerId);
         setDrag({
             id,
@@ -96,6 +113,7 @@ function useTabDrag(
         const minDx = drag.listLeft - draggedRect.left;
         const rawDx = e.clientX - drag.startX;
         const dx = Math.max(minDx, Math.min(maxDx, rawDx));
+        if (Math.abs(rawDx) > DRAG_THRESHOLD_PX) gestureRef.current.moved = true;
         const draggedLeft = draggedRect.left + dx;
         const draggedRight = draggedLeft + draggedRect.width;
 
@@ -116,22 +134,27 @@ function useTabDrag(
         }
     };
 
-    const finishDrag = (commit: boolean) => {
+    const endGesture = (commit: boolean) => {
         if (!drag) return;
-        if (commit && drag.toIndex !== drag.fromIndex) {
+        const { moved, pendingActivation } = gestureRef.current;
+        if (commit && moved && drag.toIndex !== drag.fromIndex) {
             onReorder(drag.fromIndex, drag.toIndex);
         }
+        if (commit && !moved && pendingActivation !== null) {
+            onActivate(pendingActivation);
+        }
+        gestureRef.current = { active: false, moved: false, pendingActivation: null };
         setDrag(null);
     };
 
     const onPointerUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
         if (!drag || e.pointerId !== drag.pointerId) return;
-        finishDrag(true);
+        endGesture(true);
     };
 
     const onPointerCancel = (e: ReactPointerEvent<HTMLButtonElement>) => {
         if (!drag || e.pointerId !== drag.pointerId) return;
-        finishDrag(false);
+        endGesture(false);
     };
 
     const getTriggerHandlers = (id: string) => ({
@@ -140,6 +163,14 @@ function useTabDrag(
         onPointerUp,
         onPointerCancel,
     });
+
+    const onValueChange = (id: string) => {
+        if (gestureRef.current.active) {
+            gestureRef.current.pendingActivation = id;
+        } else {
+            onActivate(id);
+        }
+    };
 
     const getTriggerStyle = (id: string, index: number): CSSProperties => {
         if (!drag) return {};
@@ -166,7 +197,7 @@ function useTabDrag(
 
     const isDragging = (id: string) => drag?.id === id;
 
-    return { getTriggerHandlers, getTriggerStyle, isDragging };
+    return { getTriggerHandlers, getTriggerStyle, isDragging, onValueChange };
 }
 
 // Tab strip + content area built on Radix Tabs. The `tabs` array is the
@@ -178,7 +209,13 @@ function TabView({ tabs, onCloseTab, onReorderTabs }: TabViewProps) {
     const [activeTabId, setActiveTabId] = useState(tabs[0].id);
     const { isVisited, markVisited, forgetVisited } = useVisitedTabs(tabs[0].id);
     const listRef = useRef<HTMLDivElement | null>(null);
-    const drag = useTabDrag(listRef, onReorderTabs);
+
+    const activate = useCallback((id: string) => {
+        setActiveTabId(id);
+        markVisited(id);
+    }, [markVisited]);
+
+    const gestures = useTabGestures(listRef, { onActivate: activate, onReorder: onReorderTabs });
 
     const closeTab = useCallback((closingId: string) => {
         onCloseTab(closingId);
@@ -186,17 +223,15 @@ function TabView({ tabs, onCloseTab, onReorderTabs }: TabViewProps) {
         if (activeTabId === closingId) {
             const closingIndex = tabs.findIndex(t => t.id === closingId);
             const nextTab = tabs[closingIndex + 1] ?? tabs[closingIndex - 1];
-            if (!nextTab) return;
-            setActiveTabId(nextTab.id);
-            markVisited(nextTab.id);
+            if (nextTab) activate(nextTab.id);
         }
-    }, [activeTabId, tabs, onCloseTab, forgetVisited, markVisited]);
+    }, [activeTabId, tabs, onCloseTab, forgetVisited, activate]);
 
     return (
         <Tabs.Root
             className={styles.root}
             value={activeTabId}
-            onValueChange={(v) => { setActiveTabId(v); markVisited(v); }}
+            onValueChange={gestures.onValueChange}
         >
             <Tabs.List className={styles.list} ref={listRef}>
                 {tabs.map((t, idx) => (
@@ -204,9 +239,9 @@ function TabView({ tabs, onCloseTab, onReorderTabs }: TabViewProps) {
                         key={t.id}
                         value={t.id}
                         data-tab-id={t.id}
-                        data-dragging={drag.isDragging(t.id) || undefined}
-                        style={drag.getTriggerStyle(t.id, idx)}
-                        {...drag.getTriggerHandlers(t.id)}
+                        data-dragging={gestures.isDragging(t.id) || undefined}
+                        style={gestures.getTriggerStyle(t.id, idx)}
+                        {...gestures.getTriggerHandlers(t.id)}
                     >
                         <span className={styles.tabLabel}>{t.label}</span>
                         {t.closeable && (
