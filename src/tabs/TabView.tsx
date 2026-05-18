@@ -214,7 +214,7 @@ function TabView({ tabs, onCloseTab, onReorderTabs }: TabViewProps) {
                                 className={styles.tabClose}
                                 role="button"
                                 tabIndex={0}
-                                onPointerDown={(e) => e.stopPropagation()}
+                                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     closeTab(t.id);
