@@ -1,0 +1,26 @@
+.panelSeparator {
+    width: var(--panel-separator-hitbox-size);
+    background-color: transparent;
+    cursor: col-resize;
+    transition: background-color 120ms ease;
+}
+
+.panelSeparator::before {
+    content: "";
+    display: block;
+    width: var(--panel-separator-line-size);
+    height: 100%;
+    margin: 0 auto;
+    background-color: var(--panel-separator-color);
+}
+
+.panelSeparator[data-separator="hover"]::before,
+.panelSeparator[data-separator="focus"]::before,
+.panelSeparator:hover::before,
+.panelSeparator:focus-visible::before {
+    background-color: var(--panel-separator-color-hover);
+}
+
+.panelSeparator[data-separator="active"]::before {
+    background-color: var(--panel-separator-color-active);
+}

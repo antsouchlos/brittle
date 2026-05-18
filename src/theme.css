@@ -6,7 +6,7 @@
 :root {
     /* Typography */
     --font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --font-size: 14px;
+    --font-size:   14px;
     --line-height: 22px;
     --font-weight: 450;
 
@@ -29,6 +29,13 @@
     /* Surface */
     --color-fg: var(--gb-fg1);
     --color-bg: var(--gb-bg0);
+
+    /* Panels */
+    --panel-separator-hitbox-size:  4px;
+    --panel-separator-line-size:    2px;
+    --panel-separator-color:        var(--gb-bg2);
+    --panel-separator-color-hover:  var(--gb-bg3);
+    --panel-separator-color-active: var(--gb-orange);
 
     /* Tabs */
     --tab-fg:                  rgba(60, 56, 54, 0.65);          /* gb-fg1 @ 65% */
@@ -68,6 +75,10 @@
 
         --color-fg: var(--gb-fg1);
         --color-bg: var(--gb-bg0);
+
+        --panel-separator-color:        var(--gb-bg2);
+        --panel-separator-color-hover:  var(--gb-bg3);
+        --panel-separator-color-active: var(--gb-orange);
 
         --tab-fg:                  rgba(213, 196, 161, 0.55);    /* gb-fg2 @ 55% */
         --tab-bg:                  rgba(40, 40, 40, 0.25);       /* gb-bg1 @ 25% */
