@@ -37,9 +37,11 @@
     border-color: var(--tab-border-color-hover);
 }
 
-[role="tab"]:active {
-    border-color: var(--tab-border-color-hover);
+[role="tab"][data-state="active"] {
+    color: var(--tab-fg-active);
     background-color: var(--tab-bg-active);
+    border-color: var(--tab-border-color-active);
+    box-shadow: var(--tab-shadow-active);
 }
 
 [role="tab"][data-dragging] {
@@ -51,7 +53,7 @@
 .tabClose {
     margin-left: 6px;
     cursor: pointer;
-    font-size: 1em;
+    font-size: 1.2em;
     line-height: 1;
     padding: 0 2px;
     color: inherit;
