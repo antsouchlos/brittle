@@ -1,6 +1,6 @@
 import { ReactNode, useCallback, useState } from 'react';
 import './App.css';
-import TabView from './TabView.tsx';
+import TabView from '../tabs/TabView.tsx';
 
 const originalTabs = [
     { id: 'tab1', label: 'Tab 1', closeable: false, content: <div>Content 1</div> },
@@ -15,6 +15,12 @@ function App() {
     return <TabView
         tabs={tabs}
         onCloseTab={(id: string) => (setTabs(prev => prev.filter(t => t.id !== id)))}
+        onReorderTabs={(from: number, to: number) => setTabs(prev => {
+            const next = prev.slice();
+            const [moved] = next.splice(from, 1);
+            next.splice(to, 0, moved);
+            return next;
+        })}
     />;
 }
 

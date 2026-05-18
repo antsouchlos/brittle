@@ -1,0 +1,62 @@
+/* --- Functional: required for tab dragging / Radix tab semantics. --- */
+
+[role="tabpanel"][data-state="inactive"] {
+    display: none;
+}
+
+[role="tab"] {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+[role="tab"]:active {
+    cursor: grabbing;
+}
+
+[role="tab"][data-dragging] {
+    cursor: grabbing;
+}
+
+/* --- Visual: overridable via CSS custom properties in theme.css. --- */
+
+[role="tab"] {
+    border-radius: var(--tab-radius);
+    border: 1px solid var(--tab-border-color);
+    padding: var(--tab-padding);
+    font-size: 1em;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--tab-fg);
+    background-color: var(--tab-bg);
+    box-shadow: var(--tab-shadow);
+    outline: none;
+}
+
+[role="tab"]:hover {
+    border-color: var(--tab-border-color-hover);
+}
+
+[role="tab"]:active {
+    border-color: var(--tab-border-color-hover);
+    background-color: var(--tab-bg-active);
+}
+
+[role="tab"][data-dragging] {
+    box-shadow: var(--tab-drag-shadow);
+}
+
+.tabLabel { display: inline-block; }
+
+.tabClose {
+    margin-left: 6px;
+    cursor: pointer;
+    font-size: 1em;
+    line-height: 1;
+    padding: 0 2px;
+    color: inherit;
+}
+
+.tabClose:hover {
+    color: var(--tab-close-hover-color);
+}
