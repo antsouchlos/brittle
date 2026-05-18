@@ -184,10 +184,13 @@ function TabView({ tabs, onCloseTab, onReorderTabs }: TabViewProps) {
         onCloseTab(closingId);
         forgetVisited(closingId);
         if (activeTabId === closingId) {
-            const remaining = tabs.filter(t => t.id !== closingId);
-            setActiveTabId(remaining[0]?.id ?? '');
+            const closingIndex = tabs.findIndex(t => t.id === closingId);
+            const nextTab = tabs[closingIndex + 1] ?? tabs[closingIndex - 1];
+            if (!nextTab) return;
+            setActiveTabId(nextTab.id);
+            markVisited(nextTab.id);
         }
-    }, [activeTabId, tabs, onCloseTab, forgetVisited]);
+    }, [activeTabId, tabs, onCloseTab, forgetVisited, markVisited]);
 
     return (
         <Tabs.Root
