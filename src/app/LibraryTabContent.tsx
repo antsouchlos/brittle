@@ -1,4 +1,4 @@
-import { CSSProperties, Dispatch, SetStateAction, useMemo, useState } from 'react';
+import { CSSProperties, Dispatch, MouseEvent as ReactMouseEvent, SetStateAction, useMemo, useState } from 'react';
 import { selectionFeature, syncDataLoaderFeature } from '@headless-tree/core';
 import { useTree } from '@headless-tree/react';
 import { ChevronDown, ChevronRight, Folder } from 'lucide-react';
@@ -116,9 +116,29 @@ function CollectionTree({
                     '--collection-tree-level': item.getItemMeta().level,
                 } as CSSProperties;
 
+                const { onClick: _defaultOnClick, ...itemProps } = item.getProps();
+                const selectOnly = () => tree.setSelectedItems([item.getId()]);
+                const toggleFold = () => {
+                    if (!item.isFolder()) return;
+                    if (item.isExpanded()) item.collapse();
+                    else item.expand();
+                };
+                const handleRowClick = () => {
+                    item.setFocused();
+                    if (item.isSelected()) toggleFold();
+                    else selectOnly();
+                };
+                const handleDisclosureClick = (e: ReactMouseEvent<HTMLSpanElement>) => {
+                    e.stopPropagation();
+                    item.setFocused();
+                    selectOnly();
+                    toggleFold();
+                };
+
                 return (
                     <button
-                        {...item.getProps()}
+                        {...itemProps}
+                        onClick={handleRowClick}
                         key={item.getId()}
                         className={styles.collectionTreeItem}
                         data-expanded={item.isExpanded() || undefined}
@@ -128,7 +148,11 @@ function CollectionTree({
                         type="button"
                     >
                         <span className={styles.collectionTreeIndent} />
-                        <span className={styles.collectionTreeDisclosure} aria-hidden="true">
+                        <span
+                            className={styles.collectionTreeDisclosure}
+                            aria-hidden="true"
+                            onClick={item.isFolder() ? handleDisclosureClick : undefined}
+                        >
                             {item.isFolder()
                                 ? item.isExpanded() ? <ChevronDown size={14} /> : <ChevronRight size={14} />
                                 : null}
