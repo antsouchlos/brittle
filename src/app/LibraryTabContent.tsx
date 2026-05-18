@@ -130,8 +130,6 @@ function CollectionTree({
                 };
                 const handleDisclosureClick = (e: ReactMouseEvent<HTMLSpanElement>) => {
                     e.stopPropagation();
-                    item.setFocused();
-                    selectOnly();
                     toggleFold();
                 };
 
