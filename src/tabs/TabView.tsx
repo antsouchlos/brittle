@@ -190,8 +190,12 @@ function TabView({ tabs, onCloseTab, onReorderTabs }: TabViewProps) {
     }, [activeTabId, tabs, onCloseTab, forgetVisited]);
 
     return (
-        <Tabs.Root value={activeTabId} onValueChange={(v) => { setActiveTabId(v); markVisited(v); }}>
-            <Tabs.List ref={listRef}>
+        <Tabs.Root
+            className={styles.root}
+            value={activeTabId}
+            onValueChange={(v) => { setActiveTabId(v); markVisited(v); }}
+        >
+            <Tabs.List className={styles.list} ref={listRef}>
                 {tabs.map((t, idx) => (
                     <Tabs.Trigger
                         key={t.id}
@@ -226,7 +230,7 @@ function TabView({ tabs, onCloseTab, onReorderTabs }: TabViewProps) {
             </Tabs.List>
             {tabs.map((t) =>
                 isVisited(t.id) ? (
-                    <Tabs.Content key={t.id} value={t.id} forceMount>
+                    <Tabs.Content className={styles.content} key={t.id} value={t.id} forceMount>
                         {t.content}
                     </Tabs.Content>
                 ) : null
