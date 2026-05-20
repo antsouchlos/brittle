@@ -31,8 +31,8 @@
     --color-bg: var(--gb-bg0);
 
     /* Panels */
-    --panel-separator-hitbox-size:  4px;
-    --panel-separator-line-size:    2px;
+    --panel-separator-hitbox-width: 6px;
+    --panel-separator-line-width:   2px;
     --panel-separator-color:        var(--gb-bg2);
     --panel-separator-color-hover:  var(--gb-bg3);
     --panel-separator-color-active: var(--gb-orange);

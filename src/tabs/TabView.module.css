@@ -30,8 +30,6 @@
     border: var(--tab-border);
     box-shadow: var(--tab-shadow);
 
-    touch-action: none;
-
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;

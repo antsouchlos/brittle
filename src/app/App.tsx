@@ -11,6 +11,7 @@ import LibraryTabContent, {
     Library,
     libraryPanelIds,
 } from './LibraryTabContent.tsx';
+import HorizontalPanelLayout from '../tabs/HorizontalPanelLayout.tsx';
 
 const sampleLibrary: Library = {
     rootId: 'library',
@@ -63,15 +64,36 @@ const defaultLibraryLayout: Layout = {
 function App() {
     const [library] = useState<Library>(sampleLibrary);
     const [libraryLayout, setLibraryLayout] = useState<Layout>(defaultLibraryLayout);
+
+    const [panel1Width, setPanel1Width] = useState(0.33);
+    const [panel2Width, setPanel2Width] = useState(0.33);
+
     const fixedTabs = [
         {
             id: 'Lib',
             label: 'Library',
-            renderContent: () => (<LibraryTabContent
-                library={library}
-                panelLayout={libraryLayout}
-                onPanelLayoutChange={setLibraryLayout}
-            />),
+            renderContent: () => (
+                <HorizontalPanelLayout
+                    firstPanelsData={[
+                        {
+                            width: panel1Width,
+                            setWidth: setPanel1Width,
+                            renderContent: () => <div>Panel 1</div>,
+                        },
+                        {
+                            width: panel2Width,
+                            setWidth: setPanel2Width,
+                            renderContent: () => <div>Panel 2</div>,
+                        }
+                    ]}
+                    renderLastPanelContent={() => <div>Panel 3</div>}
+                />
+            ),
+            // renderContent: () => (<LibraryTabContent
+            //     library={library}
+            //     panelLayout={libraryLayout}
+            //     onPanelLayoutChange={setLibraryLayout}
+            // />),
         },
     ];
 

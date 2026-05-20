@@ -56,7 +56,7 @@ export function useTabGestures(
 
         const tabBar = tabBarRef.current;
         if (!tabBar) {
-            console.error("No tabs found");
+            console.error("No tab bar found");
             return;
         };
 

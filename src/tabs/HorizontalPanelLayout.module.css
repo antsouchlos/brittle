@@ -1,0 +1,38 @@
+.horizontalPanelLayout {
+    display: flex;
+    height: 100%;
+}
+
+.panel {
+    flex: 0 0 auto;
+}
+
+.panel:last-child {
+    flex: 1 0 0 ;
+}
+
+.separator {
+    position: relative;
+    width: var(--panel-separator-hitbox-width);
+    background: separator;
+    cursor: col-resize;
+}
+
+.separator::before {
+    content: "";
+    display: block;
+    margin-left: 50%;
+    transform: translateX(-50%);
+    width: var(--panel-separator-line-width);
+    height: 100%;
+    background: var(--panel-separator-color);
+    cursor: col-resize;
+}
+
+.separator:hover::before {
+    background: var(--panel-separator-color-hover);
+}
+
+.separator:active::before {
+    background: var(--panel-separator-color-active);
+}
