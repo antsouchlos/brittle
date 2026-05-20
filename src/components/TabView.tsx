@@ -209,32 +209,33 @@ export function useTabGestures(
     return { getTriggerHandlers, getTriggerStyle, isDragging };
 }
 
-// Tracks which tabs the user has actually visited so we can lazy-mount their
-// content. A tab's `<Tabs.Content>` is only rendered once its id enters the
-// visited set; closing a tab forgets it so reopening starts fresh.
+// Tracks which tabs the user has actually visited, in first-visit order, so we
+// can lazy-mount their content. A tab's content panel is only rendered once its
+// id enters the list; closing a tab forgets it so reopening starts fresh.
+//
+// The order is preserved (rather than using a Set) so the content panels can be
+// rendered in a DOM order independent of the tab bar order. Reordering the tab
+// bar must not move the content `<div>`s in the DOM, otherwise embedded iframes
+// (e.g. the PDF viewer) detach and reload from scratch.
 function useVisitedTabs(initialId: string) {
-    const [visited, setVisited] = useState<Set<string>>(() => new Set([initialId]));
+    const [visitedOrder, setVisitedOrder] = useState<string[]>(() => [initialId]);
 
-    const isVisited = useCallback((id: string) => visited.has(id), [visited]);
     const markVisited = useCallback((id: string) => {
-        setVisited(prev => prev.has(id) ? prev : new Set(prev).add(id));
+        setVisitedOrder(prev => prev.includes(id) ? prev : [...prev, id]);
     }, []);
     const forgetVisited = useCallback((id: string) => {
-        setVisited(prev => {
-            if (!prev.has(id)) return prev;
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-        });
+        setVisitedOrder(prev => prev.includes(id) ? prev.filter(x => x !== id) : prev);
     }, []);
 
-    return { isVisited, markVisited, forgetVisited };
+    return { visitedOrder, markVisited, forgetVisited };
 }
 
 export default function TabView({
     fixedTabs, variableTabs, selectedTabId, onSelectTab, onCloseTab, onReorderTabs
 }: TabViewProps) {
-    const { isVisited, markVisited, forgetVisited } = useVisitedTabs(selectedTabId);
+    const { visitedOrder, markVisited, forgetVisited } = useVisitedTabs(selectedTabId);
+
+    const tabsById = new Map(fixedTabs.concat(variableTabs).map(t => [t.id, t]));
 
     const tabBarRef = useRef<HTMLDivElement | null>(null);
     const gestures = useTabGestures(tabBarRef, onSelectTab, onReorderTabs);
@@ -291,17 +292,27 @@ export default function TabView({
                     );
                 })}
             </div>
-            {variableTabs.concat(fixedTabs).map((tab) =>
-                isVisited(tab.id) ? (
-                    <div
-                        key={tab.id}
-                        className={styles.tabContent}
-                        data-state={tab.id == selectedTabId ? "active" : "inactive"}
-                    >
-                        {tab.renderContent()}
-                    </div>
-                ) : null
-            )}
+            {
+                // Display the tabs in the order they were visited. This
+                // ensures the UI states of the contents persist even when
+                // reordering the tabs
+                visitedOrder.map((id) => {
+                    const tab = tabsById.get(id);
+                    if (!tab) {
+                        console.error("Visited tab not found");
+                        return null
+                    };
+                    return (
+                        <div
+                            key={id}
+                            className={styles.tabContent}
+                            data-state={id == selectedTabId ? "active" : "inactive"}
+                        >
+                            {tab.renderContent()}
+                        </div>
+                    );
+                })
+            }
         </div>
     );
 }

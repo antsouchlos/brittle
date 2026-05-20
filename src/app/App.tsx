@@ -1,69 +1,77 @@
 import { useState } from 'react';
-import { Layout } from 'react-resizable-panels';
+// import { Layout } from 'react-resizable-panels';
 import './App.css';
-import TabView from '../tabs/TabView.tsx';
+import TabView from '../components/TabView.tsx';
+import HorizontalPanelLayout from '../components/HorizontalPanelLayout.tsx';
 
-import LibraryTabContent, {
-    Collection,
-    CollectionId,
-    Entry,
-    EntryId,
-    Library,
-    libraryPanelIds,
-} from './LibraryTabContent.tsx';
-import HorizontalPanelLayout from '../tabs/HorizontalPanelLayout.tsx';
+import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 
-const sampleLibrary: Library = {
-    rootId: 'library',
-    entries: new Map<EntryId, Entry>([
-        ['entry-1', { id: 'entry-1', name: 'Attention Is All You Need' }],
-        ['entry-2', { id: 'entry-2', name: 'The Rust Programming Language' }],
-        ['entry-3', { id: 'entry-3', name: 'Designing Data-Intensive Applications' }],
-        ['entry-4', { id: 'entry-4', name: 'PDF Rendering Notes' }],
-    ]),
-    collections: new Map<CollectionId, Collection>([
-        ['library', {
-            id: 'library',
-            name: 'Library',
-            childCollectionIds: ['research', 'engineering', 'reading-list'],
-            entryIds: ['entry-1', 'entry-2'],
-        }],
-        ['research', {
-            id: 'research',
-            name: 'Research',
-            childCollectionIds: ['papers'],
-            entryIds: ['entry-1'],
-        }],
-        ['papers', {
-            id: 'papers',
-            name: 'Papers',
-            childCollectionIds: [],
-            entryIds: ['entry-1', 'entry-4'],
-        }],
-        ['engineering', {
-            id: 'engineering',
-            name: 'Engineering',
-            childCollectionIds: [],
-            entryIds: ['entry-2', 'entry-3'],
-        }],
-        ['reading-list', {
-            id: 'reading-list',
-            name: 'Reading List',
-            childCollectionIds: [],
-            entryIds: ['entry-1', 'entry-3'],
-        }],
-    ]),
+const samplePdfConfig = {
+    src: 'https://snippet.embedpdf.com/ebook.pdf',
+    theme: { preference: 'dark' as const },
 };
+const pdfStyle = { width: '100%', height: '100%' };
 
-const defaultLibraryLayout: Layout = {
-    [libraryPanelIds.collections]: 33,
-    [libraryPanelIds.viewer]: 34,
-    [libraryPanelIds.details]: 33,
-};
+// import {
+//     Collection,
+//     CollectionId,
+//     Entry,
+//     EntryId,
+//     Library,
+//     // libraryPanelIds,
+// } from './LibraryTabContent.tsx';
+
+// const sampleLibrary: Library = {
+//     rootId: 'library',
+//     entries: new Map<EntryId, Entry>([
+//         ['entry-1', { id: 'entry-1', name: 'Attention Is All You Need' }],
+//         ['entry-2', { id: 'entry-2', name: 'The Rust Programming Language' }],
+//         ['entry-3', { id: 'entry-3', name: 'Designing Data-Intensive Applications' }],
+//         ['entry-4', { id: 'entry-4', name: 'PDF Rendering Notes' }],
+//     ]),
+//     collections: new Map<CollectionId, Collection>([
+//         ['library', {
+//             id: 'library',
+//             name: 'Library',
+//             childCollectionIds: ['research', 'engineering', 'reading-list'],
+//             entryIds: ['entry-1', 'entry-2'],
+//         }],
+//         ['research', {
+//             id: 'research',
+//             name: 'Research',
+//             childCollectionIds: ['papers'],
+//             entryIds: ['entry-1'],
+//         }],
+//         ['papers', {
+//             id: 'papers',
+//             name: 'Papers',
+//             childCollectionIds: [],
+//             entryIds: ['entry-1', 'entry-4'],
+//         }],
+//         ['engineering', {
+//             id: 'engineering',
+//             name: 'Engineering',
+//             childCollectionIds: [],
+//             entryIds: ['entry-2', 'entry-3'],
+//         }],
+//         ['reading-list', {
+//             id: 'reading-list',
+//             name: 'Reading List',
+//             childCollectionIds: [],
+//             entryIds: ['entry-1', 'entry-3'],
+//         }],
+//     ]),
+// };
+
+// const defaultLibraryLayout: Layout = {
+//     [libraryPanelIds.collections]: 33,
+//     [libraryPanelIds.viewer]: 34,
+//     [libraryPanelIds.details]: 33,
+// };
 
 function App() {
-    const [library] = useState<Library>(sampleLibrary);
-    const [libraryLayout, setLibraryLayout] = useState<Layout>(defaultLibraryLayout);
+    // const [library] = useState<Library>(sampleLibrary);
+    // const [libraryLayout, setLibraryLayout] = useState<Layout>(defaultLibraryLayout);
 
     const [panel1Width, setPanel1Width] = useState(0.33);
     const [panel2Width, setPanel2Width] = useState(0.33);
@@ -86,7 +94,7 @@ function App() {
                             renderContent: () => <div>Panel 2</div>,
                         }
                     ]}
-                    renderLastPanelContent={() => <div>Panel 3</div>}
+                    renderLastPanelContent={() => <div>Panel 4</div>}
                 />
             ),
             // renderContent: () => (<LibraryTabContent
@@ -100,9 +108,21 @@ function App() {
     const [selectedTabId, setSelectedTabId] = useState(fixedTabs[0].id);
 
     const [variableTabs, setVariableTabs] = useState(() => [
-        { id: 'A', label: 'A.pdf', renderContent: () => (<div>Content 2</div>) },
-        { id: 'B', label: 'B.pdf', renderContent: () => (<div>Content 3</div>) },
-        { id: 'C', label: 'C.pdf', renderContent: () => (<div>Content 4</div>) },
+        {
+            id: 'A', label: 'A.pdf', renderContent: () => (
+                <PDFViewer style={pdfStyle} config={samplePdfConfig} />
+            )
+        },
+        {
+            id: 'B', label: 'B.pdf', renderContent: () => (
+                <PDFViewer style={pdfStyle} config={samplePdfConfig} />
+            )
+        },
+        {
+            id: 'C', label: 'C.pdf', renderContent: () => (
+                <PDFViewer style={pdfStyle} config={samplePdfConfig} />
+            )
+        },
     ]);
 
     return <TabView
