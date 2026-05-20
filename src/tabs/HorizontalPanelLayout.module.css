@@ -3,6 +3,10 @@
     height: 100%;
 }
 
+.isDragging {
+    cursor: col-resize !important;
+}
+
 .panel {
     flex: 0 0 auto;
 }
