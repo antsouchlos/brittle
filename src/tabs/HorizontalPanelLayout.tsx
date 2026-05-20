@@ -9,7 +9,45 @@ interface DragData {
 }
 
 // TODO: Make this configurable
-const MIN_PANEL_WIDTH = 0.05;
+const MIN_PANEL_WIDTH = 0.1;
+
+function computeNewWidths(
+    startWidths: Array<number>, widthDiff: number, minWidth: number,
+    dragIndex: number
+) {
+    let widths = [...startWidths];
+
+    let diffBudget = widthDiff;
+
+    if (widthDiff < 0) {
+        let i = dragIndex;
+        while (i >= 0 && diffBudget < 0) {
+            const dWi = Math.max(diffBudget, minWidth - startWidths[i]);
+
+            widths[i] = widths[i] + dWi;
+            diffBudget -= dWi;
+
+            i -= 1;
+        }
+
+        widths[dragIndex + 1] -= widthDiff - diffBudget;
+    } else {
+        let i = dragIndex + 1;
+        while (i < widths.length && diffBudget >= 0) {
+            const dWi = Math.min(diffBudget, startWidths[i] - minWidth);
+
+            widths[i] = widths[i] - dWi;
+            diffBudget -= dWi;
+
+            i += 1;
+        }
+
+        widths[dragIndex] += widthDiff - diffBudget;
+    }
+
+    return widths;
+}
+
 
 function usePanelResize(
     panelLayoutRef: RefObject<HTMLDivElement | null>,
@@ -55,19 +93,15 @@ function usePanelResize(
         }
 
         const containerWidth = panelLayout.getBoundingClientRect().width;
-        let dragDiffPercent = (e.clientX - dragData.startX) / containerWidth;
+        const dragDiffPercent = (e.clientX - dragData.startX) / containerWidth;
 
-        const i = dragData.panelIdx;
-        dragDiffPercent = Math.max(
-            MIN_PANEL_WIDTH - dragData.startWidths[i],
-            Math.min(
-                dragData.startWidths[i + 1] - MIN_PANEL_WIDTH,
-                dragDiffPercent
-            )
+        const newWidths = computeNewWidths(
+            dragData.startWidths, dragDiffPercent, MIN_PANEL_WIDTH, dragData.panelIdx
         );
 
-        panelWidthSetters[i](dragData.startWidths[i] + dragDiffPercent);
-        panelWidthSetters[i + 1](dragData.startWidths[i + 1] - dragDiffPercent);
+        for (let i = 0; i < newWidths.length; i++) {
+            panelWidthSetters[i](newWidths[i]);
+        }
     };
 
     const onPointerUp = () => { setDragData(null); };
