@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Layout } from 'react-resizable-panels';
 import './App.css';
 import TabView from '../tabs/TabView.tsx';
+
 import LibraryTabContent, {
     Collection,
     CollectionId,
@@ -62,33 +63,42 @@ const defaultLibraryLayout: Layout = {
 function App() {
     const [library] = useState<Library>(sampleLibrary);
     const [libraryLayout, setLibraryLayout] = useState<Layout>(defaultLibraryLayout);
-    const [tabs, setTabs] = useState(() => [
+    const fixedTabs = [
         {
-            id: 'tab1',
+            id: 'Lib',
             label: 'Library',
-            closeable: false,
-            content: (
-                <LibraryTabContent
-                    library={library}
-                    panelLayout={libraryLayout}
-                    onPanelLayoutChange={setLibraryLayout}
-                />
-            ),
+            renderContent: () => (<LibraryTabContent
+                library={library}
+                panelLayout={libraryLayout}
+                onPanelLayoutChange={setLibraryLayout}
+            />),
         },
-        { id: 'tab2', label: 'A.pdf', closeable: true, content: <div>Content 2</div> },
-        { id: 'tab3', label: 'B.pdf', closeable: true, content: <div>Content 3</div> },
-        { id: 'tab4', label: 'C.pdf', closeable: true, content: <div>Content 4</div> },
+    ];
+
+    const [activeTabId, setActiveTabId] = useState(fixedTabs[0].id);
+
+    const [variableTabs, setVariableTabs] = useState(() => [
+        { id: 'A', label: 'A.pdf', renderContent: () => (<div>Content 2</div>) },
+        { id: 'B', label: 'B.pdf', renderContent: () => (<div>Content 3</div>) },
+        { id: 'C', label: 'C.pdf', renderContent: () => (<div>Content 4</div>) },
     ]);
 
     return <TabView
-        tabs={tabs}
-        onCloseTab={(id: string) => (setTabs(prev => prev.filter(t => t.id !== id)))}
-        onReorderTabs={(from: number, to: number) => setTabs(prev => {
-            const next = prev.slice();
-            const [moved] = next.splice(from, 1);
-            next.splice(to, 0, moved);
-            return next;
-        })}
+        fixedTabs={fixedTabs}
+        variableTabs={variableTabs}
+        selectedTabId={activeTabId}
+        onSelectTab={setActiveTabId}
+        onCloseTab={(id: string) => {
+            setVariableTabs(variableTabs.filter((tab) => (tab.id != id)))
+        }}
+        onReorderTabs={(from: number, to: number) => {
+            setVariableTabs(prev => {
+                const newTabs = [...prev];
+                const [moved] = newTabs.splice(from, 1);
+                newTabs.splice(to, 0, moved);
+                return newTabs;
+            });
+        }}
     />;
 }
 

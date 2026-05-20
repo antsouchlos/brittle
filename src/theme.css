@@ -57,27 +57,36 @@
     --collection-tree-fg-muted:             var(--gb-fg2);
     --collection-tree-fg-selected:          var(--gb-fg0);
     --collection-tree-icon-color:           var(--gb-blue);
-    --collection-tree-bg-hover:             rgba(213, 196, 161, 0.35);       /* gb-bg2 @ 35% */
-    --collection-tree-bg-selected:          rgba(69, 133, 136, 0.18);        /* gb-blue @ 18% */
+    --collection-tree-bg-hover:             rgba(213, 196, 161, 0.35); /* gb-bg2 @ 35% */
+    --collection-tree-bg-selected:          rgba(69, 133, 136, 0.18); /* gb-blue @ 18% */
     --collection-tree-focus-outline:        1px solid var(--gb-orange);
     --collection-tree-focus-outline-offset: -1px;
 
     /* Tabs */
-    --tab-fg:                  rgba(60, 56, 54, 0.65);          /* gb-fg1 @ 65% */
-    --tab-bg:                  rgba(235, 219, 178, 0.18);       /* gb-bg1 @ 18% */
-    --tab-border-color:        transparent;
-    --tab-border-color-hover:  var(--gb-orange);
+    --tab-radius:              10px 10px 4px 4px;
+    --tab-padding:             0.35em 0.8em 0 0.8em;
+
+    --tab-close-hover-color:   var(--gb-red);
+
+    --tab-fg:                  rgba(60, 56, 54, 0.65); /* gb-fg1 @ 65% */
+    --tab-bg:                  var(--gb-bg0);
+    --tab-border:              1px solid transparent;
     --tab-shadow:              none;
+
+    --tab-fg-hover:            rgba(60, 56, 54, 0.65); /* gb-fg1 @ 65% */
+    --tab-bg-hover:            var(--gb-bg0);
+    --tab-border-hover:        1px solid var(--gb-orange);
+    --tab-shadow-hover:        none;
 
     --tab-fg-active:           var(--gb-fg0);
     --tab-bg-active:           var(--gb-bg1);
-    --tab-border-color-active: var(--gb-orange);
+    --tab-border-active:       var(--tab-border-hover);
     --tab-shadow-active:       none;
 
-    --tab-radius:              10px 10px 4px 4px;
-    --tab-padding:             0.5em 1.1em;
-    --tab-drag-shadow:         0 6px 18px rgba(60, 56, 54, 0.22);
-    --tab-close-hover-color:   var(--gb-red);
+    --tab-fg-drag:             rgba(60, 56, 54, 0.65); /* gb-fg1 @ 65% */
+    --tab-bg-drag:             var(--gb-bg0);
+    --tab-border-drag:         1px solid var(--gb-orange);
+    --tab-shadow-drag:         0 8px 22px rgba(0, 0, 0, 0.55);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -112,20 +121,29 @@
         --collection-tree-fg-muted:             var(--gb-fg2);
         --collection-tree-fg-selected:          var(--gb-fg0);
         --collection-tree-icon-color:           var(--gb-blue);
-        --collection-tree-bg-hover:             rgba(80, 73, 69, 0.45);      /* gb-bg3 @ 45% */
-        --collection-tree-bg-selected:          rgba(131, 165, 152, 0.16);   /* gb-blue @ 16% */
+        --collection-tree-bg-hover:             rgba(80, 73, 69, 0.45); /* gb-bg3 @ 45% */
+        --collection-tree-bg-selected:          rgba(131, 165, 152, 0.16); /* gb-blue @ 16% */
         --collection-tree-focus-outline:        1px solid var(--gb-orange);
 
-        --tab-fg:                  rgba(213, 196, 161, 0.55);    /* gb-fg2 @ 55% */
-        --tab-bg:                  rgba(40, 40, 40, 0.25);       /* gb-bg1 @ 25% */
-        --tab-border-color-hover:  var(--gb-orange);
+        --tab-fg:                  rgba(213, 196, 161, 0.55); /* gb-fg2 @ 55% */
+        --tab-bg:                  var(--gb-bg0);
+        --tab-border:              1px solid transparent;
         --tab-shadow:              none;
+
+        --tab-fg-hover:            rgba(213, 196, 161, 0.55); /* gb-fg2 @ 55% */
+        --tab-bg-hover:            var(--gb-bg0);
+        --tab-border-hover:        1px solid var(--gb-orange);
+        --tab-shadow-hover:        none;
 
         --tab-fg-active:           var(--gb-fg0);
         --tab-bg-active:           var(--gb-bg2);
-        --tab-border-color-active: var(--gb-orange);
+        --tab-border-active:       var(--tab-border-hover);
         --tab-shadow-active:       none;
 
-        --tab-drag-shadow:         0 8px 22px rgba(0, 0, 0, 0.55);
+        --tab-fg-drag:             rgba(213, 196, 161, 0.55); /* gb-fg2 @ 55% */
+        --tab-bg-drag:             var(--gb-bg0);
+        --tab-border-drag:         1px solid var(--gb-orange);
+        --tab-shadow-drag:         0 8px 22px rgba(0, 0, 0, 0.55);
+
     }
 }

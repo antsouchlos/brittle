@@ -1,80 +1,77 @@
-/* --- Functional: required for tab dragging / Radix tab semantics. --- */
-
-[role="tabpanel"][data-state="inactive"] {
-    display: none;
+.tabBar {
+    display: flex;
 }
 
-[role="tab"] {
-    cursor: grab;
-    touch-action: none;
-    user-select: none;
-}
-
-[role="tab"]:active {
-    cursor: grabbing;
-}
-
-[role="tab"][data-dragging] {
-    cursor: grabbing;
-}
-
-.root {
+.tabView {
     display: flex;
     flex-direction: column;
     height: 100%;
     min-height: 0;
 }
 
-.list {
-    flex: 0 0 auto;
+.tabContent {
+    height: 100%;
 }
 
-.content {
-    flex: 1 1 auto;
-    min-height: 0;
+.tabContent[data-state="inactive"] {
+    display: none;
 }
 
-/* --- Visual: overridable via CSS custom properties in theme.css. --- */
-
-[role="tab"] {
-    border-radius: var(--tab-radius);
-    border: 1px solid var(--tab-border-color);
+.tabHeader {
     padding: var(--tab-padding);
-    font-size: 1em;
-    font-weight: 500;
-    font-family: inherit;
-    color: var(--tab-fg);
+    border-radius: var(--tab-radius);
+    height: 1.6em;
+    display: flex;
+    align-items: center;
+
+    cursor: pointer;
     background-color: var(--tab-bg);
+    color: var(--tab-fg);
+    border: var(--tab-border);
     box-shadow: var(--tab-shadow);
-    outline: none;
+
+    touch-action: none;
+
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
-[role="tab"]:hover {
-    border-color: var(--tab-border-color-hover);
+.tabHeader:hover {
+    background-color: var(--tab-bg-hover);
+    color: var(--tab-fg-hover);
+    border: var(--tab-border-hover);
+    box-shadow: var(--tab-shadow-hover);
 }
 
-[role="tab"][data-state="active"] {
-    color: var(--tab-fg-active);
+.tabHeader[data-state="active"] {
     background-color: var(--tab-bg-active);
-    border-color: var(--tab-border-color-active);
+    color: var(--tab-fg-active);
+    border: var(--tab-border-active);
     box-shadow: var(--tab-shadow-active);
 }
 
-[role="tab"][data-dragging] {
-    box-shadow: var(--tab-drag-shadow);
+.tabHeader[data-dragging][data-state="active"] {
+    background-color: var(--tab-bg-active);
+    color: var(--tab-fg-active);
+    border: var(--tab-border-drag);
+    box-shadow: var(--tab-shadow-drag);
 }
 
-.tabLabel { display: inline-block; }
+.tabHeader[data-dragging] {
+    cursor: grabbing;
+    background-color: var(--tab-bg-drag);
+    color: var(--tab-fg-drag);
+    border: var(--tab-border-drag);
+    box-shadow: var(--tab-shadow-drag);
+}
 
-.tabClose {
-    margin-left: 6px;
+.tabCloseButton {
+    margin-left: 0.5em;
     cursor: pointer;
-    font-size: 1.2em;
-    line-height: 1;
-    padding: 0 2px;
-    color: inherit;
 }
 
-.tabClose:hover {
+.tabCloseButton:hover {
     color: var(--tab-close-hover-color);
 }
