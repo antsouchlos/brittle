@@ -75,7 +75,7 @@ function App() {
         },
     ];
 
-    const [activeTabId, setActiveTabId] = useState(fixedTabs[0].id);
+    const [selectedTabId, setSelectedTabId] = useState(fixedTabs[0].id);
 
     const [variableTabs, setVariableTabs] = useState(() => [
         { id: 'A', label: 'A.pdf', renderContent: () => (<div>Content 2</div>) },
@@ -86,10 +86,31 @@ function App() {
     return <TabView
         fixedTabs={fixedTabs}
         variableTabs={variableTabs}
-        selectedTabId={activeTabId}
-        onSelectTab={setActiveTabId}
+        selectedTabId={selectedTabId}
+        onSelectTab={setSelectedTabId}
         onCloseTab={(id: string) => {
-            setVariableTabs(variableTabs.filter((tab) => (tab.id != id)))
+            // Remove closed tab
+
+            setVariableTabs(variableTabs.filter((tab) => (tab.id != id)));
+            if (id != selectedTabId) return;
+
+            // Select other tab if the selected one was closed
+
+            const allTabs = fixedTabs.concat(variableTabs);
+
+            const selectedIdx = allTabs.findIndex(
+                (tab) => tab.id == selectedTabId);
+
+            if (!selectedIdx) {
+                console.error("Could not find closed tab id");
+                return;
+            }
+
+            if (selectedIdx + 1 < allTabs.length) {
+                setSelectedTabId(allTabs[selectedIdx + 1].id);
+            } else {
+                setSelectedTabId(allTabs[allTabs.length - 2].id);
+            }
         }}
         onReorderTabs={(from: number, to: number) => {
             setVariableTabs(prev => {
