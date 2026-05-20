@@ -37,6 +37,6 @@
     background: var(--panel-separator-color-hover);
 }
 
-.separator:active::before {
-    background: var(--panel-separator-color-active);
+.activeSeparator::before {
+    background: var(--panel-separator-color-active) !important;
 }

@@ -2,8 +2,7 @@ import { PointerEvent as ReactPointerEvent, Fragment, ReactNode, RefObject, useR
 import styles from './HorizontalPanelLayout.module.css';
 
 interface DragData {
-    // Index of the panel on the left side of the separator being dragged
-    panelIdx: number;
+    separatorIdx: number;
     startX: number;
     startWidths: number[];
 }
@@ -56,7 +55,7 @@ function usePanelResize(
     const [dragData, setDragData] = useState<DragData | null>(null);
 
     const onPointerDown =
-        (e: ReactPointerEvent<HTMLDivElement>, panelIdx: number) => {
+        (e: ReactPointerEvent<HTMLDivElement>, separatorIdx: number) => {
             // Only consider left mouse button clicks
             if (e.button !== 0) return;
 
@@ -77,7 +76,7 @@ function usePanelResize(
             e.preventDefault();
 
             setDragData({
-                panelIdx,
+                separatorIdx: separatorIdx,
                 startX: e.clientX,
                 startWidths,
             });
@@ -96,7 +95,7 @@ function usePanelResize(
         const dragDiffPercent = (e.clientX - dragData.startX) / containerWidth;
 
         const newWidths = computeNewWidths(
-            dragData.startWidths, dragDiffPercent, MIN_PANEL_WIDTH, dragData.panelIdx
+            dragData.startWidths, dragDiffPercent, MIN_PANEL_WIDTH, dragData.separatorIdx
         );
 
         for (let i = 0; i < newWidths.length; i++) {
@@ -107,14 +106,20 @@ function usePanelResize(
     const onPointerUp = () => { setDragData(null); };
     const onPointerCancel = () => { setDragData(null); };
 
-    const getTriggerHandlers = (panelIdx: number) => ({
-        onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => onPointerDown(e, panelIdx),
+    const getTriggerHandlers = (separatorIdx: number) => ({
+        onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => onPointerDown(e, separatorIdx),
         onPointerMove,
         onPointerUp,
         onPointerCancel,
     });
 
-    const isDragging = () => (dragData != null);
+    const isDragging = (separatorIdx: number | null) => {
+        if (separatorIdx === null) {
+            return dragData != null;
+        } else {
+            return (dragData != null) && (separatorIdx == dragData.separatorIdx);
+        }
+    };
 
     return { getTriggerHandlers, isDragging };
 }
@@ -145,7 +150,7 @@ export default function HorizontalPanelLayout(
     return (
         <div
             className={`${styles.horizontalPanelLayout}
-                ${isDragging() ? styles.isDragging : ''}`}
+                ${isDragging(null) ? styles.isDragging : ''}`}
             ref={panelLayoutRef}
         >
             {firstPanelsData.map((data, index) => (
@@ -157,7 +162,8 @@ export default function HorizontalPanelLayout(
                         {data.renderContent()}
                     </div>
                     <div
-                        className={styles.separator}
+                        className={`${styles.separator}
+                            ${isDragging(index) ? styles.activeSeparator : ''}`}
                         {...getTriggerHandlers(index)}
                     ></div>
                 </Fragment>
