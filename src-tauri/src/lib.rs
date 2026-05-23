@@ -129,9 +129,6 @@ pub fn run() {
 }
 
 // ---------- Serialized (wire) types ----------
-//
-// These mirror the TypeScript types in `src/ipc/wireTypes.ts`. `serde` renames
-// are emitted as camelCase to match the JS shape directly.
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

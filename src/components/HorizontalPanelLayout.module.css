@@ -9,6 +9,8 @@
 
 .panel {
     flex: 0 0 auto;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .panel:last-child {

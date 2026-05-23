@@ -1,8 +1,8 @@
 import { useState } from 'react';
-// import { Layout } from 'react-resizable-panels';
 import './App.css';
 import TabView from '../components/TabView.tsx';
 import HorizontalPanelLayout from '../components/HorizontalPanelLayout.tsx';
+import DirectoryTreeView from '../components/TreeView.tsx';
 
 import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 
@@ -76,6 +76,35 @@ function App() {
     const [panel1Width, setPanel1Width] = useState(0.33);
     const [panel2Width, setPanel2Width] = useState(0.33);
 
+    const root = {
+        name: "Library",
+        count: 9,
+        children: [
+            {
+                name: "ba-thesis", count: 1, children: []
+            },
+            {
+                name: "ma-thesis", count: 3, children: [
+                    { name: "fundamentals", count: 1, children: [] },
+                    { name: "research-gap", count: 1, children: [] },
+                    { name: "state-of-the-art", count: 1, children: [] }
+                ]
+            },
+            {
+                name: "phd", count: 2, children: [
+                    { name: "qec", count: 1, children: [] },
+                    { name: "polar-codes", count: 1, children: [] }
+                ]
+            },
+            {
+                name: "other", count: 2, children: [
+                    { name: "electronics", count: 1, children: [] },
+                    { name: "software", count: 1, children: [] },
+                ]
+            },
+        ]
+    };
+
     const fixedTabs = [
         {
             id: 'Lib',
@@ -86,7 +115,7 @@ function App() {
                         {
                             width: panel1Width,
                             setWidth: setPanel1Width,
-                            renderContent: () => <div>Panel 1</div>,
+                            renderContent: () => <DirectoryTreeView root={root} />,
                         },
                         {
                             width: panel2Width,

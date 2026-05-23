@@ -87,6 +87,16 @@
     --tab-bg-drag:             var(--gb-bg0);
     --tab-border-drag:         1px solid var(--gb-orange);
     --tab-shadow-drag:         0 8px 22px rgba(0, 0, 0, 0.55);
+
+    --tree-fg-hover:           currentColor; /* gb-fg1 @ 65% */
+    --tree-bg-hover:           var(--gb-bg0);
+    --tree-border-hover:       1px solid var(--gb-orange);
+    --tree-shadow-hover:       none;
+
+    --tree-fg-active:          var(--gb-fg0);
+    --tree-bg-active:          var(--gb-bg1);
+    --tree-border-active:      1px solid transparent;
+    --tree-shadow-active:      none;
 }
 
 @media (prefers-color-scheme: dark) {

@@ -1,0 +1,95 @@
+.node {
+    margin-left: 2em;
+    min-width: 0;
+}
+
+.nodeTitle {
+    display: flex;
+    align-items: center;
+    height: 1.3em;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.nodeButton {
+    flex: 0 0 auto;
+    position: relative;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    margin-right: 5px;
+    transform: translateY(-50%);
+    /* background: red; */
+}
+
+.nodeButton[button-variant="none"] {
+    visibility: hidden;
+}
+
+.nodeButton::before,
+.nodeButton::after {
+    content: '';
+    position: absolute;
+    width: 2px;
+    height: 7px;
+    background: currentColor;
+    left: 4px;
+    top: 1px;
+    border-radius: 1px;
+}
+
+.nodeButton[button-variant="collapsed"]::before {
+    transform: rotate(45deg);
+    transform-origin: bottom left;
+}
+
+.nodeButton[button-variant="collapsed"]::after {
+    transform: rotate(-45deg);
+    transform-origin: top left;
+}
+
+.nodeButton[button-variant="expanded"]::before {
+    transform: rotate(-45deg);
+    transform-origin: bottom right;
+}
+
+.nodeButton[button-variant="expanded"]::after {
+    transform: rotate(45deg);
+    transform-origin: bottom left;
+}
+
+.nodeName {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding-left: 24px;
+    background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M22   19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'/></svg>") 5px center / 15px 15px no-repeat;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nodeCount {
+    flex: 0 0 auto;
+    margin-left: 8px;
+    padding-right: 5px;
+    color: var(--tree-fg-muted, currentColor);
+    white-space: nowrap;
+}
+
+.nodeName:active {
+    color: var(--tree-fg-active);
+    background-color: var(--tree-bg-active);
+    border: var(--tree-border-active);
+    box-shadow: var(--tree-shadow-active);
+}
+
+.nodeName:hover {
+    color: var(--tree-fg-hover);
+    background-color: var(--tree-bg-hover);
+    border: var(--tree-border-hover);
+    box-shadow: var(--tree-shadow-hover);
+}
