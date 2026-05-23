@@ -8,7 +8,7 @@ interface DragData {
 }
 
 // TODO: Make this configurable
-const MIN_PANEL_WIDTH = 0.1;
+const MIN_PANEL_WIDTH = 0.15;
 
 function computeNewWidths(
     startWidths: Array<number>, widthDiff: number, minWidth: number,

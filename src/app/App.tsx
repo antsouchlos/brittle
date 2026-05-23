@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Folder } from 'lucide-react';
 import './App.css';
 import TabView from '../components/TabView.tsx';
 import HorizontalPanelLayout from '../components/HorizontalPanelLayout.tsx';
@@ -11,6 +12,7 @@ const samplePdfConfig = {
     theme: { preference: 'dark' as const },
 };
 const pdfStyle = { width: '100%', height: '100%' };
+const renderFolderIcon = () => <Folder size={15} aria-hidden="true" />;
 
 // import {
 //     Collection,
@@ -77,32 +79,92 @@ function App() {
     const [panel2Width, setPanel2Width] = useState(0.33);
 
     const root = {
+        id: 'library',
         name: "Library",
         count: 9,
+        renderIcon: renderFolderIcon,
         children: [
             {
-                name: "ba-thesis", count: 1, children: []
+                id: 'ba-thesis',
+                name: "ba-thesis",
+                count: 1,
+                renderIcon: renderFolderIcon,
+                children: [],
             },
             {
-                name: "ma-thesis", count: 3, children: [
-                    { name: "fundamentals", count: 1, children: [] },
-                    { name: "research-gap", count: 1, children: [] },
-                    { name: "state-of-the-art", count: 1, children: [] }
-                ]
+                id: 'ma-thesis',
+                name: "ma-thesis",
+                count: 3,
+                renderIcon: renderFolderIcon,
+                children: [
+                    {
+                        id: 'fundamentals',
+                        name: "fundamentals",
+                        count: 1,
+                        renderIcon: renderFolderIcon,
+                        children: [],
+                    },
+                    {
+                        id: 'research-gap',
+                        name: "research-gap",
+                        count: 1,
+                        renderIcon: renderFolderIcon,
+                        children: [],
+                    },
+                    {
+                        id: 'state-of-the-art',
+                        name: "state-of-the-art",
+                        count: 1,
+                        renderIcon: renderFolderIcon,
+                        children: [],
+                    },
+                ],
             },
             {
-                name: "phd", count: 2, children: [
-                    { name: "qec", count: 1, children: [] },
-                    { name: "polar-codes", count: 1, children: [] }
-                ]
+                id: 'phd',
+                name: "phd",
+                count: 2,
+                renderIcon: renderFolderIcon,
+                children: [
+                    {
+                        id: 'qec',
+                        name: "qec",
+                        count: 1,
+                        renderIcon: renderFolderIcon,
+                        children: [],
+                    },
+                    {
+                        id: 'polar-codes',
+                        name: "polar-codes",
+                        count: 1,
+                        renderIcon: renderFolderIcon,
+                        children: [],
+                    },
+                ],
             },
             {
-                name: "other", count: 2, children: [
-                    { name: "electronics", count: 1, children: [] },
-                    { name: "software", count: 1, children: [] },
-                ]
+                id: 'other',
+                name: "other",
+                count: 2,
+                renderIcon: renderFolderIcon,
+                children: [
+                    {
+                        id: 'electronics',
+                        name: "electronics",
+                        count: 1,
+                        renderIcon: renderFolderIcon,
+                        children: [],
+                    },
+                    {
+                        id: 'software',
+                        name: "software",
+                        count: 1,
+                        renderIcon: renderFolderIcon,
+                        children: [],
+                    },
+                ],
             },
-        ]
+        ],
     };
 
     const fixedTabs = [

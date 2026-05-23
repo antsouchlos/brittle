@@ -1,9 +1,12 @@
+import { ReactNode } from 'react';
 import styles from './TreeView.module.css';
 
 interface TreeNodeData {
+    id: string,
     name: string;
     count?: number;
     children: TreeNodeData[];
+    renderIcon?: () => ReactNode;
 }
 
 
@@ -12,22 +15,31 @@ interface TreeNodeProps {
 }
 
 function TreeNode({ data }: TreeNodeProps) {
+    const icon = data.renderIcon?.();
+
     return (
         <div className={styles.node}>
-            <div className={styles.nodeTitle}>
+            <div className={styles.row}>
                 <div
-                    className={styles.nodeButton}
-                    button-variant={data.children.length == 0 ? 'none' : 'expanded'}
+                    className={styles.foldButton}
+                    button-variant={
+                        data.children.length == 0 ? 'none' : 'expanded'
+                    }
                 />
-                <div className={styles.nodeName}>{data.name}</div>
-                {data.count !== undefined && (
-                    <div className={styles.nodeCount}>{data.count}</div>
-                )}
+                <div className={styles.label}>
+                    {icon !== undefined && (
+                        <span className={styles.icon}>{icon}</span>
+                    )}
+                    <span className={styles.text}>{data.name}</span>
+                    {data.count !== undefined && (
+                        <span className={styles.count}>{data.count}</span>
+                    )}
+                </div>
             </div>
-            <div className={styles.nodeChildren}>
-                {data.children.map((node, idx) => (
+            <div className={styles.children}>
+                {data.children.map((node) => (
                     <TreeNode
-                        key={idx}
+                        key={node.id}
                         data={node}
                     />
                 ))}

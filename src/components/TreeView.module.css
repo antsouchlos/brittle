@@ -1,95 +1,87 @@
 .node {
-    margin-left: 2em;
-    min-width: 0;
+    margin-left: 1.3em;
+
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
-.nodeTitle {
+.row {
     display: flex;
-    align-items: center;
-    height: 1.3em;
-    cursor: pointer;
-    min-width: 0;
-}
-
-.nodeButton {
-    flex: 0 0 auto;
     position: relative;
-    top: 50%;
-    width: 10px;
-    height: 10px;
-    margin-right: 5px;
-    transform: translateY(-50%);
-    /* background: red; */
 }
 
-.nodeButton[button-variant="none"] {
+.foldButton {
+    flex: 0 0 auto;
+    display: block;
+    width: 20px;
+    height: 20px;
+}
+
+.foldButton[button-variant="none"] {
     visibility: hidden;
 }
 
-.nodeButton::before,
-.nodeButton::after {
-    content: '';
-    position: absolute;
-    width: 2px;
-    height: 7px;
-    background: currentColor;
-    left: 4px;
-    top: 1px;
-    border-radius: 1px;
+.foldButton[button-variant="collapsed"] {
+    cursor: pointer;
 }
 
-.nodeButton[button-variant="collapsed"]::before {
-    transform: rotate(45deg);
-    transform-origin: bottom left;
+.foldButton[button-variant="expanded"] {
+    cursor: pointer;
 }
 
-.nodeButton[button-variant="collapsed"]::after {
-    transform: rotate(-45deg);
-    transform-origin: top left;
-}
-
-.nodeButton[button-variant="expanded"]::before {
-    transform: rotate(-45deg);
-    transform-origin: bottom right;
-}
-
-.nodeButton[button-variant="expanded"]::after {
-    transform: rotate(45deg);
-    transform-origin: bottom left;
-}
-
-.nodeName {
+.label {
+    cursor: pointer;
     flex: 1 1 auto;
+    display: flex;
     min-width: 0;
-    height: 100%;
-    position: relative;
-    overflow: hidden;
-    border: 1px solid transparent;
+    padding: 0.2em 1.2em 0.2em 0;
+
     border-radius: 5px;
-    padding-left: 24px;
-    background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'><path d='M22   19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'/></svg>") 5px center / 15px 15px no-repeat;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+
+    color: var(--tree-fg);
+    background-color: var(--tree-bg);
+    border: var(--tree-border);
+    box-shadow: var(--tree-shadow);
 }
 
-.nodeCount {
-    flex: 0 0 auto;
-    margin-left: 8px;
-    padding-right: 5px;
-    color: var(--tree-fg-muted, currentColor);
-    white-space: nowrap;
-}
-
-.nodeName:active {
+.label:active {
     color: var(--tree-fg-active);
     background-color: var(--tree-bg-active);
     border: var(--tree-border-active);
     box-shadow: var(--tree-shadow-active);
 }
 
-.nodeName:hover {
+.label:hover {
     color: var(--tree-fg-hover);
     background-color: var(--tree-bg-hover);
     border: var(--tree-border-hover);
     box-shadow: var(--tree-shadow-hover);
+}
+
+.icon {
+    height: 1.3em;
+    position: relative;
+    padding: 0 0.2em 0 0.2em;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.text {
+    height: 1.3em;
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+}
+
+.count {
+    position: absolute;
+    right: 0;
+    height: 1.3em;
+    margin-right: 0.2em;
 }

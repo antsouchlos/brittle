@@ -88,14 +88,19 @@
     --tab-border-drag:         1px solid var(--gb-orange);
     --tab-shadow-drag:         0 8px 22px rgba(0, 0, 0, 0.55);
 
+    --tree-fg:                 currentColor; /* gb-fg1 @ 65% */
+    --tree-bg:                 var(--gb-bg0);
+    --tree-border:             1px solid transparent;
+    --tree-shadow:             none;
+
     --tree-fg-hover:           currentColor; /* gb-fg1 @ 65% */
-    --tree-bg-hover:           var(--gb-bg0);
-    --tree-border-hover:       1px solid var(--gb-orange);
+    --tree-bg-hover:           var(--gb-bg2);
+    --tree-border-hover:       1px solid transparent;
     --tree-shadow-hover:       none;
 
     --tree-fg-active:          var(--gb-fg0);
     --tree-bg-active:          var(--gb-bg1);
-    --tree-border-active:      1px solid transparent;
+    --tree-border-active:      1px solid var(--gb-orange);
     --tree-shadow-active:      none;
 }
 
