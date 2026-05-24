@@ -50,7 +50,14 @@ function TreeNode(
                 <div
                     className={styles.label}
                     data-selected={selected || undefined}
-                    onClick={() => setSelected(data.id)}
+                    onClick={() => {
+                        if (selected && !isLeaf) {
+                            toggleExpanded(data.id);
+                            return;
+                        }
+
+                        setSelected(data.id);
+                    }}
                 >
                     {icon !== undefined && (
                         <span className={styles.icon}>{icon}</span>
