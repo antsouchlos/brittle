@@ -14,9 +14,15 @@
 
 .foldButton {
     flex: 0 0 auto;
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 20px;
     height: 20px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--tree-fg);
 }
 
 .foldButton[button-variant="none"] {
@@ -46,18 +52,18 @@
     box-shadow: var(--tree-shadow);
 }
 
-.label:active {
-    color: var(--tree-fg-active);
-    background-color: var(--tree-bg-active);
-    border: var(--tree-border-active);
-    box-shadow: var(--tree-shadow-active);
-}
-
 .label:hover {
     color: var(--tree-fg-hover);
     background-color: var(--tree-bg-hover);
     border: var(--tree-border-hover);
     box-shadow: var(--tree-shadow-hover);
+}
+
+.label:active {
+    color: var(--tree-fg-active);
+    background-color: var(--tree-bg-active);
+    border: var(--tree-border-active);
+    box-shadow: var(--tree-shadow-active);
 }
 
 .icon {

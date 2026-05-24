@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Folder } from 'lucide-react';
+import { Folder, Library } from 'lucide-react';
 import './App.css';
 import TabView from '../components/TabView.tsx';
 import HorizontalPanelLayout from '../components/HorizontalPanelLayout.tsx';
@@ -13,6 +13,7 @@ const samplePdfConfig = {
 };
 const pdfStyle = { width: '100%', height: '100%' };
 const renderFolderIcon = () => <Folder size={15} aria-hidden="true" />;
+const renderLibraryIcon = () => <Library size={15} aria-hidden="true" />;
 
 // import {
 //     Collection,
@@ -82,7 +83,7 @@ function App() {
         id: 'library',
         name: "Library",
         count: 9,
-        renderIcon: renderFolderIcon,
+        renderIcon: renderLibraryIcon,
         children: [
             {
                 id: 'ba-thesis',

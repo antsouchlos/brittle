@@ -99,7 +99,7 @@
     --tree-shadow-hover:       none;
 
     --tree-fg-active:          var(--gb-fg0);
-    --tree-bg-active:          var(--gb-bg1);
+    --tree-bg-active:          var(--gb-bg2);
     --tree-border-active:      1px solid var(--gb-orange);
     --tree-shadow-active:      none;
 }

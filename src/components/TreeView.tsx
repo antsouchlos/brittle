@@ -1,4 +1,5 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import styles from './TreeView.module.css';
 
 interface TreeNodeData {
@@ -16,16 +17,30 @@ interface TreeNodeProps {
 
 function TreeNode({ data }: TreeNodeProps) {
     const icon = data.renderIcon?.();
+    const isLeaf = data.children.length === 0;
+    const [isExpanded, setIsExpanded] = useState(true);
+    const buttonVariant = isLeaf ? 'none' : isExpanded ? 'expanded' : 'collapsed';
 
     return (
         <div className={styles.node}>
             <div className={styles.row}>
-                <div
-                    className={styles.foldButton}
-                    button-variant={
-                        data.children.length == 0 ? 'none' : 'expanded'
-                    }
-                />
+                {isLeaf ? (
+                    <span
+                        className={styles.foldButton}
+                        button-variant={buttonVariant}
+                        aria-hidden="true"
+                    />
+                ) : (
+                    <button
+                        type="button"
+                        className={styles.foldButton}
+                        button-variant={buttonVariant}
+                        aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
+                        onClick={() => setIsExpanded((expanded) => !expanded)}
+                    >
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </button>
+                )}
                 <div className={styles.label}>
                     {icon !== undefined && (
                         <span className={styles.icon}>{icon}</span>
@@ -36,14 +51,16 @@ function TreeNode({ data }: TreeNodeProps) {
                     )}
                 </div>
             </div>
-            <div className={styles.children}>
-                {data.children.map((node) => (
-                    <TreeNode
-                        key={node.id}
-                        data={node}
-                    />
-                ))}
-            </div>
+            {isExpanded && (
+                <div className={styles.children}>
+                    {data.children.map((node) => (
+                        <TreeNode
+                            key={node.id}
+                            data={node}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
