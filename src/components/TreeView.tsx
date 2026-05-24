@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import styles from './TreeView.module.css';
 
@@ -13,13 +13,20 @@ interface TreeNodeData {
 
 interface TreeNodeProps {
     data: TreeNodeData;
+    isExpanded: (id: string) => boolean;
+    isSelected: (id: string) => boolean;
+    toggleExpanded: (id: string) => void;
+    setSelected: (id: string) => void;
 }
 
-function TreeNode({ data }: TreeNodeProps) {
+function TreeNode(
+    { data, isExpanded, isSelected, toggleExpanded, setSelected }: TreeNodeProps
+) {
     const icon = data.renderIcon?.();
     const isLeaf = data.children.length === 0;
-    const [isExpanded, setIsExpanded] = useState(true);
-    const buttonVariant = isLeaf ? 'none' : isExpanded ? 'expanded' : 'collapsed';
+    const expanded = isExpanded(data.id);
+    const selected = isSelected(data.id);
+    const buttonVariant = isLeaf ? 'none' : expanded ? 'expanded' : 'collapsed';
 
     return (
         <div className={styles.node}>
@@ -31,17 +38,20 @@ function TreeNode({ data }: TreeNodeProps) {
                         aria-hidden="true"
                     />
                 ) : (
-                    <button
-                        type="button"
+                    <div
                         className={styles.foldButton}
                         button-variant={buttonVariant}
-                        aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
-                        onClick={() => setIsExpanded((expanded) => !expanded)}
+                        aria-label={expanded ? 'Collapse folder' : 'Expand folder'}
+                        onClick={() => toggleExpanded(data.id)}
                     >
-                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    </button>
+                        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </div>
                 )}
-                <div className={styles.label}>
+                <div
+                    className={styles.label}
+                    data-selected={selected || undefined}
+                    onClick={() => setSelected(data.id)}
+                >
                     {icon !== undefined && (
                         <span className={styles.icon}>{icon}</span>
                     )}
@@ -51,12 +61,16 @@ function TreeNode({ data }: TreeNodeProps) {
                     )}
                 </div>
             </div>
-            {isExpanded && (
+            {expanded && (
                 <div className={styles.children}>
                     {data.children.map((node) => (
                         <TreeNode
                             key={node.id}
                             data={node}
+                            isExpanded={isExpanded}
+                            isSelected={isSelected}
+                            toggleExpanded={toggleExpanded}
+                            setSelected={setSelected}
                         />
                     ))}
                 </div>
@@ -68,10 +82,25 @@ function TreeNode({ data }: TreeNodeProps) {
 
 interface DirectoryTreeViewProps {
     root: TreeNodeData;
+    selectedNodeId: string;
+    expandedNodeIds: Array<string>;
+    onToggleExpanded: (id: string) => void;
+    onSelectNode: (id: string) => void;
 }
 
-export default function DirectoryTreeView({ root }: DirectoryTreeViewProps) {
+export default function DirectoryTreeView(
+    { root, selectedNodeId, expandedNodeIds, onToggleExpanded, onSelectNode }: DirectoryTreeViewProps
+) {
+    const isExpanded = (id: string) => expandedNodeIds.includes(id);
+    const isSelected = (id: string) => selectedNodeId === id;
+
     return (
-        <TreeNode data={root} />
+        <TreeNode
+            data={root}
+            isExpanded={isExpanded}
+            isSelected={isSelected}
+            toggleExpanded={onToggleExpanded}
+            setSelected={onSelectNode}
+        />
     );
 }

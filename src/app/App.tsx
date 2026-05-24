@@ -78,6 +78,8 @@ function App() {
 
     const [panel1Width, setPanel1Width] = useState(0.33);
     const [panel2Width, setPanel2Width] = useState(0.33);
+    const [selectedNodeId, setSelectedNodeId] = useState('library');
+    const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>(['library']);
 
     const root = {
         id: 'library',
@@ -178,7 +180,21 @@ function App() {
                         {
                             width: panel1Width,
                             setWidth: setPanel1Width,
-                            renderContent: () => <DirectoryTreeView root={root} />,
+                            renderContent: () => (
+                                <DirectoryTreeView
+                                    root={root}
+                                    selectedNodeId={selectedNodeId}
+                                    expandedNodeIds={expandedNodeIds}
+                                    onToggleExpanded={(id: string) => {
+                                        setExpandedNodeIds((prev) => (
+                                            prev.includes(id)
+                                                ? prev.filter((expandedId) => expandedId !== id)
+                                                : [...prev, id]
+                                        ));
+                                    }}
+                                    onSelectNode={setSelectedNodeId}
+                                />
+                            ),
                         },
                         {
                             width: panel2Width,
