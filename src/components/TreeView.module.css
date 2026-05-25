@@ -55,10 +55,13 @@
     color: var(--gb-fg1);
 }
 
-.label[data-selected] {
+.node[data-selected] .label {
     background-color: var(--gb-bg2);
-    border-left-color: var(--gb-orange);
     color: var(--gb-fg0);
+}
+
+.node[data-selected] > .row > .label {
+    border-left-color: var(--gb-orange);
 }
 
 .icon {

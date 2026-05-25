@@ -21,7 +21,6 @@
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
-
 }
 
 .card:hover {
@@ -42,12 +41,13 @@
 }
 
 .journal {
-    color: var(--gb-fg4);
+    color: var(--gb-blue);
     text-transform: uppercase;
+    font-size: 0.85rem;
 }
 
 .dateBadge {
-    color: var(--gb-fg4);
+    color: var(--gb-aqua);
 }
 
 .cardTitle {
@@ -56,6 +56,7 @@
 }
 
 .author {
-    color: var(--gb-fg4);
+    color: var(--gb-orange);
     line-height: 1.1;
+    font-size: 0.85rem;
 }

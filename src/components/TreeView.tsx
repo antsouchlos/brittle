@@ -29,7 +29,10 @@ function TreeNode(
     const buttonVariant = isLeaf ? 'none' : expanded ? 'expanded' : 'collapsed';
 
     return (
-        <div className={styles.node}>
+        <div
+            className={styles.node}
+            data-selected={selected || undefined}
+        >
             <div className={styles.row}>
                 {isLeaf ? (
                     <span
@@ -49,7 +52,6 @@ function TreeNode(
                 )}
                 <div
                     className={styles.label}
-                    data-selected={selected || undefined}
                     onClick={() => {
                         if (selected && !isLeaf) {
                             toggleExpanded(data.id);
