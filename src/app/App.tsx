@@ -3,7 +3,7 @@ import { Folder, Library } from 'lucide-react';
 import './App.css';
 import TabView from '../components/TabView.tsx';
 import HorizontalPanelLayout from '../components/HorizontalPanelLayout.tsx';
-import DirectoryTreeView from '../components/TreeView.tsx';
+import TreeView from '../components/TreeView.tsx';
 
 import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 
@@ -181,7 +181,7 @@ function App() {
                             width: panel1Width,
                             setWidth: setPanel1Width,
                             renderContent: () => (
-                                <DirectoryTreeView
+                                <TreeView
                                     root={root}
                                     selectedNodeId={selectedNodeId}
                                     expandedNodeIds={expandedNodeIds}
