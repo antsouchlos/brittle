@@ -1,0 +1,45 @@
+.detailPane {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 14px;
+}
+
+.detailBadgeRow {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.detailBadge {
+    padding: 2px 8px;
+    border: 1px solid rgba(131, 165, 152, 0.24);
+    background: rgba(131, 165, 152, 0.12);
+    color: var(--gb-blue);
+    text-transform: uppercase;
+}
+
+.detailGrid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 14px;
+    margin: 0;
+}
+
+.detailGrid dt {
+    color: var(--gb-fg2);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+}
+
+.detailGrid dd {
+    margin: 0;
+    color: var(--gb-fg0);
+    line-height: 1.2;
+}
+
+.detailSummary {
+    margin: 0;
+    color: var(--gb-fg2);
+    line-height: 1.2;
+}

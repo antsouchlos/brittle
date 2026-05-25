@@ -7,6 +7,7 @@ import TreeView from '../components/TreeView.tsx';
 
 import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 import PublicationList from '../components/PublicationList.tsx';
+import DetailView from '../components/DetailView.tsx';
 
 const samplePdfConfig = {
     src: 'https://snippet.embedpdf.com/ebook.pdf',
@@ -236,7 +237,13 @@ function App() {
                             />,
                         }
                     ]}
-                    renderLastPanelContent={() => <div>Panel 4</div>}
+                    renderLastPanelContent={() => <DetailView
+                        journal={publications.find((pub) => pub.id === selectedPublicationId)?.journal || ''}
+                        author={publications.find((pub) => pub.id === selectedPublicationId)?.author || ''}
+                        date={publications.find((pub) => pub.id === selectedPublicationId)?.date || ''}
+                        collection={publications.find((pub) => pub.id === selectedPublicationId)?.journal || ''}
+                        filename={publications.find((pub) => pub.id === selectedPublicationId)?.title || ''}
+                    />}
                 />
             ),
         },
