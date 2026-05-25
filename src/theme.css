@@ -43,39 +43,20 @@
     --library-pane-muted-fg:        var(--gb-fg2);
     --library-pane-meta-gap:        4px;
 
-    /* Collection tree */
-    --collection-tree-row-height:           28px;
-    --collection-tree-row-gap:              1px;
-    --collection-tree-row-radius:           4px;
-    --collection-tree-row-padding:          0 6px;
-    --collection-tree-indent:               16px;
-    --collection-tree-disclosure-size:      18px;
-    --collection-tree-icon-gap:             6px;
-    --collection-tree-count-gap:            8px;
-    --collection-tree-count-min-width:      2.5ch;
-    --collection-tree-fg:                   var(--gb-fg1);
-    --collection-tree-fg-muted:             var(--gb-fg2);
-    --collection-tree-fg-selected:          var(--gb-fg0);
-    --collection-tree-icon-color:           var(--gb-blue);
-    --collection-tree-bg-hover:             rgba(213, 196, 161, 0.35); /* gb-bg2 @ 35% */
-    --collection-tree-bg-selected:          rgba(69, 133, 136, 0.18); /* gb-blue @ 18% */
-    --collection-tree-focus-outline:        1px solid var(--gb-orange);
-    --collection-tree-focus-outline-offset: -1px;
-
-    --tree-fg:                 currentColor; /* gb-fg1 @ 65% */
-    --tree-bg:                 var(--gb-bg0);
-    --tree-border:             1px solid transparent;
-    --tree-shadow:             none;
-
-    --tree-fg-hover:           currentColor; /* gb-fg1 @ 65% */
-    --tree-bg-hover:           var(--gb-bg2);
-    --tree-border-hover:       1px solid transparent;
-    --tree-shadow-hover:       none;
-
-    --tree-fg-active:          var(--gb-fg0);
-    --tree-bg-active:          var(--gb-bg2);
-    --tree-border-active:      1px solid var(--gb-orange);
-    --tree-shadow-active:      none;
+    /* --tree-fg:                 currentColor; /* gb-fg1 @ 65% */
+    /* --tree-bg:                 var(--gb-bg0); */
+    /* --tree-border:             1px solid transparent; */
+    /* --tree-shadow:             none; */
+    /**/
+    /* --tree-fg-hover:           currentColor; /* gb-fg1 @ 65% */ 
+    /* --tree-bg-hover:           var(--gb-bg2); */
+    /* --tree-border-hover:       1px solid transparent; */
+    /* --tree-shadow-hover:       none; */
+    /**/
+    /* --tree-fg-active:          var(--gb-fg0); */
+    /* --tree-bg-active:          var(--gb-bg2); */
+    /* --tree-border-active:      1px solid var(--gb-orange); */
+    /* --tree-shadow-active:      none; */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -107,13 +88,5 @@
 
         --library-pane-title-fg:        var(--gb-fg0);
         --library-pane-muted-fg:        var(--gb-fg2);
-
-        --collection-tree-fg:                   var(--gb-fg1);
-        --collection-tree-fg-muted:             var(--gb-fg2);
-        --collection-tree-fg-selected:          var(--gb-fg0);
-        --collection-tree-icon-color:           var(--gb-blue);
-        --collection-tree-bg-hover:             rgba(80, 73, 69, 0.45); /* gb-bg3 @ 45% */
-        --collection-tree-bg-selected:          rgba(131, 165, 152, 0.16); /* gb-blue @ 16% */
-        --collection-tree-focus-outline:        1px solid var(--gb-orange);
     }
 }

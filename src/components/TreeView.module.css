@@ -44,33 +44,18 @@
     min-width: 0;
     padding: 0.2em 1.2em 0.2em 0;
 
-    border-radius: 5px;
+    border-radius: 4px;
 
-    color: var(--tree-fg);
-    background-color: var(--tree-bg);
-    border: var(--tree-border);
-    box-shadow: var(--tree-shadow);
+    border: 1px solid transparent;
 }
 
 .label:hover {
-    color: var(--tree-fg-hover);
-    background-color: var(--tree-bg-hover);
-    border: var(--tree-border-hover);
-    box-shadow: var(--tree-shadow-hover);
-}
-
-.label:active {
-    color: var(--tree-fg-active);
-    background-color: var(--tree-bg-active);
-    border: var(--tree-border-active);
-    box-shadow: var(--tree-shadow-active);
+    background-color: var(--gb-bg2);
 }
 
 .label[data-selected] {
-    color: var(--tree-fg-active);
-    background-color: var(--tree-bg-active);
-    border: var(--tree-border-active);
-    box-shadow: var(--tree-shadow-active);
+    background-color: var(--gb-bg2);
+    border: 1px solid var(--gb-orange);
 }
 
 .icon {
