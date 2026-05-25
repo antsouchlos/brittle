@@ -30,8 +30,8 @@ function PublicationList({
                         onClick={() => onSelectPublication(pub.id)}
                     >
                         <div className={styles.cardTopRow}>
-                            <div className={styles.journal}>{pub.journal}</div>
-                            <div className={styles.dateBadge}>{pub.date}</div>
+                            <span className={styles.journal}>{pub.journal}</span>
+                            <span className={styles.dateBadge}>{pub.date}</span>
                         </div>
                         <span className={styles.cardTitle}>{pub.title}</span>
                         <span className={styles.author}>{pub.author}</span>
