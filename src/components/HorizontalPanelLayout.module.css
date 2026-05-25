@@ -14,12 +14,12 @@
 }
 
 .panel:last-child {
-    flex: 1 0 0 ;
+    flex: 1 0 0;
 }
 
 .separator {
     position: relative;
-    width: var(--panel-separator-hitbox-width);
+    width: 6px;
     background: separator;
     cursor: col-resize;
 }
@@ -29,16 +29,16 @@
     display: block;
     margin-left: 50%;
     transform: translateX(-50%);
-    width: var(--panel-separator-line-width);
+    width: 2px;
     height: 100%;
-    background: var(--panel-separator-color);
+    background: var(--gb-bg2);
     cursor: col-resize;
 }
 
 .separator:hover::before {
-    background: var(--panel-separator-color-hover);
+    background: var(--gb-bg3);
 }
 
 .activeSeparator::before {
-    background: var(--panel-separator-color-active) !important;
+    background: var(--gb-orange) !important;
 }

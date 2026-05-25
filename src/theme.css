@@ -1,7 +1,7 @@
 /*
- * Theme variables (Gruvbox). Override these in a user-supplied stylesheet
- * loaded after this one to restyle the app without touching component class
- * names.
+ *
+ * Gruvbox theme
+ *
  */
 :root {
     /* Typography */
@@ -25,38 +25,6 @@
     --gb-aqua:       #689d6a;
     --gb-blue:       #458588;
     --gb-purple:     #b16286;
-
-    /* Surface */
-    --color-fg: var(--gb-fg1);
-    --color-bg: var(--gb-bg0);
-
-    /* Panels */
-    --panel-separator-hitbox-width: 6px;
-    --panel-separator-line-width:   2px;
-    --panel-separator-color:        var(--gb-bg2);
-    --panel-separator-color-hover:  var(--gb-bg3);
-    --panel-separator-color-active: var(--gb-orange);
-
-    /* Library panes */
-    --library-pane-padding:         10px;
-    --library-pane-title-fg:        var(--gb-fg0);
-    --library-pane-muted-fg:        var(--gb-fg2);
-    --library-pane-meta-gap:        4px;
-
-    /* --tree-fg:                 currentColor; /* gb-fg1 @ 65% */
-    /* --tree-bg:                 var(--gb-bg0); */
-    /* --tree-border:             1px solid transparent; */
-    /* --tree-shadow:             none; */
-    /**/
-    /* --tree-fg-hover:           currentColor; /* gb-fg1 @ 65% */ 
-    /* --tree-bg-hover:           var(--gb-bg2); */
-    /* --tree-border-hover:       1px solid transparent; */
-    /* --tree-shadow-hover:       none; */
-    /**/
-    /* --tree-fg-active:          var(--gb-fg0); */
-    /* --tree-bg-active:          var(--gb-bg2); */
-    /* --tree-border-active:      1px solid var(--gb-orange); */
-    /* --tree-shadow-active:      none; */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -78,15 +46,5 @@
         --gb-aqua:   #8ec07c;
         --gb-blue:   #83a598;
         --gb-purple: #d3869b;
-
-        --color-fg: var(--gb-fg1);
-        --color-bg: var(--gb-bg0);
-
-        --panel-separator-color:        var(--gb-bg2);
-        --panel-separator-color-hover:  var(--gb-bg3);
-        --panel-separator-color-active: var(--gb-orange);
-
-        --library-pane-title-fg:        var(--gb-fg0);
-        --library-pane-muted-fg:        var(--gb-fg2);
     }
 }
