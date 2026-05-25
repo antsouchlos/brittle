@@ -87,7 +87,7 @@ function TreeNode(
 }
 
 
-interface DirectoryTreeViewProps {
+interface TreeViewProps {
     root: TreeNodeData;
     selectedNodeId: string;
     expandedNodeIds: Array<string>;
@@ -95,8 +95,8 @@ interface DirectoryTreeViewProps {
     onSelectNode: (id: string) => void;
 }
 
-export default function DirectoryTreeView(
-    { root, selectedNodeId, expandedNodeIds, onToggleExpanded, onSelectNode }: DirectoryTreeViewProps
+export default function TreeView(
+    { root, selectedNodeId, expandedNodeIds, onToggleExpanded, onSelectNode }: TreeViewProps
 ) {
     const isExpanded = (id: string) => expandedNodeIds.includes(id);
     const isSelected = (id: string) => selectedNodeId === id;

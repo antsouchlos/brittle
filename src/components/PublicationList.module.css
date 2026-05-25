@@ -1,0 +1,60 @@
+.publicationList {
+    height: 100%;
+    overflow-y: auto;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--gb-bg3);
+    cursor: pointer;
+
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+
+}
+
+.card:hover {
+    background: var(--gb-bg2);
+}
+
+.card[data-selected="true"] {
+    background: var(--gb-bg3);
+    border-color: var(--gb-orange);
+}
+
+
+.cardTopRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    line-height: 1.1;
+}
+
+.journal {
+    color: var(--gb-fg4);
+    text-transform: uppercase;
+}
+
+.dateBadge {
+    color: var(--gb-fg4);
+}
+
+.cardTitle {
+    line-height: 1.1;
+    color: var(--gb-fg0);
+}
+
+.author {
+    color: var(--gb-fg4);
+    line-height: 1.1;
+}

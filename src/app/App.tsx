@@ -3,9 +3,10 @@ import { Folder, Library } from 'lucide-react';
 import './App.css';
 import TabView from '../components/TabView.tsx';
 import HorizontalPanelLayout from '../components/HorizontalPanelLayout.tsx';
-import DirectoryTreeView from '../components/TreeView.tsx';
+import TreeView from '../components/TreeView.tsx';
 
 import { PDFViewer } from '@embedpdf/react-pdf-viewer';
+import PublicationList from '../components/PublicationList.tsx';
 
 const samplePdfConfig = {
     src: 'https://snippet.embedpdf.com/ebook.pdf',
@@ -15,160 +16,189 @@ const pdfStyle = { width: '100%', height: '100%' };
 const renderFolderIcon = () => <Folder size={15} aria-hidden="true" />;
 const renderLibraryIcon = () => <Library size={15} aria-hidden="true" />;
 
-// import {
-//     Collection,
-//     CollectionId,
-//     Entry,
-//     EntryId,
-//     Library,
-//     // libraryPanelIds,
-// } from './LibraryTabContent.tsx';
 
-// const sampleLibrary: Library = {
-//     rootId: 'library',
-//     entries: new Map<EntryId, Entry>([
-//         ['entry-1', { id: 'entry-1', name: 'Attention Is All You Need' }],
-//         ['entry-2', { id: 'entry-2', name: 'The Rust Programming Language' }],
-//         ['entry-3', { id: 'entry-3', name: 'Designing Data-Intensive Applications' }],
-//         ['entry-4', { id: 'entry-4', name: 'PDF Rendering Notes' }],
-//     ]),
-//     collections: new Map<CollectionId, Collection>([
-//         ['library', {
-//             id: 'library',
-//             name: 'Library',
-//             childCollectionIds: ['research', 'engineering', 'reading-list'],
-//             entryIds: ['entry-1', 'entry-2'],
-//         }],
-//         ['research', {
-//             id: 'research',
-//             name: 'Research',
-//             childCollectionIds: ['papers'],
-//             entryIds: ['entry-1'],
-//         }],
-//         ['papers', {
-//             id: 'papers',
-//             name: 'Papers',
-//             childCollectionIds: [],
-//             entryIds: ['entry-1', 'entry-4'],
-//         }],
-//         ['engineering', {
-//             id: 'engineering',
-//             name: 'Engineering',
-//             childCollectionIds: [],
-//             entryIds: ['entry-2', 'entry-3'],
-//         }],
-//         ['reading-list', {
-//             id: 'reading-list',
-//             name: 'Reading List',
-//             childCollectionIds: [],
-//             entryIds: ['entry-1', 'entry-3'],
-//         }],
-//     ]),
-// };
+const publications = [
+    {
+        id: "vaswani-attention-2017",
+        title: "Attention Is All You Need",
+        author: "Ashish Vaswani et al.",
+        journal: "NeurIPS",
+        date: "2017",
+    },
+    {
+        id: "klabnik-rust-2023",
+        title: "The Rust Programming Language",
+        author: "Steve Klabnik, Carol Nichols",
+        journal: "No Starch Press",
+        date: "2023",
+    },
+    {
+        id: "kleppmann-data-2017",
+        title: "Designing Data-Intensive Applications",
+        author: "Martin Kleppmann",
+        journal: "O'Reilly Media",
+        date: "2017",
+    },
+    {
+        id: "macwilliams-theory-1977",
+        title: "The Theory of Error-Correcting Codes",
+        author: "F. Jessie MacWilliams, Neil J. A. Sloane",
+        journal: "North-Holland",
+        date: "1977",
+    },
+    {
+        id: "gottesman-quantum-2009",
+        title: "Quantum Error Correction for Beginners",
+        author: "Daniel Gottesman",
+        journal: "Lecture Notes",
+        date: "2009",
+    },
+    {
+        id: "arikan-channel-2009",
+        title: "Channel Polarization: A Method for Constructing Capacity-Achieving Codes",
+        author: "Erdal Arikan",
+        journal: "IEEE Transactions on Information Theory",
+        date: "2009",
+    },
+    {
+        id: "vangala-survey-2015",
+        title: "A Survey of Polar Coding Schemes",
+        author: "Harish Vangala, Emanuele Viterbo, Yi Hong",
+        journal: "IEEE Communications Surveys & Tutorials",
+        date: "2015",
+    },
+    {
+        id: "manning-foundations-1999",
+        title: "Foundations of Statistical Natural Language Processing",
+        author: "Christopher D. Manning, Hinrich Schutze",
+        journal: "MIT Press",
+        date: "1999",
+    },
+    {
+        id: "lee-research-2024",
+        title: "Research Gaps in Human-AI Collaboration",
+        author: "Mina Lee, Percy Liang",
+        journal: "CHI Workshop Proceedings",
+        date: "2024",
+    },
+    {
+        id: "lewis-state-2024",
+        title: "State of the Art in Retrieval-Augmented Generation",
+        author: "Patrick Lewis et al.",
+        journal: "arXiv",
+        date: "2024",
+    },
+    {
+        id: "scherz-practical-2016",
+        title: "Practical Electronics for Inventors",
+        author: "Paul Scherz, Simon Monk",
+        journal: "McGraw-Hill",
+        date: "2016",
+    },
+    {
+        id: "abelson-structure-1996",
+        title: "Structure and Interpretation of Computer Programs",
+        author: "Harold Abelson, Gerald Jay Sussman",
+        journal: "MIT Press",
+        date: "1996",
+    },
+];
 
-// const defaultLibraryLayout: Layout = {
-//     [libraryPanelIds.collections]: 33,
-//     [libraryPanelIds.viewer]: 34,
-//     [libraryPanelIds.details]: 33,
-// };
+const library = {
+    id: 'library',
+    name: "Library",
+    count: 9,
+    renderIcon: renderLibraryIcon,
+    children: [
+        {
+            id: 'ba-thesis',
+            name: "ba-thesis",
+            count: 1,
+            renderIcon: renderFolderIcon,
+            children: [],
+        },
+        {
+            id: 'ma-thesis',
+            name: "ma-thesis",
+            count: 3,
+            renderIcon: renderFolderIcon,
+            children: [
+                {
+                    id: 'fundamentals',
+                    name: "fundamentals",
+                    count: 1,
+                    renderIcon: renderFolderIcon,
+                    children: [],
+                },
+                {
+                    id: 'research-gap',
+                    name: "research-gap",
+                    count: 1,
+                    renderIcon: renderFolderIcon,
+                    children: [],
+                },
+                {
+                    id: 'state-of-the-art',
+                    name: "state-of-the-art",
+                    count: 1,
+                    renderIcon: renderFolderIcon,
+                    children: [],
+                },
+            ],
+        },
+        {
+            id: 'phd',
+            name: "phd",
+            count: 2,
+            renderIcon: renderFolderIcon,
+            children: [
+                {
+                    id: 'qec',
+                    name: "qec",
+                    count: 1,
+                    renderIcon: renderFolderIcon,
+                    children: [],
+                },
+                {
+                    id: 'polar-codes',
+                    name: "polar-codes",
+                    count: 1,
+                    renderIcon: renderFolderIcon,
+                    children: [],
+                },
+            ],
+        },
+        {
+            id: 'other',
+            name: "other",
+            count: 2,
+            renderIcon: renderFolderIcon,
+            children: [
+                {
+                    id: 'electronics',
+                    name: "electronics",
+                    count: 1,
+                    renderIcon: renderFolderIcon,
+                    children: [],
+                },
+                {
+                    id: 'software',
+                    name: "software",
+                    count: 1,
+                    renderIcon: renderFolderIcon,
+                    children: [],
+                },
+            ],
+        },
+    ],
+};
 
 function App() {
-    // const [library] = useState<Library>(sampleLibrary);
-    // const [libraryLayout, setLibraryLayout] = useState<Layout>(defaultLibraryLayout);
-
     const [panel1Width, setPanel1Width] = useState(0.33);
     const [panel2Width, setPanel2Width] = useState(0.33);
     const [selectedNodeId, setSelectedNodeId] = useState('library');
     const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>(['library']);
-
-    const root = {
-        id: 'library',
-        name: "Library",
-        count: 9,
-        renderIcon: renderLibraryIcon,
-        children: [
-            {
-                id: 'ba-thesis',
-                name: "ba-thesis",
-                count: 1,
-                renderIcon: renderFolderIcon,
-                children: [],
-            },
-            {
-                id: 'ma-thesis',
-                name: "ma-thesis",
-                count: 3,
-                renderIcon: renderFolderIcon,
-                children: [
-                    {
-                        id: 'fundamentals',
-                        name: "fundamentals",
-                        count: 1,
-                        renderIcon: renderFolderIcon,
-                        children: [],
-                    },
-                    {
-                        id: 'research-gap',
-                        name: "research-gap",
-                        count: 1,
-                        renderIcon: renderFolderIcon,
-                        children: [],
-                    },
-                    {
-                        id: 'state-of-the-art',
-                        name: "state-of-the-art",
-                        count: 1,
-                        renderIcon: renderFolderIcon,
-                        children: [],
-                    },
-                ],
-            },
-            {
-                id: 'phd',
-                name: "phd",
-                count: 2,
-                renderIcon: renderFolderIcon,
-                children: [
-                    {
-                        id: 'qec',
-                        name: "qec",
-                        count: 1,
-                        renderIcon: renderFolderIcon,
-                        children: [],
-                    },
-                    {
-                        id: 'polar-codes',
-                        name: "polar-codes",
-                        count: 1,
-                        renderIcon: renderFolderIcon,
-                        children: [],
-                    },
-                ],
-            },
-            {
-                id: 'other',
-                name: "other",
-                count: 2,
-                renderIcon: renderFolderIcon,
-                children: [
-                    {
-                        id: 'electronics',
-                        name: "electronics",
-                        count: 1,
-                        renderIcon: renderFolderIcon,
-                        children: [],
-                    },
-                    {
-                        id: 'software',
-                        name: "software",
-                        count: 1,
-                        renderIcon: renderFolderIcon,
-                        children: [],
-                    },
-                ],
-            },
-        ],
-    };
+    const [selectedPublicationId, setSelectedPublicationId] = useState<string>(publications[0].id);
 
     const fixedTabs = [
         {
@@ -181,8 +211,8 @@ function App() {
                             width: panel1Width,
                             setWidth: setPanel1Width,
                             renderContent: () => (
-                                <DirectoryTreeView
-                                    root={root}
+                                <TreeView
+                                    root={library}
                                     selectedNodeId={selectedNodeId}
                                     expandedNodeIds={expandedNodeIds}
                                     onToggleExpanded={(id: string) => {
@@ -199,17 +229,16 @@ function App() {
                         {
                             width: panel2Width,
                             setWidth: setPanel2Width,
-                            renderContent: () => <div>Panel 2</div>,
+                            renderContent: () => <PublicationList
+                                publications={publications}
+                                selectedPublicationId={selectedPublicationId}
+                                onSelectPublication={setSelectedPublicationId}
+                            />,
                         }
                     ]}
                     renderLastPanelContent={() => <div>Panel 4</div>}
                 />
             ),
-            // renderContent: () => (<LibraryTabContent
-            //     library={library}
-            //     panelLayout={libraryLayout}
-            //     onPanelLayoutChange={setLibraryLayout}
-            // />),
         },
     ];
 
