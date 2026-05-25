@@ -38,11 +38,11 @@
 }
 
 .tabHeader:hover {
-    background-color: var(--gb-bg2);
+    background-color: var(--gb-bg1);
 }
 
 .tabHeader[data-state="active"] {
-    background-color: var(--gb-bg3);
+    background-color: var(--gb-bg2);
     border-bottom: 1px solid var(--gb-orange);
 }
 

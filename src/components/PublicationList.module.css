@@ -13,6 +13,7 @@
     flex-direction: column;
     gap: 6px;
     padding: 6px 8px;
+    border-left: 1px solid transparent;
     border-bottom: 1px solid var(--gb-bg3);
     cursor: pointer;
 
@@ -24,12 +25,12 @@
 }
 
 .card:hover {
-    background: var(--gb-bg2);
+    background: var(--gb-bg1);
 }
 
 .card[data-selected="true"] {
-    background: var(--gb-bg3);
-    border-color: var(--gb-orange);
+    background: var(--gb-bg2);
+    border-left-color: var(--gb-orange);
 }
 
 
