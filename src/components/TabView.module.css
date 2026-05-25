@@ -19,17 +19,16 @@
 }
 
 .tabHeader {
-    padding: var(--tab-padding);
-    border-radius: var(--tab-radius);
+    padding: 0.35em 0.8em 0 0.8em;
+    border-radius: 4px 4px 0px 0px;
     height: 1.6em;
     display: flex;
     align-items: center;
 
+    border-bottom: 1px solid var(--gb-bg0);
+
     cursor: pointer;
-    background-color: var(--tab-bg);
-    color: var(--tab-fg);
-    border: var(--tab-border);
-    box-shadow: var(--tab-shadow);
+    background-color: var(--gb-bg0);
 
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -38,32 +37,16 @@
 }
 
 .tabHeader:hover {
-    background-color: var(--tab-bg-hover);
-    color: var(--tab-fg-hover);
-    border: var(--tab-border-hover);
-    box-shadow: var(--tab-shadow-hover);
+    background-color: var(--gb-bg2);
 }
 
 .tabHeader[data-state="active"] {
-    background-color: var(--tab-bg-active);
-    color: var(--tab-fg-active);
-    border: var(--tab-border-active);
-    box-shadow: var(--tab-shadow-active);
-}
-
-.tabHeader[data-dragging][data-state="active"] {
-    background-color: var(--tab-bg-active);
-    color: var(--tab-fg-active);
-    border: var(--tab-border-drag);
-    box-shadow: var(--tab-shadow-drag);
+    background-color: var(--gb-bg3);
+    border-bottom: 1px solid var(--gb-orange);
 }
 
 .tabHeader[data-dragging] {
-    cursor: grabbing;
-    background-color: var(--tab-bg-drag);
-    color: var(--tab-fg-drag);
-    border: var(--tab-border-drag);
-    box-shadow: var(--tab-shadow-drag);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
 }
 
 .tabCloseButton {
@@ -72,5 +55,5 @@
 }
 
 .tabCloseButton:hover {
-    color: var(--tab-close-hover-color);
+    color: var(--gb-red);
 }
