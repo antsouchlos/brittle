@@ -71,7 +71,7 @@
     color: var(--gb-fg4);
 }
 
-.label[data-selected] .icon {
+.node[data-selected] > .row > .label > .icon {
     color: var(--gb-orange);
 }
 
