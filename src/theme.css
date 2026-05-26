@@ -12,40 +12,40 @@
     --font-weight: 450;
 
     /* Gruvbox dark palette */
-    --gb-bg0: #1d2021;
-    --gb-bg1: #282828;
-    --gb-bg2: #3c3836;
-    --gb-bg3: #504945;
-    --gb-fg0: #fbf1c7;
-    --gb-fg1: #ebdbb2;
-    --gb-fg2: #d5c4a1;
-    --gb-fg3: #bdae93;
-    --gb-fg4: #a89984;
-    --gb-red: #fb4934;
-    --gb-orange: #fe8019;
-    --gb-yellow: #fabd2f;
-    --gb-green: #b8bb26;
-    --gb-aqua: #8ec07c;
-    --gb-blue: #83a598;
-    --gb-purple: #d3869b;
+    --bg0: #1d2021;
+    --bg1: #282828;
+    --bg2: #3c3836;
+    --bg3: #504945;
+    --fg0: #fbf1c7;
+    --fg1: #ebdbb2;
+    --fg2: #d5c4a1;
+    --fg3: #bdae93;
+    --fg4: #a89984;
+    --accent1: #fe8019;
+    --accent2: #fb4934;
+    --accent3: #83a598;
+    --accent4: #8ec07c;
+    --accent5: #d3869b;
+    --accent6: #fabd2f;
+    --accent7: #b8bb26;
 }
 
 @media (prefers-color-scheme: light) {
     :root {
         /* Gruvbox light palette */
-        --gb-bg0: #fbf1c7;
-        --gb-bg1: #ebdbb2;
-        --gb-bg2: #d5c4a1;
-        --gb-bg3: #bdae93;
-        --gb-fg0: #282828;
-        --gb-fg1: #3c3836;
-        --gb-fg2: #504945;
-        --gb-red: #cc241d;
-        --gb-orange: #d65d0e;
-        --gb-yellow: #d79921;
-        --gb-green: #98971a;
-        --gb-aqua: #689d6a;
-        --gb-blue: #458588;
-        --gb-purple: #b16286;
+        --bg0: #fbf1c7;
+        --bg1: #ebdbb2;
+        --bg2: #d5c4a1;
+        --bg3: #bdae93;
+        --fg0: #282828;
+        --fg1: #3c3836;
+        --fg2: #504945;
+        --accent1: #d65d0e;
+        --accent2: #cc241d;
+        --accent3: #458588;
+        --accent4: #689d6a;
+        --accent5: #b16286;
+        --accent6: #d79921;
+        --accent7: #98971a;
     }
 }

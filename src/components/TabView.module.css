@@ -26,10 +26,10 @@
     display: flex;
     align-items: center;
 
-    border-bottom: 1px solid var(--gb-bg0);
+    border-bottom: 1px solid var(--bg0);
 
     cursor: pointer;
-    background-color: var(--gb-bg0);
+    background-color: var(--bg0);
 
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -38,12 +38,12 @@
 }
 
 .tabHeader:hover {
-    background-color: var(--gb-bg1);
+    background-color: var(--bg1);
 }
 
 .tabHeader[data-state="active"] {
-    background-color: var(--gb-bg2);
-    border-bottom: 1px solid var(--gb-orange);
+    background-color: var(--bg2);
+    border-bottom: 1px solid var(--accent1);
 }
 
 .tabHeader[data-dragging] {
@@ -56,5 +56,5 @@
 }
 
 .tabCloseButton:hover {
-    color: var(--gb-red);
+    color: var(--accent2);
 }

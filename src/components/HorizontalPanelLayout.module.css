@@ -31,14 +31,14 @@
     transform: translateX(-50%);
     width: 2px;
     height: 100%;
-    background: var(--gb-bg2);
+    background: var(--bg2);
     cursor: col-resize;
 }
 
 .separator:hover::before {
-    background: var(--gb-bg3);
+    background: var(--bg3);
 }
 
 .activeSeparator::before {
-    background: var(--gb-orange) !important;
+    background: var(--accent1) !important;
 }

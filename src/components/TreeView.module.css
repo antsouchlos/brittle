@@ -12,7 +12,7 @@
 .children {
     margin-left: 9px;
     padding-left: 10px;
-    border-left: 1px solid var(--gb-bg2);
+    border-left: 1px solid var(--bg2);
 }
 
 .foldButton {
@@ -25,7 +25,7 @@
     padding: 0;
     border: 0;
     background: none;
-    color: var(--gb-fg4);
+    color: var(--fg4);
 }
 
 .foldButton[button-variant="collapsed"],
@@ -35,7 +35,7 @@
 
 .foldButton:hover,
 .foldButton:hover {
-    color: var(--gb-fg1);
+    color: var(--fg1);
 }
 
 .label {
@@ -47,32 +47,32 @@
     min-width: 0;
     padding: 0 8px 0 6px;
     border-left: 1px solid transparent;
-    color: var(--gb-fg2);
+    color: var(--fg2);
 }
 
 .label:hover {
-    background-color: var(--gb-bg1);
-    color: var(--gb-fg1);
+    background-color: var(--bg1);
+    color: var(--fg1);
 }
 
 .node[data-selected] .label {
-    background-color: var(--gb-bg2);
-    color: var(--gb-fg0);
+    background-color: var(--bg2);
+    color: var(--fg0);
 }
 
 .node[data-selected] > .row > .label {
-    border-left-color: var(--gb-orange);
+    border-left-color: var(--accent1);
 }
 
 .icon {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    color: var(--gb-fg4);
+    color: var(--fg4);
 }
 
 .node[data-selected] > .row > .label > .icon {
-    color: var(--gb-orange);
+    color: var(--accent1);
 }
 
 .text {
@@ -85,6 +85,6 @@
 .count {
     flex: 0 0 auto;
     margin-left: 4px;
-    color: var(--gb-fg4);
+    color: var(--fg4);
     font-size: 0.9em;
 }
