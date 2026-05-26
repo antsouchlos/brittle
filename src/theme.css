@@ -1,166 +1,51 @@
 /*
- * Theme variables (Gruvbox). Override these in a user-supplied stylesheet
- * loaded after this one to restyle the app without touching component class
- * names.
+ *
+ * Gruvbox theme
+ *
  */
+
 :root {
     /* Typography */
     --font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --font-size:   14px;
+    --font-size: 14px;
     --line-height: 22px;
     --font-weight: 450;
 
-    /* Gruvbox light palette */
-    --gb-bg0:        #fbf1c7;
-    --gb-bg1:        #ebdbb2;
-    --gb-bg2:        #d5c4a1;
-    --gb-bg3:        #bdae93;
-    --gb-fg0:        #282828;
-    --gb-fg1:        #3c3836;
-    --gb-fg2:        #504945;
-    --gb-red:        #cc241d;
-    --gb-orange:     #d65d0e;
-    --gb-yellow:     #d79921;
-    --gb-green:      #98971a;
-    --gb-aqua:       #689d6a;
-    --gb-blue:       #458588;
-    --gb-purple:     #b16286;
-
-    /* Surface */
-    --color-fg: var(--gb-fg1);
-    --color-bg: var(--gb-bg0);
-
-    /* Panels */
-    --panel-separator-hitbox-width: 6px;
-    --panel-separator-line-width:   2px;
-    --panel-separator-color:        var(--gb-bg2);
-    --panel-separator-color-hover:  var(--gb-bg3);
-    --panel-separator-color-active: var(--gb-orange);
-
-    /* Library panes */
-    --library-pane-padding:         10px;
-    --library-pane-title-fg:        var(--gb-fg0);
-    --library-pane-muted-fg:        var(--gb-fg2);
-    --library-pane-meta-gap:        4px;
-
-    /* Collection tree */
-    --collection-tree-row-height:           28px;
-    --collection-tree-row-gap:              1px;
-    --collection-tree-row-radius:           4px;
-    --collection-tree-row-padding:          0 6px;
-    --collection-tree-indent:               16px;
-    --collection-tree-disclosure-size:      18px;
-    --collection-tree-icon-gap:             6px;
-    --collection-tree-count-gap:            8px;
-    --collection-tree-count-min-width:      2.5ch;
-    --collection-tree-fg:                   var(--gb-fg1);
-    --collection-tree-fg-muted:             var(--gb-fg2);
-    --collection-tree-fg-selected:          var(--gb-fg0);
-    --collection-tree-icon-color:           var(--gb-blue);
-    --collection-tree-bg-hover:             rgba(213, 196, 161, 0.35); /* gb-bg2 @ 35% */
-    --collection-tree-bg-selected:          rgba(69, 133, 136, 0.18); /* gb-blue @ 18% */
-    --collection-tree-focus-outline:        1px solid var(--gb-orange);
-    --collection-tree-focus-outline-offset: -1px;
-
-    /* Tabs */
-    --tab-radius:              10px 10px 4px 4px;
-    --tab-padding:             0.35em 0.8em 0 0.8em;
-
-    --tab-close-hover-color:   var(--gb-red);
-
-    --tab-fg:                  rgba(60, 56, 54, 0.65); /* gb-fg1 @ 65% */
-    --tab-bg:                  var(--gb-bg0);
-    --tab-border:              1px solid transparent;
-    --tab-shadow:              none;
-
-    --tab-fg-hover:            rgba(60, 56, 54, 0.65); /* gb-fg1 @ 65% */
-    --tab-bg-hover:            var(--gb-bg0);
-    --tab-border-hover:        1px solid var(--gb-orange);
-    --tab-shadow-hover:        none;
-
-    --tab-fg-active:           var(--gb-fg0);
-    --tab-bg-active:           var(--gb-bg1);
-    --tab-border-active:       var(--tab-border-hover);
-    --tab-shadow-active:       none;
-
-    --tab-fg-drag:             rgba(60, 56, 54, 0.65); /* gb-fg1 @ 65% */
-    --tab-bg-drag:             var(--gb-bg0);
-    --tab-border-drag:         1px solid var(--gb-orange);
-    --tab-shadow-drag:         0 8px 22px rgba(0, 0, 0, 0.55);
-
-    --tree-fg:                 currentColor; /* gb-fg1 @ 65% */
-    --tree-bg:                 var(--gb-bg0);
-    --tree-border:             1px solid transparent;
-    --tree-shadow:             none;
-
-    --tree-fg-hover:           currentColor; /* gb-fg1 @ 65% */
-    --tree-bg-hover:           var(--gb-bg2);
-    --tree-border-hover:       1px solid transparent;
-    --tree-shadow-hover:       none;
-
-    --tree-fg-active:          var(--gb-fg0);
-    --tree-bg-active:          var(--gb-bg2);
-    --tree-border-active:      1px solid var(--gb-orange);
-    --tree-shadow-active:      none;
+    /* Gruvbox dark palette */
+    --bg0: #1d2021;
+    --bg1: #282828;
+    --bg2: #3c3836;
+    --bg3: #504945;
+    --fg0: #fbf1c7;
+    --fg1: #ebdbb2;
+    --fg2: #d5c4a1;
+    --fg3: #bdae93;
+    --fg4: #a89984;
+    --accent1: #fe8019;
+    --accent2: #fb4934;
+    --accent3: #83a598;
+    --accent4: #8ec07c;
+    --accent5: #d3869b;
+    --accent6: #fabd2f;
+    --accent7: #b8bb26;
 }
 
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
     :root {
-        /* Gruvbox dark palette */
-        --gb-bg0:    #1d2021;
-        --gb-bg1:    #282828;
-        --gb-bg2:    #3c3836;
-        --gb-bg3:    #504945;
-        --gb-fg0:    #fbf1c7;
-        --gb-fg1:    #ebdbb2;
-        --gb-fg2:    #d5c4a1;
-        --gb-fg3:    #bdae93;
-        --gb-fg4:    #a89984;
-        --gb-red:    #fb4934;
-        --gb-orange: #fe8019;
-        --gb-yellow: #fabd2f;
-        --gb-green:  #b8bb26;
-        --gb-aqua:   #8ec07c;
-        --gb-blue:   #83a598;
-        --gb-purple: #d3869b;
-
-        --color-fg: var(--gb-fg1);
-        --color-bg: var(--gb-bg0);
-
-        --panel-separator-color:        var(--gb-bg2);
-        --panel-separator-color-hover:  var(--gb-bg3);
-        --panel-separator-color-active: var(--gb-orange);
-
-        --library-pane-title-fg:        var(--gb-fg0);
-        --library-pane-muted-fg:        var(--gb-fg2);
-
-        --collection-tree-fg:                   var(--gb-fg1);
-        --collection-tree-fg-muted:             var(--gb-fg2);
-        --collection-tree-fg-selected:          var(--gb-fg0);
-        --collection-tree-icon-color:           var(--gb-blue);
-        --collection-tree-bg-hover:             rgba(80, 73, 69, 0.45); /* gb-bg3 @ 45% */
-        --collection-tree-bg-selected:          rgba(131, 165, 152, 0.16); /* gb-blue @ 16% */
-        --collection-tree-focus-outline:        1px solid var(--gb-orange);
-
-        --tab-fg:                  rgba(213, 196, 161, 0.55); /* gb-fg2 @ 55% */
-        --tab-bg:                  var(--gb-bg0);
-        --tab-border:              1px solid transparent;
-        --tab-shadow:              none;
-
-        --tab-fg-hover:            rgba(213, 196, 161, 0.55); /* gb-fg2 @ 55% */
-        --tab-bg-hover:            var(--gb-bg0);
-        --tab-border-hover:        1px solid var(--gb-orange);
-        --tab-shadow-hover:        none;
-
-        --tab-fg-active:           var(--gb-fg0);
-        --tab-bg-active:           var(--gb-bg2);
-        --tab-border-active:       var(--tab-border-hover);
-        --tab-shadow-active:       none;
-
-        --tab-fg-drag:             rgba(213, 196, 161, 0.55); /* gb-fg2 @ 55% */
-        --tab-bg-drag:             var(--gb-bg0);
-        --tab-border-drag:         1px solid var(--gb-orange);
-        --tab-shadow-drag:         0 8px 22px rgba(0, 0, 0, 0.55);
-
+        /* Gruvbox light palette */
+        --bg0: #fbf1c7;
+        --bg1: #ebdbb2;
+        --bg2: #d5c4a1;
+        --bg3: #bdae93;
+        --fg0: #282828;
+        --fg1: #3c3836;
+        --fg2: #504945;
+        --accent1: #d65d0e;
+        --accent2: #cc241d;
+        --accent3: #458588;
+        --accent4: #689d6a;
+        --accent5: #b16286;
+        --accent6: #d79921;
+        --accent7: #98971a;
     }
 }

@@ -2,7 +2,8 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    padding: 14px;
+    padding: 0px 14px;
+    overflow-wrap: anywhere;
 }
 
 .detailBadgeRow {
@@ -12,10 +13,11 @@
 }
 
 .detailBadge {
+    line-height: 1.2;
     padding: 2px 8px;
-    border: 1px solid rgba(131, 165, 152, 0.24);
-    background: rgba(131, 165, 152, 0.12);
-    color: var(--gb-blue);
+    border: 1px solid color-mix(in srgb, var(--accent3) 70%, transparent);
+    background: color-mix(in srgb, var(--accent3) 14%, transparent);
+    color: var(--accent3);
     text-transform: uppercase;
 }
 
@@ -27,19 +29,23 @@
 }
 
 .detailGrid dt {
-    color: var(--gb-fg2);
+    color: var(--fg2);
     font-size: 0.85rem;
     text-transform: uppercase;
 }
 
 .detailGrid dd {
     margin: 0;
-    color: var(--gb-fg0);
+    color: var(--fg0);
     line-height: 1.2;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
 }
 
 .detailSummary {
     margin: 0;
-    color: var(--gb-fg2);
+    color: var(--fg2);
     line-height: 1.2;
 }

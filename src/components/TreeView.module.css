@@ -1,6 +1,4 @@
 .node {
-    margin-left: 1.3em;
-
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
@@ -9,7 +7,12 @@
 
 .row {
     display: flex;
-    position: relative;
+}
+
+.children {
+    margin-left: 9px;
+    padding-left: 10px;
+    border-left: 1px solid var(--bg2);
 }
 
 .foldButton {
@@ -17,84 +20,71 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    min-height: 24px;
     padding: 0;
     border: 0;
     background: none;
-    color: var(--tree-fg);
+    color: var(--fg4);
 }
 
-.foldButton[button-variant="none"] {
-    visibility: hidden;
-}
-
-.foldButton[button-variant="collapsed"] {
-    cursor: pointer;
-}
-
+.foldButton[button-variant="collapsed"],
 .foldButton[button-variant="expanded"] {
     cursor: pointer;
+}
+
+.foldButton:hover,
+.foldButton:hover {
+    color: var(--fg1);
 }
 
 .label {
     cursor: pointer;
     flex: 1 1 auto;
     display: flex;
+    align-items: center;
+    gap: 6px;
     min-width: 0;
-    padding: 0.2em 1.2em 0.2em 0;
-
-    border-radius: 5px;
-
-    color: var(--tree-fg);
-    background-color: var(--tree-bg);
-    border: var(--tree-border);
-    box-shadow: var(--tree-shadow);
+    padding: 0 8px 0 6px;
+    border-left: 1px solid transparent;
+    color: var(--fg2);
 }
 
 .label:hover {
-    color: var(--tree-fg-hover);
-    background-color: var(--tree-bg-hover);
-    border: var(--tree-border-hover);
-    box-shadow: var(--tree-shadow-hover);
+    background-color: var(--bg1);
+    color: var(--fg1);
 }
 
-.label:active {
-    color: var(--tree-fg-active);
-    background-color: var(--tree-bg-active);
-    border: var(--tree-border-active);
-    box-shadow: var(--tree-shadow-active);
+.node[data-selected] .label {
+    background-color: var(--bg2);
+    color: var(--fg0);
 }
 
-.label[data-selected] {
-    color: var(--tree-fg-active);
-    background-color: var(--tree-bg-active);
-    border: var(--tree-border-active);
-    box-shadow: var(--tree-shadow-active);
+.node[data-selected] > .row > .label {
+    border-left-color: var(--accent1);
 }
 
 .icon {
-    height: 1.3em;
-    position: relative;
-    padding: 0 0.2em 0 0.2em;
-    top: 50%;
-    transform: translateY(-50%);
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    color: var(--fg4);
+}
+
+.node[data-selected] > .row > .label > .icon {
+    color: var(--accent1);
 }
 
 .text {
-    height: 1.3em;
-    top: 50%;
-    transform: translateY(-50%);
-    min-width: 0;
+    flex: 1 1 auto;
     text-overflow: ellipsis;
     white-space: nowrap;
-    position: relative;
     overflow: hidden;
 }
 
 .count {
-    position: absolute;
-    right: 0;
-    height: 1.3em;
-    margin-right: 0.2em;
+    flex: 0 0 auto;
+    margin-left: 4px;
+    color: var(--fg4);
+    font-size: 0.9em;
 }

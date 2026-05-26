@@ -10,8 +10,8 @@ html, body, #root {
     line-height: var(--line-height);
     font-weight: var(--font-weight);
 
-    color: var(--color-fg);
-    background-color: var(--color-bg);
+    color: var(--fg1);
+    background-color: var(--bg0);
 
     font-synthesis: none;
     text-rendering: optimizeLegibility;
