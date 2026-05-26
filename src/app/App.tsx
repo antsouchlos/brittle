@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Folder, Library } from 'lucide-react';
+import styles from './App.module.css'
 import './App.css';
 import TabView from '../components/TabView.tsx';
 import HorizontalPanelLayout from '../components/HorizontalPanelLayout.tsx';
@@ -200,6 +201,7 @@ function App() {
     const [selectedNodeId, setSelectedNodeId] = useState('library');
     const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>(['library']);
     const [selectedPublicationId, setSelectedPublicationId] = useState<string>(publications[0].id);
+    const [focusedPanelIdx, setFocusedPanelIdx] = useState(0);
 
     const fixedTabs = [
         {
@@ -212,38 +214,62 @@ function App() {
                             width: panel1Width,
                             setWidth: setPanel1Width,
                             renderContent: () => (
-                                <TreeView
-                                    root={library}
-                                    selectedNodeId={selectedNodeId}
-                                    expandedNodeIds={expandedNodeIds}
-                                    onToggleExpanded={(id: string) => {
-                                        setExpandedNodeIds((prev) => (
-                                            prev.includes(id)
-                                                ? prev.filter((expandedId) => expandedId !== id)
-                                                : [...prev, id]
-                                        ));
-                                    }}
-                                    onSelectNode={setSelectedNodeId}
-                                />
+                                <div className={styles.panelContainer}
+                                    data-selected={focusedPanelIdx == 0}
+                                >
+                                    <TreeView
+                                        root={library}
+                                        selectedNodeId={selectedNodeId}
+                                        expandedNodeIds={expandedNodeIds}
+                                        onToggleExpanded={(id: string) => {
+                                            setExpandedNodeIds((prev) => (
+                                                prev.includes(id)
+                                                    ? prev.filter((expandedId) => expandedId !== id)
+                                                    : [...prev, id]
+                                            ));
+                                        }}
+                                        onSelectNode={(id) => {
+                                            setFocusedPanelIdx(0);
+                                            setSelectedNodeId(id);
+                                        }}
+                                    />
+                                </div>
                             ),
                         },
                         {
                             width: panel2Width,
                             setWidth: setPanel2Width,
-                            renderContent: () => <PublicationList
-                                publications={publications}
-                                selectedPublicationId={selectedPublicationId}
-                                onSelectPublication={setSelectedPublicationId}
-                            />,
+                            renderContent: () => (
+                                <div
+                                    className={styles.panelContainer}
+                                    data-selected={focusedPanelIdx == 1}
+                                >
+                                    <PublicationList
+                                        publications={publications}
+                                        selectedPublicationId={selectedPublicationId}
+                                        onSelectPublication={(id) => {
+                                            setFocusedPanelIdx(1);
+                                            setSelectedPublicationId(id)
+                                        }}
+                                    />
+                                </div>
+                            ),
                         }
                     ]}
-                    renderLastPanelContent={() => <DetailView
-                        journal={publications.find((pub) => pub.id === selectedPublicationId)?.journal || ''}
-                        author={publications.find((pub) => pub.id === selectedPublicationId)?.author || ''}
-                        date={publications.find((pub) => pub.id === selectedPublicationId)?.date || ''}
-                        collection={publications.find((pub) => pub.id === selectedPublicationId)?.journal || ''}
-                        filename={publications.find((pub) => pub.id === selectedPublicationId)?.title || ''}
-                    />}
+                    renderLastPanelContent={() => (
+                        <div
+                            className={styles.panelContainer}
+                            data-selected={focusedPanelIdx == 2}
+                        >
+                            <DetailView
+                                journal={publications.find((pub) => pub.id === selectedPublicationId)?.journal || ''}
+                                author={publications.find((pub) => pub.id === selectedPublicationId)?.author || ''}
+                                date={publications.find((pub) => pub.id === selectedPublicationId)?.date || ''}
+                                collection={publications.find((pub) => pub.id === selectedPublicationId)?.journal || ''}
+                                filename={publications.find((pub) => pub.id === selectedPublicationId)?.title || ''}
+                            />
+                        </div>
+                    )}
                 />
             ),
         },
