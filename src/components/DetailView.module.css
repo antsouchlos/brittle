@@ -3,6 +3,7 @@
     flex-direction: column;
     gap: 16px;
     padding: 0px 14px;
+    overflow-wrap: anywhere;
 }
 
 .detailBadgeRow {
@@ -36,6 +37,10 @@
     margin: 0;
     color: var(--gb-fg0);
     line-height: 1.2;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
 }
 
 .detailSummary {
