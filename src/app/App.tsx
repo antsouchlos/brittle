@@ -204,6 +204,7 @@ enum Action {
     MoveDown,
     NextTab,
     PrevTab,
+    Submit,
 }
 
 const keymap: Array<[string, Action]> = [
@@ -213,7 +214,20 @@ const keymap: Array<[string, Action]> = [
     ["j", Action.MoveDown],
     ["gt", Action.NextTab],
     ["gT", Action.PrevTab],
+    ["Enter", Action.Submit],
 ];
+
+function getVisibleNodeIds(node: typeof library, expandedIds: string[]): string[] {
+    const result: string[] = [node.id];
+
+    if (expandedIds.includes(node.id)) {
+        for (const child of node.children) {
+            result.push(...getVisibleNodeIds(child, expandedIds));
+        }
+    }
+
+    return result;
+}
 
 function App() {
     const [panel1Width, setPanel1Width] = useState(0.33);
@@ -317,6 +331,7 @@ function App() {
 
     const stateMachine = useRef(new KeymapStateMachine(keymap));
 
+    // TODO: Extract this into separate hook
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             const target = event.target as HTMLElement;
@@ -337,18 +352,26 @@ function App() {
 
             if (action == Action.MoveDown) {
                 if (focusedPanelIdx == 0) {
-                    // TODO: Select next expanded node
+                    const visibleIds = getVisibleNodeIds(library, expandedNodeIds);
+                    const currentIdx = visibleIds.indexOf(selectedNodeId);
+                    const nextIdx = (currentIdx + 1) % visibleIds.length;
+                    setSelectedNodeId(visibleIds[nextIdx]);
                 } else if (focusedPanelIdx == 1) {
-                    // TODO: Select next publication
+                    const currentIdx = publications.findIndex(p => p.id === selectedPublicationId);
+                    const nextIdx = (currentIdx + 1) % publications.length;
+                    setSelectedPublicationId(publications[nextIdx].id);
                 }
-                console.log("MoveDown");
             } else if (action == Action.MoveUp) {
                 if (focusedPanelIdx == 0) {
-                    // TODO: Select previous expanded node
+                    const visibleIds = getVisibleNodeIds(library, expandedNodeIds);
+                    const currentIdx = visibleIds.indexOf(selectedNodeId);
+                    const prevIdx = (currentIdx - 1 + visibleIds.length) % visibleIds.length;
+                    setSelectedNodeId(visibleIds[prevIdx]);
                 } else if (focusedPanelIdx == 1) {
-                    // TODO: Select previous publication
+                    const currentIdx = publications.findIndex(p => p.id === selectedPublicationId);
+                    const prevIdx = (currentIdx - 1 + publications.length) % publications.length;
+                    setSelectedPublicationId(publications[prevIdx].id);
                 }
-                console.log("MoveUp");
             } else if (action == Action.MoveLeft) {
                 setFocusedPanelIdx((focusedPanelIdx + 3 - 1) % 3)
             } else if (action == Action.MoveRight) {
@@ -363,8 +386,34 @@ function App() {
                 const currentIdx = allTabIds.indexOf(selectedTabId);
                 const prevIdx = (currentIdx - 1 + allTabIds.length) % allTabIds.length;
                 setSelectedTabId(allTabIds[prevIdx]);
+            } else if (action == Action.Submit) {
+                if (focusedPanelIdx == 0) {
+                    const findNode = (node: typeof library, targetId: string): typeof library | null => {
+                        if (node.id === targetId) return node;
+                        for (const child of node.children) {
+                            const found = findNode(child, targetId);
+                            if (found) return found;
+                        }
+                        return null;
+                    };
+
+                    if (focusedPanelIdx == 0) {
+                        const currentNode = findNode(library, selectedNodeId);
+                        if (currentNode && currentNode.children.length > 0) {
+                            setExpandedNodeIds((prev) => (
+                                prev.includes(selectedNodeId)
+                                    ? prev.filter((id) => id !== selectedNodeId)
+                                    : [...prev, selectedNodeId]
+                            ));
+                        }
+                    }
+                } else if (focusedPanelIdx == 1) {
+                    console.log("Open PDF");
+                    // TODO: Open / go to PDF tab
+                }
             }
         };
+
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [focusedPanelIdx, selectedTabId, fixedTabs, variableTabs]);
