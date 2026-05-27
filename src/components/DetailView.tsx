@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import styles from './DetailView.module.css';
+import VimTextArea from './VimTextArea';
 
 interface DetailViewProps {
     journal: string,
@@ -9,6 +11,8 @@ interface DetailViewProps {
 }
 
 function DetailView({ journal, author, date, collection, filename }: DetailViewProps) {
+    const [bibContent, setBibContent] = useState(`${journal}\n${author}\n${date}\n${collection}\n${filename}`);
+
     return (
         <div>
             <div className={styles.detailPane}>
@@ -27,11 +31,10 @@ function DetailView({ journal, author, date, collection, filename }: DetailViewP
                     <dd>{filename}</dd>
                 </dl>
 
-                <p className={styles.detailSummary}>
-                    Sample metadata pane styled after the previous Brittle UI:
-                    compact, information-dense, and visually quiet so the
-                    document tabs stay the primary focus.
-                </p>
+                <VimTextArea
+                    value={bibContent}
+                    onChange={setBibContent}
+                />
             </div>
         </div>
     );
