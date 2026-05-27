@@ -38,9 +38,9 @@ export default function MinimalWrapperEditor({ value, onChange }: MinimalWrapper
             { key: "ArrowRight", run: cursorCharRight, shift: selectCharRight },
         ]),
         vim(),
-        // Fix alt key bindings for vim mode
         EditorView.domEventHandlers({
             keydown(event, view) {
+                // Fix alt key bindings for vim mode
                 if (event.altKey && event.key !== 'Alt' && event.key !== 'Control' && event.key !== 'Shift') {
                     const cm = getCM(view);
 
@@ -54,6 +54,20 @@ export default function MinimalWrapperEditor({ value, onChange }: MinimalWrapper
                         return true;
                     }
                 }
+
+                // Unfocus when 'Escape' is pressed in normal mode
+                if (event.key === 'Escape') {
+                    const cm = getCM(view);
+                    if (cm) {
+                        const vimState = (cm as any).state?.vim;
+                        // Check if in normal mode (not insert mode AND not visual mode)
+                        if (vimState && !vimState.insertMode && !vimState.visualMode) {
+                            view.contentDOM.blur();
+                            return true;
+                        }
+                    }
+                }
+
                 return false;
             }
         })
