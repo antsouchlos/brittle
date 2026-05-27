@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Folder, Library } from 'lucide-react';
 import styles from './App.module.css'
 import './App.css';
@@ -9,6 +9,8 @@ import TreeView from '../components/TreeView.tsx';
 import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 import PublicationList from '../components/PublicationList.tsx';
 import DetailView from '../components/DetailView.tsx';
+
+import { KeymapStateMachine, normalizeKeyEvent } from './KeymapStateMachine.ts'
 
 const samplePdfConfig = {
     src: 'https://snippet.embedpdf.com/ebook.pdf',
@@ -195,6 +197,24 @@ const library = {
     ],
 };
 
+enum Action {
+    MoveLeft,
+    MoveRight,
+    MoveUp,
+    MoveDown,
+    NextTab,
+    PrevTab,
+}
+
+const keymap: Array<[string, Action]> = [
+    ["h", Action.MoveLeft],
+    ["l", Action.MoveRight],
+    ["k", Action.MoveUp],
+    ["j", Action.MoveDown],
+    ["gt", Action.NextTab],
+    ["gT", Action.PrevTab],
+];
+
 function App() {
     const [panel1Width, setPanel1Width] = useState(0.33);
     const [panel2Width, setPanel2Width] = useState(0.33);
@@ -294,6 +314,60 @@ function App() {
             )
         },
     ]);
+
+    const stateMachine = useRef(new KeymapStateMachine(keymap));
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement;
+            if (
+                target.tagName === 'INPUT' ||
+                target.tagName === 'TEXTAREA' ||
+                target.isContentEditable
+            ) {
+                return;
+            }
+
+            let normalized_key = normalizeKeyEvent(event);
+            if (normalized_key === null) {
+                return;
+            }
+
+            let action: Action | null = stateMachine.current.feed(normalized_key);
+
+            if (action == Action.MoveDown) {
+                if (focusedPanelIdx == 0) {
+                    // TODO: Select next expanded node
+                } else if (focusedPanelIdx == 1) {
+                    // TODO: Select next publication
+                }
+                console.log("MoveDown");
+            } else if (action == Action.MoveUp) {
+                if (focusedPanelIdx == 0) {
+                    // TODO: Select previous expanded node
+                } else if (focusedPanelIdx == 1) {
+                    // TODO: Select previous publication
+                }
+                console.log("MoveUp");
+            } else if (action == Action.MoveLeft) {
+                setFocusedPanelIdx((focusedPanelIdx + 3 - 1) % 3)
+            } else if (action == Action.MoveRight) {
+                setFocusedPanelIdx((focusedPanelIdx + 1) % 3)
+            } else if (action == Action.NextTab) {
+                const allTabIds = [...fixedTabs.map(t => t.id), ...variableTabs.map(t => t.id)];
+                const currentIdx = allTabIds.indexOf(selectedTabId);
+                const nextIdx = (currentIdx + 1) % allTabIds.length;
+                setSelectedTabId(allTabIds[nextIdx]);
+            } else if (action == Action.PrevTab) {
+                const allTabIds = [...fixedTabs.map(t => t.id), ...variableTabs.map(t => t.id)];
+                const currentIdx = allTabIds.indexOf(selectedTabId);
+                const prevIdx = (currentIdx - 1 + allTabIds.length) % allTabIds.length;
+                setSelectedTabId(allTabIds[prevIdx]);
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [focusedPanelIdx, selectedTabId, fixedTabs, variableTabs]);
 
     return <TabView
         fixedTabs={fixedTabs}
