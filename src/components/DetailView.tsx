@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
 
@@ -11,7 +11,10 @@ interface DetailViewProps {
 }
 
 function DetailView({ journal, author, date, collection, filename }: DetailViewProps) {
-    const [bibContent, setBibContent] = useState(`${journal}\n${author}\n${date}\n${collection}\n${filename}`);
+    const [bibContent, setBibContent] = useState('');
+    useEffect(() => {
+        setBibContent(`${journal}\n${author}\n${date}\n${collection}\n${filename}`);
+    }, [journal, author, date, collection, filename]);
 
     return (
         <div>
