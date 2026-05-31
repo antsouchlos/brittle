@@ -303,7 +303,12 @@ function App() {
                                 collection={publications.find((pub) => pub.id === selectedPublicationId)?.journal || ''}
                                 filename={publications.find((pub) => pub.id === selectedPublicationId)?.title || ''}
                                 bibTextAreaFocused={bibTextAreaFocused}
-                                setBibTextAreaFocused={setBibTextAreaFocused}
+                                setBibTextAreaFocused={(val: boolean) => {
+                                    setBibTextAreaFocused(val);
+                                    if (val) {
+                                        setFocusedPanelIdx(2);
+                                    }
+                                }}
                             />
                         </div>
                     )}
