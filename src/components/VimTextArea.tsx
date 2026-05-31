@@ -4,7 +4,7 @@ import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { drawSelection, keymap } from '@codemirror/view';
 import { history, historyKeymap } from '@codemirror/commands';
 import { vim, getCM, Vim } from '@replit/codemirror-vim';
-import { EditorState } from '@codemirror/state';
+import { EditorState, Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { bracketMatching } from '@codemirror/language';
 import {
@@ -18,6 +18,43 @@ import {
 
 import styles from './VimTextArea.module.css';
 
+// This hook is responsible for syncing the external focus state managed by
+// the called with the internal one handled by the `CodeMirror` component
+export function useCodeMirrorFocusSync(
+    editorRef: React.RefObject<ReactCodeMirrorRef | null>,
+    isFocused: boolean,
+    setFocused: (value: boolean) => void
+): Extension[] {
+    // Sync external isFocused state to CodeMirror's internal focus state
+    useEffect(() => {
+        if (editorRef.current?.view) {
+            if (isFocused) {
+                editorRef.current.view?.contentDOM.focus();
+            } else {
+                editorRef.current.view?.contentDOM.blur();
+            }
+        }
+    }, [isFocused, editorRef]);
+
+    // Return extensions that sync internal focus state back to parent
+    return [
+        EditorView.domEventHandlers({
+            focus(_event, _view) {
+                setFocused(true);
+            },
+            blur(_event, view) {
+                // Use requestAnimationFrame to avoid race conditions
+                requestAnimationFrame(() => {
+                    // Check if focus moved outside the editor
+                    if (!view.contentDOM.contains(document.activeElement)) {
+                        setFocused(false);
+                    }
+                });
+            },
+        }),
+    ];
+}
+
 interface VimTextAreaProps {
     value: string;
     onChange: (value: string) => void;
@@ -28,9 +65,8 @@ interface VimTextAreaProps {
 
 // This component is based on a CodeMirror, which manages its own focus state
 // internally. To allow use of this component as though the focus state is
-// managed by the caller, the setFocused() function is called every time the
-// CodeMirror looses or gains focus. This way, the external focus state is
-// configured to mirror the interal one.
+// managed by the caller, the external focus state is set up to mirror the 
+// internal one.
 //
 // TODO: Only focus textarea if the actual textarea is clicked, not the area
 // below it
@@ -39,22 +75,14 @@ interface VimTextAreaProps {
 // doesn't register the enter key
 export default function VimTextArea({ value, onChange, isFocused, setFocused }: VimTextAreaProps) {
     const editorRef = useRef<ReactCodeMirrorRef>(null);
-
-    useEffect(() => {
-        if (isFocused !== undefined && editorRef.current) {
-            if (isFocused) {
-                editorRef.current.view?.contentDOM.focus();
-            } else {
-                editorRef.current.view?.contentDOM.blur();
-            }
-        }
-    }, [isFocused]);
+    const focusSyncExtensions = useCodeMirrorFocusSync(editorRef, isFocused, setFocused);
 
     const extensions = [
         history(),
         drawSelection(),
         EditorState.allowMultipleSelections.of(true),
         bracketMatching(),
+        ...focusSyncExtensions,
         keymap.of([
             ...historyKeymap,
             // Fix char deletion on multiple lines when in visual block mode
@@ -97,21 +125,6 @@ export default function VimTextArea({ value, onChange, isFocused, setFocused }: 
                 return false;
             }
         }),
-        // Mirror the internal focus state in the external focus state
-        EditorView.domEventHandlers({
-            focus(_event, _view) {
-                setFocused(true);
-            },
-            blur(_event, view) {
-                // Use requestAnimationFrame to avoid race conditions
-                requestAnimationFrame(() => {
-                    // Check if focus moved outside the editor
-                    if (!view.contentDOM.contains(document.activeElement)) {
-                        setFocused(false);
-                    }
-                });
-            },
-        })
     ];
 
 
