@@ -6,9 +6,13 @@
     background: var(--bg1);
 }
 
-.editor :global(.cm-editor.cm-focused) {
+.editor[data-focused='true'] :global(.cm-editor) {
     outline: none;
     border: 1px solid var(--accent1);
+}
+
+.editor :global(.cm-line) {
+    padding-left: 0 !important;
 }
 
 .editor :global(.cm-content) {
@@ -20,6 +24,17 @@
     border-left: 1px solid var(--fg0);
 }
 
-/* .editor :global(.cm-editor:not(.cm-focused)) { */
-/*     background: var(--bg2); */
-/* } */
+.editor :global(.cm-fat-cursor) {
+    outline: none !important;
+    background: var(--fg3) !important;
+    color: var(--bg1) !important;
+}
+
+.editor:not([data-focused='true']) :global(.cm-fat-cursor) {
+    display: none;
+}
+
+.editor :global(.cm-selectionBackground) {
+    background: var(--bg3) !important;
+}
+

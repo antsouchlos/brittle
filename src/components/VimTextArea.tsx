@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 
 import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
-import { drawSelection, keymap } from '@codemirror/view';
-import { history, historyKeymap } from '@codemirror/commands';
+import { drawSelection, KeyBinding, keymap } from '@codemirror/view';
+import { cursorDocEnd, cursorDocStart, cursorGroupLeft, cursorGroupRight, cursorLineBoundaryBackward, cursorLineBoundaryForward, cursorLineBoundaryLeft, cursorLineBoundaryRight, cursorLineDown, cursorLineUp, cursorPageDown, cursorPageUp, deleteGroupBackward, deleteGroupForward, deleteLineBoundaryBackward, deleteLineBoundaryForward, emacsStyleKeymap, history, historyKeymap, selectAll, selectDocEnd, selectDocStart, selectGroupLeft, selectGroupRight, selectLineBoundaryBackward, selectLineBoundaryForward, selectLineBoundaryLeft, selectLineBoundaryRight, selectLineDown, selectLineUp, selectPageDown, selectPageUp, standardKeymap } from '@codemirror/commands';
 import { vim, getCM, Vim } from '@replit/codemirror-vim';
 import { EditorState, Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
@@ -13,14 +13,15 @@ import {
     cursorCharLeft,
     cursorCharRight,
     selectCharLeft,
-    selectCharRight
-} from "@codemirror/commands"
+    selectCharRight,
+    insertNewlineAndIndent,
+} from "@codemirror/commands";
 
 import styles from './VimTextArea.module.css';
 
 // This hook is responsible for syncing the external focus state managed by
-// the called with the internal one handled by the `CodeMirror` component
-export function useCodeMirrorFocusSync(
+// the caller with the internal one managed by the `CodeMirror` component
+function useCodeMirrorFocusSync(
     editorRef: React.RefObject<ReactCodeMirrorRef | null>,
     isFocused: boolean,
     setFocused: (value: boolean) => void
@@ -55,6 +56,53 @@ export function useCodeMirrorFocusSync(
     ];
 }
 
+// Selection of key bindings required for the proper function of the text area.
+// This is a subset of the `standardKeymap` defined by the code mirror library.
+const minimumFunctionalKeymap: readonly KeyBinding[] = ([
+    { key: "ArrowLeft", run: cursorCharLeft, shift: selectCharLeft, preventDefault: true },
+    { key: "Mod-ArrowLeft", mac: "Alt-ArrowLeft", run: cursorGroupLeft, shift: selectGroupLeft, preventDefault: true },
+    { mac: "Cmd-ArrowLeft", run: cursorLineBoundaryLeft, shift: selectLineBoundaryLeft, preventDefault: true },
+
+    { key: "ArrowRight", run: cursorCharRight, shift: selectCharRight, preventDefault: true },
+    { key: "Mod-ArrowRight", mac: "Alt-ArrowRight", run: cursorGroupRight, shift: selectGroupRight, preventDefault: true },
+    { mac: "Cmd-ArrowRight", run: cursorLineBoundaryRight, shift: selectLineBoundaryRight, preventDefault: true },
+
+    { key: "ArrowUp", run: cursorLineUp, shift: selectLineUp, preventDefault: true },
+    { key: "ArrowDown", run: cursorLineDown, shift: selectLineDown, preventDefault: true },
+
+    { key: "PageUp", run: cursorPageUp, shift: selectPageUp },
+    { key: "PageDown", run: cursorPageDown, shift: selectPageDown },
+
+    { key: "Home", run: cursorLineBoundaryBackward, shift: selectLineBoundaryBackward, preventDefault: true },
+    { key: "End", run: cursorLineBoundaryForward, shift: selectLineBoundaryForward, preventDefault: true },
+
+    { key: "Enter", run: insertNewlineAndIndent, shift: insertNewlineAndIndent },
+    { key: "Backspace", run: deleteCharBackward, shift: deleteCharBackward, preventDefault: true },
+    { key: "Delete", run: deleteCharForward, preventDefault: true },
+] as KeyBinding[]).concat(emacsStyleKeymap.map(b => ({ mac: b.key, run: b.run, shift: b.shift })));
+
+// Selection of auxiliary key bindings, not absolutely required for proper
+// operation but usually existing in text editors by convention.
+// This is a subset of the `standardKeymap` defined by the code mirror library.
+// TODO: Use this when not in vim mode
+const auxKeymap: readonly KeyBinding[] = ([
+    { mac: "Cmd-ArrowUp", run: cursorDocStart, shift: selectDocStart },
+    { mac: "Ctrl-ArrowUp", run: cursorPageUp, shift: selectPageUp },
+    { mac: "Cmd-ArrowDown", run: cursorDocEnd, shift: selectDocEnd },
+    { mac: "Ctrl-ArrowDown", run: cursorPageDown, shift: selectPageDown },
+
+    { key: "Mod-Home", run: cursorDocStart, shift: selectDocStart },
+    { key: "Mod-End", run: cursorDocEnd, shift: selectDocEnd },
+
+    { key: "Mod-a", run: selectAll },
+
+    { key: "Mod-Backspace", mac: "Alt-Backspace", run: deleteGroupBackward, preventDefault: true },
+    { key: "Mod-Delete", mac: "Alt-Delete", run: deleteGroupForward, preventDefault: true },
+    { mac: "Mod-Backspace", run: deleteLineBoundaryBackward, preventDefault: true },
+    { mac: "Mod-Delete", run: deleteLineBoundaryForward, preventDefault: true }
+] as KeyBinding[]).concat(emacsStyleKeymap.map(b => ({ mac: b.key, run: b.run, shift: b.shift })));
+
+
 interface VimTextAreaProps {
     value: string;
     onChange: (value: string) => void;
@@ -71,28 +119,24 @@ interface VimTextAreaProps {
 // TODO: Only focus textarea if the actual textarea is clicked, not the area
 // below it
 // TODO: Make vim mode configurable
-// TODO: For some reason, typing "}," followed immediately by an enter key
-// doesn't register the enter key
+// TODO: Make history work as expected
 export default function VimTextArea({ value, onChange, isFocused, setFocused }: VimTextAreaProps) {
     const editorRef = useRef<ReactCodeMirrorRef>(null);
     const focusSyncExtensions = useCodeMirrorFocusSync(editorRef, isFocused, setFocused);
 
     const extensions = [
         history(),
-        drawSelection(),
+        drawSelection({ cursorBlinkRate: 0 }),
         EditorState.allowMultipleSelections.of(true),
         bracketMatching(),
         ...focusSyncExtensions,
         keymap.of([
-            ...historyKeymap,
-            // Fix char deletion on multiple lines when in visual block mode
-            { key: "Backspace", run: deleteCharBackward },
-            { key: "Delete", run: deleteCharForward },
-            { key: "ArrowLeft", run: cursorCharLeft, shift: selectCharLeft },
-            { key: "ArrowRight", run: cursorCharRight, shift: selectCharRight },
+            // ...historyKeymap,  // TODO: Use this when not in vim mode
+            ...minimumFunctionalKeymap,
         ]),
         vim(),
         EditorView.domEventHandlers({
+            // TODO: Only use in vim mode
             keydown(event, view) {
                 // Fix alt key bindings for vim mode
                 if (event.altKey && event.key !== 'Alt' && event.key !== 'Control' && event.key !== 'Shift') {
@@ -136,6 +180,7 @@ export default function VimTextArea({ value, onChange, isFocused, setFocused }: 
             basicSetup={false}
             className={styles.editor}
             extensions={extensions}
+            data-focused={isFocused ? 'true' : 'false'}
         />
     );
 }
