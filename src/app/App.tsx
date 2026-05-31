@@ -236,6 +236,7 @@ function App() {
     const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>(['library']);
     const [selectedPublicationId, setSelectedPublicationId] = useState<string>(publications[0].id);
     const [focusedPanelIdx, setFocusedPanelIdx] = useState(0);
+    const [bibTextAreaFocused, setBibTextAreaFocused] = useState(false);
 
     const fixedTabs = [
         {
@@ -301,6 +302,8 @@ function App() {
                                 date={publications.find((pub) => pub.id === selectedPublicationId)?.date || ''}
                                 collection={publications.find((pub) => pub.id === selectedPublicationId)?.journal || ''}
                                 filename={publications.find((pub) => pub.id === selectedPublicationId)?.title || ''}
+                                bibTextAreaFocused={bibTextAreaFocused}
+                                setBibTextAreaFocused={setBibTextAreaFocused}
                             />
                         </div>
                     )}
@@ -342,6 +345,9 @@ function App() {
             ) {
                 return;
             }
+
+            event.stopPropagation();
+            event.preventDefault();
 
             let normalized_key = normalizeKeyEvent(event);
             if (normalized_key === null) {
@@ -410,6 +416,8 @@ function App() {
                 } else if (focusedPanelIdx == 1) {
                     console.log("Open PDF");
                     // TODO: Open / go to PDF tab
+                } else if (focusedPanelIdx == 2) {
+                    setBibTextAreaFocused(true);
                 }
             }
         };

@@ -1,11 +1,12 @@
-import CodeMirror from '@uiw/react-codemirror';
-import { drawSelection, dropCursor, rectangularSelection, crosshairCursor, keymap, highlightSpecialChars } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { useEffect, useRef } from 'react';
+
+import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
+import { drawSelection, keymap } from '@codemirror/view';
+import { history, historyKeymap } from '@codemirror/commands';
 import { vim, getCM, Vim } from '@replit/codemirror-vim';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { indentOnInput, syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language';
-import { closeBrackets, autocompletion } from '@codemirror/autocomplete';
+import { bracketMatching } from '@codemirror/language';
 import {
     deleteCharBackward,
     deleteCharForward,
@@ -17,13 +18,38 @@ import {
 
 import styles from './VimTextArea.module.css';
 
-interface MinimalWrapperEditorProps {
+interface VimTextAreaProps {
     value: string;
     onChange: (value: string) => void;
+    isFocused: boolean;
+    setFocused: (value: boolean) => void;
+
 }
 
+// This component is based on a CodeMirror, which manages its own focus state
+// internally. To allow use of this component as though the focus state is
+// managed by the caller, the setFocused() function is called every time the
+// CodeMirror looses or gains focus. This way, the external focus state is
+// configured to mirror the interal one.
+//
+// TODO: Only focus textarea if the actual textarea is clicked, not the area
+// below it
 // TODO: Make vim mode configurable
-export default function MinimalWrapperEditor({ value, onChange }: MinimalWrapperEditorProps) {
+// TODO: For some reason, typing "}," followed immediately by an enter key
+// doesn't register the enter key
+export default function VimTextArea({ value, onChange, isFocused, setFocused }: VimTextAreaProps) {
+    const editorRef = useRef<ReactCodeMirrorRef>(null);
+
+    useEffect(() => {
+        if (isFocused !== undefined && editorRef.current) {
+            if (isFocused) {
+                editorRef.current.view?.contentDOM.focus();
+            } else {
+                editorRef.current.view?.contentDOM.blur();
+            }
+        }
+    }, [isFocused]);
+
     const extensions = [
         history(),
         drawSelection(),
@@ -62,7 +88,7 @@ export default function MinimalWrapperEditor({ value, onChange }: MinimalWrapper
                         const vimState = (cm as any).state?.vim;
                         // Check if in normal mode (not insert mode AND not visual mode)
                         if (vimState && !vimState.insertMode && !vimState.visualMode) {
-                            view.contentDOM.blur();
+                            setFocused(false);
                             return true;
                         }
                     }
@@ -70,11 +96,28 @@ export default function MinimalWrapperEditor({ value, onChange }: MinimalWrapper
 
                 return false;
             }
+        }),
+        // Mirror the internal focus state in the external focus state
+        EditorView.domEventHandlers({
+            focus(_event, _view) {
+                setFocused(true);
+            },
+            blur(_event, view) {
+                // Use requestAnimationFrame to avoid race conditions
+                requestAnimationFrame(() => {
+                    // Check if focus moved outside the editor
+                    if (!view.contentDOM.contains(document.activeElement)) {
+                        setFocused(false);
+                    }
+                });
+            },
         })
     ];
 
+
     return (
         <CodeMirror
+            ref={editorRef}
             value={value}
             onChange={onChange}
             basicSetup={false}
