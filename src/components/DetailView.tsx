@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import styles from './DetailView.module.css';
+import VimTextArea from './VimTextArea';
 
 interface DetailViewProps {
     journal: string,
@@ -6,9 +8,21 @@ interface DetailViewProps {
     date: string,
     collection: string,
     filename: string,
+    bibSource: string,
+    bibTextAreaFocused: boolean,
+    setBibTextAreaFocused: (val: boolean) => void;
 }
 
-function DetailView({ journal, author, date, collection, filename }: DetailViewProps) {
+function DetailView(
+    { journal, author, date, collection, filename, bibSource, bibTextAreaFocused,
+        setBibTextAreaFocused }: DetailViewProps
+) {
+    const [bibContent, setBibContent] = useState('');
+
+    useEffect(() => {
+        setBibContent(bibSource);
+    }, [bibSource]);
+
     return (
         <div>
             <div className={styles.detailPane}>
@@ -27,11 +41,12 @@ function DetailView({ journal, author, date, collection, filename }: DetailViewP
                     <dd>{filename}</dd>
                 </dl>
 
-                <p className={styles.detailSummary}>
-                    Sample metadata pane styled after the previous Brittle UI:
-                    compact, information-dense, and visually quiet so the
-                    document tabs stay the primary focus.
-                </p>
+                <VimTextArea
+                    value={bibContent}
+                    onChange={setBibContent}
+                    isFocused={bibTextAreaFocused}
+                    setFocused={setBibTextAreaFocused}
+                />
             </div>
         </div>
     );

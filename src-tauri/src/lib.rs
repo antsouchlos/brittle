@@ -1,8 +1,15 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use log::error;
 use serde::{Deserialize, Serialize};
+use tauri::{Manager, State};
+
+use crate::config::Config;
+
+mod config;
+mod library;
 
 /// Walk the GTK widget tree under `container` and return the first descendant                                                                                            
 /// whose type name starts with `WebKitWebView` (the webkit2gtk webview widget).                                                                                          
@@ -38,6 +45,8 @@ impl From<tauri::Error> for Error {
         Error::WebViewError
     }
 }
+
+impl std::error::Error for Error {}
 
 /// On Linux, Tauri's WebKitGTK webview intercepts trackpad pinch as page zoom
 /// before JS sees it. This attaches a GTK gesture controller that captures the
@@ -91,6 +100,10 @@ fn setup_linux_pinch(window: &tauri::WebviewWindow) -> Result<(), Error> {
 pub fn run() {
     let result = tauri::Builder::default()
         .setup(|app| {
+            {
+                let config = config::load_config(app)?;
+                app.manage(config);
+            }
             #[cfg(target_os = "linux")]
             {
                 use tauri::Manager;
@@ -118,6 +131,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             load_library,
+            parse_publication,
             load_ui_state,
             save_ui_state
         ])
@@ -129,33 +143,6 @@ pub fn run() {
 }
 
 // ---------- Serialized (wire) types ----------
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SerializedDocument {
-    id: String,
-    path: String,
-    title: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tags: Option<Vec<String>>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SerializedFolder {
-    id: String,
-    name: String,
-    parent_id: Option<String>,
-    document_ids: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SerializedLibrary {
-    documents: Vec<SerializedDocument>,
-    folders: Vec<SerializedFolder>,
-    root_folder_id: String,
-}
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -204,63 +191,41 @@ struct SerializedUiState {
 
 // ---------- Commands ----------
 
-/// Returns a hardcoded sample library so the UI has something to render.
-/// Real implementation will scan disk and persist an index.
 #[tauri::command]
-fn load_library() -> SerializedLibrary {
-    SerializedLibrary {
-        root_folder_id: "root".into(),
-        folders: vec![
-            SerializedFolder {
-                id: "root".into(),
-                name: "Library".into(),
-                parent_id: None,
-                document_ids: vec![],
-            },
-            SerializedFolder {
-                id: "samples".into(),
-                name: "Samples".into(),
-                parent_id: Some("root".into()),
-                document_ids: vec!["doc-ebook".into(), "doc-ebook-2".into()],
-            },
-            SerializedFolder {
-                id: "archived".into(),
-                name: "Archived".into(),
-                parent_id: Some("root".into()),
-                document_ids: vec!["doc-ebook-3".into()],
-            },
-        ],
-        documents: vec![
-            SerializedDocument {
-                id: "doc-ebook".into(),
-                path: "https://snippet.embedpdf.com/ebook.pdf".into(),
-                title: "Sample Ebook".into(),
-                tags: None,
-            },
-            SerializedDocument {
-                id: "doc-ebook-2".into(),
-                path: "https://snippet.embedpdf.com/ebook.pdf".into(),
-                title: "Sample Ebook (copy)".into(),
-                tags: None,
-            },
-            SerializedDocument {
-                id: "doc-ebook-3".into(),
-                path: "https://snippet.embedpdf.com/ebook.pdf".into(),
-                title: "Old Ebook".into(),
-                tags: Some(vec!["archived".into()]),
-            },
-        ],
+fn load_library(config: State<Config>) -> Result<library::Library, String> {
+    library::load_library(&config.inner().library_path).map_err(|e| e.to_string())
+}
+
+static PARSE_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicationMetadata {
+    pub title: String,
+    pub author: String,
+    pub year: i32,
+    pub journal: String,
+}
+
+#[tauri::command]
+fn parse_publication(_id: String) -> PublicationMetadata {
+    let count = PARSE_COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
+    PublicationMetadata {
+        title: format!("title{}", count),
+        author: format!("author{}", count),
+        year: count as i32,
+        journal: format!("journal{}", count),
     }
 }
 
 /// Stub: always returns `None` so the frontend initializes from defaults.
 /// Real implementation will read a versioned JSON file from `app_config_dir()`.
 #[tauri::command]
-fn load_ui_state() -> Option<SerializedUiState> {
+fn load_ui_state(config: State<Config>) -> Option<SerializedUiState> {
     None
 }
 
 /// Stub: no-op. Real implementation will write atomically (temp file + rename)
 /// to `app_config_dir()/ui-state.json`.
 #[tauri::command]
-fn save_ui_state(_state: SerializedUiState) {}
+fn save_ui_state(config: State<Config>, _state: SerializedUiState) {}
