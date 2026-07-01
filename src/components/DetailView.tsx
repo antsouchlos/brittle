@@ -8,19 +8,20 @@ interface DetailViewProps {
     date: string,
     collection: string,
     filename: string,
+    bibSource: string,
     bibTextAreaFocused: boolean,
     setBibTextAreaFocused: (val: boolean) => void;
 }
 
 function DetailView(
-    { journal, author, date, collection, filename, bibTextAreaFocused,
+    { journal, author, date, collection, filename, bibSource, bibTextAreaFocused,
         setBibTextAreaFocused }: DetailViewProps
 ) {
     const [bibContent, setBibContent] = useState('');
 
     useEffect(() => {
-        setBibContent(`${journal}\n${author}\n${date}\n${collection}\n${filename}`);
-    }, [journal, author, date, collection, filename]);
+        setBibContent(bibSource);
+    }, [bibSource]);
 
     return (
         <div>

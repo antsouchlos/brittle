@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -130,6 +131,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             load_library,
+            parse_publication,
             load_ui_state,
             save_ui_state
         ])
@@ -192,6 +194,28 @@ struct SerializedUiState {
 #[tauri::command]
 fn load_library(config: State<Config>) -> Result<library::Library, String> {
     library::load_library(&config.inner().library_path).map_err(|e| e.to_string())
+}
+
+static PARSE_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicationMetadata {
+    pub title: String,
+    pub author: String,
+    pub year: i32,
+    pub journal: String,
+}
+
+#[tauri::command]
+fn parse_publication(_id: String) -> PublicationMetadata {
+    let count = PARSE_COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
+    PublicationMetadata {
+        title: format!("title{}", count),
+        author: format!("author{}", count),
+        year: count as i32,
+        journal: format!("journal{}", count),
+    }
 }
 
 /// Stub: always returns `None` so the frontend initializes from defaults.

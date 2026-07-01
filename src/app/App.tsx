@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { Folder, Library } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { LibraryModel, Library, Metadata } from './LibraryModel';
+
 import styles from './App.module.css'
 import './App.css';
 import TabView from '../components/TabView.tsx';
@@ -11,191 +12,13 @@ import PublicationList from '../components/PublicationList.tsx';
 import DetailView from '../components/DetailView.tsx';
 
 import { KeymapStateMachine, normalizeKeyEvent } from './KeymapStateMachine.ts'
+import { invoke } from '@tauri-apps/api/core';
 
 const samplePdfConfig = {
     src: 'https://snippet.embedpdf.com/ebook.pdf',
     theme: { preference: 'dark' as const },
 };
 const pdfStyle = { width: '100%', height: '100%' };
-const renderFolderIcon = () => <Folder size={15} aria-hidden="true" />;
-const renderLibraryIcon = () => <Library size={15} aria-hidden="true" />;
-
-
-const publications = [
-    {
-        id: "vaswani-attention-2017",
-        title: "Attention Is All You Need",
-        author: "Ashish Vaswani et al.",
-        journal: "NeurIPS",
-        date: "2017",
-    },
-    {
-        id: "klabnik-rust-2023",
-        title: "The Rust Programming Language",
-        author: "Steve Klabnik, Carol Nichols",
-        journal: "No Starch Press",
-        date: "2023",
-    },
-    {
-        id: "kleppmann-data-2017",
-        title: "Designing Data-Intensive Applications",
-        author: "Martin Kleppmann",
-        journal: "O'Reilly Media",
-        date: "2017",
-    },
-    {
-        id: "macwilliams-theory-1977",
-        title: "The Theory of Error-Correcting Codes",
-        author: "F. Jessie MacWilliams, Neil J. A. Sloane",
-        journal: "North-Holland",
-        date: "1977",
-    },
-    {
-        id: "gottesman-quantum-2009",
-        title: "Quantum Error Correction for Beginners",
-        author: "Daniel Gottesman",
-        journal: "Lecture Notes",
-        date: "2009",
-    },
-    {
-        id: "arikan-channel-2009",
-        title: "Channel Polarization: A Method for Constructing Capacity-Achieving Codes",
-        author: "Erdal Arikan",
-        journal: "IEEE Transactions on Information Theory",
-        date: "2009",
-    },
-    {
-        id: "vangala-survey-2015",
-        title: "A Survey of Polar Coding Schemes",
-        author: "Harish Vangala, Emanuele Viterbo, Yi Hong",
-        journal: "IEEE Communications Surveys & Tutorials",
-        date: "2015",
-    },
-    {
-        id: "manning-foundations-1999",
-        title: "Foundations of Statistical Natural Language Processing",
-        author: "Christopher D. Manning, Hinrich Schutze",
-        journal: "MIT Press",
-        date: "1999",
-    },
-    {
-        id: "lee-research-2024",
-        title: "Research Gaps in Human-AI Collaboration",
-        author: "Mina Lee, Percy Liang",
-        journal: "CHI Workshop Proceedings",
-        date: "2024",
-    },
-    {
-        id: "lewis-state-2024",
-        title: "State of the Art in Retrieval-Augmented Generation",
-        author: "Patrick Lewis et al.",
-        journal: "arXiv",
-        date: "2024",
-    },
-    {
-        id: "scherz-practical-2016",
-        title: "Practical Electronics for Inventors",
-        author: "Paul Scherz, Simon Monk",
-        journal: "McGraw-Hill",
-        date: "2016",
-    },
-    {
-        id: "abelson-structure-1996",
-        title: "Structure and Interpretation of Computer Programs",
-        author: "Harold Abelson, Gerald Jay Sussman",
-        journal: "MIT Press",
-        date: "1996",
-    },
-];
-
-const library = {
-    id: 'library',
-    name: "Library",
-    count: 9,
-    renderIcon: renderLibraryIcon,
-    children: [
-        {
-            id: 'ba-thesis',
-            name: "ba-thesis",
-            count: 1,
-            renderIcon: renderFolderIcon,
-            children: [],
-        },
-        {
-            id: 'ma-thesis',
-            name: "ma-thesis",
-            count: 3,
-            renderIcon: renderFolderIcon,
-            children: [
-                {
-                    id: 'fundamentals',
-                    name: "fundamentals",
-                    count: 1,
-                    renderIcon: renderFolderIcon,
-                    children: [],
-                },
-                {
-                    id: 'research-gap',
-                    name: "research-gap",
-                    count: 1,
-                    renderIcon: renderFolderIcon,
-                    children: [],
-                },
-                {
-                    id: 'state-of-the-art',
-                    name: "state-of-the-art",
-                    count: 1,
-                    renderIcon: renderFolderIcon,
-                    children: [],
-                },
-            ],
-        },
-        {
-            id: 'phd',
-            name: "phd",
-            count: 2,
-            renderIcon: renderFolderIcon,
-            children: [
-                {
-                    id: 'qec',
-                    name: "qec",
-                    count: 1,
-                    renderIcon: renderFolderIcon,
-                    children: [],
-                },
-                {
-                    id: 'polar-codes',
-                    name: "polar-codes",
-                    count: 1,
-                    renderIcon: renderFolderIcon,
-                    children: [],
-                },
-            ],
-        },
-        {
-            id: 'other',
-            name: "other",
-            count: 2,
-            renderIcon: renderFolderIcon,
-            children: [
-                {
-                    id: 'electronics',
-                    name: "electronics",
-                    count: 1,
-                    renderIcon: renderFolderIcon,
-                    children: [],
-                },
-                {
-                    id: 'software',
-                    name: "software",
-                    count: 1,
-                    renderIcon: renderFolderIcon,
-                    children: [],
-                },
-            ],
-        },
-    ],
-};
 
 enum Action {
     MoveLeft,
@@ -217,26 +40,71 @@ const keymap: Array<[string, Action]> = [
     ["Enter", Action.Submit],
 ];
 
-function getVisibleNodeIds(node: typeof library, expandedIds: string[]): string[] {
-    const result: string[] = [node.id];
-
-    if (expandedIds.includes(node.id)) {
-        for (const child of node.children) {
-            result.push(...getVisibleNodeIds(child, expandedIds));
-        }
-    }
-
-    return result;
-}
-
 function App() {
     const [panel1Width, setPanel1Width] = useState(0.33);
     const [panel2Width, setPanel2Width] = useState(0.33);
-    const [selectedNodeId, setSelectedNodeId] = useState('library');
-    const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>(['library']);
-    const [selectedPublicationId, setSelectedPublicationId] = useState<string>(publications[0].id);
+    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+    const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>([]);
+    const [selectedPublicationId, setSelectedPublicationId] = useState<string | null>(null);
     const [focusedPanelIdx, setFocusedPanelIdx] = useState(0);
     const [bibTextAreaFocused, setBibTextAreaFocused] = useState(false);
+
+    const [lib, setLib] = useState<LibraryModel | null>(null);
+    const [pubMetadata, setPubMetadata] = useState<Record<string, Metadata>>({});
+
+    useEffect(() => {
+        invoke<Library>('load_library')
+            .then(async (data) => {
+                const model = new LibraryModel(data);
+                setLib(model);
+
+                const rootId = model.rootId;
+                if (rootId) {
+                    setSelectedNodeId(rootId);
+                    setExpandedNodeIds([rootId]);
+                }
+
+                const ids = Object.keys(data.publications);
+                const metas = await Promise.all(
+                    ids.map(id => invoke<Metadata>('parse_publication', { id }))
+                );
+                const metaMap: Record<string, Metadata> = {};
+                ids.forEach((id, i) => { metaMap[id] = metas[i]; });
+                setPubMetadata(metaMap);
+
+                if (rootId && ids.length > 0) {
+                    setSelectedPublicationId(ids[0]);
+                }
+            })
+            .catch(e => console.error(e));
+    }, []);
+
+    const treeRoot = useMemo(() => {
+        if (!lib) return null;
+        return lib.buildTree(lib.rootId);
+    }, [lib]);
+
+    const visiblePubIds = useMemo(() => {
+        if (!lib || !selectedNodeId) return [];
+        return lib.collectPubIds(selectedNodeId);
+    }, [lib, selectedNodeId]);
+
+    const publicationListItems = useMemo(() => {
+        return visiblePubIds
+            .filter(id => pubMetadata[id])
+            .map(id => ({
+                id,
+                title: pubMetadata[id].title,
+                author: pubMetadata[id].author,
+                journal: pubMetadata[id].journal,
+                date: String(pubMetadata[id].year),
+            }));
+    }, [visiblePubIds, pubMetadata]);
+
+    const selectedMeta = selectedPublicationId ? pubMetadata[selectedPublicationId] ?? null : null;
+    const selectedPub = selectedPublicationId && lib
+        ? lib.publications[selectedPublicationId] ?? null
+        : null;
 
     const fixedTabs = [
         {
@@ -252,22 +120,24 @@ function App() {
                                 <div className={styles.panelContainer}
                                     data-selected={focusedPanelIdx == 0}
                                 >
-                                    <TreeView
-                                        root={library}
-                                        selectedNodeId={selectedNodeId}
-                                        expandedNodeIds={expandedNodeIds}
-                                        onToggleExpanded={(id: string) => {
-                                            setExpandedNodeIds((prev) => (
-                                                prev.includes(id)
-                                                    ? prev.filter((expandedId) => expandedId !== id)
-                                                    : [...prev, id]
-                                            ));
-                                        }}
-                                        onSelectNode={(id) => {
-                                            setFocusedPanelIdx(0);
-                                            setSelectedNodeId(id);
-                                        }}
-                                    />
+                                    {treeRoot && selectedNodeId && (
+                                        <TreeView
+                                            root={treeRoot}
+                                            selectedNodeId={selectedNodeId}
+                                            expandedNodeIds={expandedNodeIds}
+                                            onToggleExpanded={(id: string) => {
+                                                setExpandedNodeIds((prev) => (
+                                                    prev.includes(id)
+                                                        ? prev.filter((expandedId) => expandedId !== id)
+                                                        : [...prev, id]
+                                                ));
+                                            }}
+                                            onSelectNode={(id) => {
+                                                setFocusedPanelIdx(0);
+                                                setSelectedNodeId(id);
+                                            }}
+                                        />
+                                    )}
                                 </div>
                             ),
                         },
@@ -280,8 +150,8 @@ function App() {
                                     data-selected={focusedPanelIdx == 1}
                                 >
                                     <PublicationList
-                                        publications={publications}
-                                        selectedPublicationId={selectedPublicationId}
+                                        publications={publicationListItems}
+                                        selectedPublicationId={selectedPublicationId ?? ''}
                                         onSelectPublication={(id) => {
                                             setFocusedPanelIdx(1);
                                             setSelectedPublicationId(id)
@@ -297,11 +167,12 @@ function App() {
                             data-selected={focusedPanelIdx == 2}
                         >
                             <DetailView
-                                journal={publications.find((pub) => pub.id === selectedPublicationId)?.journal || ''}
-                                author={publications.find((pub) => pub.id === selectedPublicationId)?.author || ''}
-                                date={publications.find((pub) => pub.id === selectedPublicationId)?.date || ''}
-                                collection={publications.find((pub) => pub.id === selectedPublicationId)?.journal || ''}
-                                filename={publications.find((pub) => pub.id === selectedPublicationId)?.title || ''}
+                                journal={selectedMeta?.journal ?? ''}
+                                author={selectedMeta?.author ?? ''}
+                                date={selectedMeta?.year ? String(selectedMeta.year) : ''}
+                                collection={selectedPub ? lib!.nameOf(selectedPub.parentDirectoryId) : ''}
+                                filename={selectedPub ? lib!.nameOf(selectedPub.extensionlessPath) : ''}
+                                bibSource={selectedPub?.bibSource ?? ''}
                                 bibTextAreaFocused={bibTextAreaFocused}
                                 setBibTextAreaFocused={(val: boolean) => {
                                     setBibTextAreaFocused(val);
@@ -363,25 +234,33 @@ function App() {
 
             if (action == Action.MoveDown) {
                 if (focusedPanelIdx == 0) {
-                    const visibleIds = getVisibleNodeIds(library, expandedNodeIds);
+                    if (!lib) return;
+                    const visibleIds = lib.visibleNodeIds(lib.rootId, expandedNodeIds);
+                    if (visibleIds.length === 0 || !selectedNodeId) return;
                     const currentIdx = visibleIds.indexOf(selectedNodeId);
                     const nextIdx = (currentIdx + 1) % visibleIds.length;
                     setSelectedNodeId(visibleIds[nextIdx]);
                 } else if (focusedPanelIdx == 1) {
-                    const currentIdx = publications.findIndex(p => p.id === selectedPublicationId);
-                    const nextIdx = (currentIdx + 1) % publications.length;
-                    setSelectedPublicationId(publications[nextIdx].id);
+                    if (publicationListItems.length === 0) return;
+                    const currentIdx = publicationListItems.findIndex(p => p.id === selectedPublicationId);
+                    const startIdx = currentIdx < 0 ? 0 : currentIdx;
+                    const nextIdx = (startIdx + 1) % publicationListItems.length;
+                    setSelectedPublicationId(publicationListItems[nextIdx].id);
                 }
             } else if (action == Action.MoveUp) {
                 if (focusedPanelIdx == 0) {
-                    const visibleIds = getVisibleNodeIds(library, expandedNodeIds);
+                    if (!lib) return;
+                    const visibleIds = lib.visibleNodeIds(lib.rootId, expandedNodeIds);
+                    if (visibleIds.length === 0 || !selectedNodeId) return;
                     const currentIdx = visibleIds.indexOf(selectedNodeId);
                     const prevIdx = (currentIdx - 1 + visibleIds.length) % visibleIds.length;
                     setSelectedNodeId(visibleIds[prevIdx]);
                 } else if (focusedPanelIdx == 1) {
-                    const currentIdx = publications.findIndex(p => p.id === selectedPublicationId);
-                    const prevIdx = (currentIdx - 1 + publications.length) % publications.length;
-                    setSelectedPublicationId(publications[prevIdx].id);
+                    if (publicationListItems.length === 0) return;
+                    const currentIdx = publicationListItems.findIndex(p => p.id === selectedPublicationId);
+                    const startIdx = currentIdx < 0 ? 0 : currentIdx;
+                    const prevIdx = (startIdx - 1 + publicationListItems.length) % publicationListItems.length;
+                    setSelectedPublicationId(publicationListItems[prevIdx].id);
                 }
             } else if (action == Action.MoveLeft) {
                 setFocusedPanelIdx((focusedPanelIdx + 3 - 1) % 3)
@@ -399,18 +278,9 @@ function App() {
                 setSelectedTabId(allTabIds[prevIdx]);
             } else if (action == Action.Submit) {
                 if (focusedPanelIdx == 0) {
-                    const findNode = (node: typeof library, targetId: string): typeof library | null => {
-                        if (node.id === targetId) return node;
-                        for (const child of node.children) {
-                            const found = findNode(child, targetId);
-                            if (found) return found;
-                        }
-                        return null;
-                    };
-
-                    if (focusedPanelIdx == 0) {
-                        const currentNode = findNode(library, selectedNodeId);
-                        if (currentNode && currentNode.children.length > 0) {
+                    if (lib && selectedNodeId) {
+                        const dir = lib.directories[selectedNodeId];
+                        if (dir && dir.childDirectoryIds.length > 0) {
                             setExpandedNodeIds((prev) => (
                                 prev.includes(selectedNodeId)
                                     ? prev.filter((id) => id !== selectedNodeId)
@@ -429,7 +299,9 @@ function App() {
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [focusedPanelIdx, selectedTabId, fixedTabs, variableTabs]);
+    }, [focusedPanelIdx, selectedTabId, fixedTabs, variableTabs, lib,
+        selectedNodeId, expandedNodeIds, selectedPublicationId,
+        publicationListItems, pubMetadata]);
 
     return <TabView
         fixedTabs={fixedTabs}
