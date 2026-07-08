@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -32,6 +31,8 @@ fn find_webview_descendant(container: &gtk::Container) -> Option<gtk::Widget> {
 #[derive(Debug)]
 enum Error {
     WebViewError,
+    Lua(mlua::Error),
+    Io(std::io::Error),
 }
 
 impl Display for Error {
@@ -43,6 +44,18 @@ impl Display for Error {
 impl From<tauri::Error> for Error {
     fn from(_: tauri::Error) -> Self {
         Error::WebViewError
+    }
+}
+
+impl From<mlua::Error> for Error {
+    fn from(e: mlua::Error) -> Self {
+        Error::Lua(e)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::Io(e)
     }
 }
 
@@ -196,8 +209,6 @@ fn load_library(config: State<Config>) -> Result<library::Library, String> {
     library::load_library(&config.inner().library_path).map_err(|e| e.to_string())
 }
 
-static PARSE_COUNTER: AtomicU32 = AtomicU32::new(0);
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicationMetadata {
@@ -208,14 +219,26 @@ pub struct PublicationMetadata {
 }
 
 #[tauri::command]
-fn parse_publication(_id: String) -> PublicationMetadata {
-    let count = PARSE_COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
-    PublicationMetadata {
-        title: format!("title{}", count),
-        author: format!("author{}", count),
-        year: count as i32,
-        journal: format!("journal{}", count),
+fn parse_publication(id: String, config: State<Config>) -> Result<PublicationMetadata, String> {
+    let pub_path = config
+        .library_path
+        .parent()
+        .unwrap_or(&config.library_path)
+        .join(&id);
+
+    for format in config.get_parser_formats() {
+        let metadata_path = pub_path.with_extension(&format);
+        if metadata_path.exists() {
+            let source = std::fs::read_to_string(&metadata_path)
+                .map_err(|e| format!("Failed to read {}: {}", metadata_path.display(), e))?;
+            return config.call_ref_parser(&format, &source);
+        }
     }
+
+    Err(format!(
+        "No supported metadata file found for {}",
+        pub_path.display()
+    ))
 }
 
 /// Stub: always returns `None` so the frontend initializes from defaults.
