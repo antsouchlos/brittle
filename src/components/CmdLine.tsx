@@ -1,3 +1,4 @@
+import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './CmdLine.module.css';
 
@@ -57,8 +58,13 @@ function createDefaultBindings(
         prefixedKeyMapping: {
             'Ctrl+r': {
                 '0': async (buf) => {
-                    const text = await navigator.clipboard.readText();
-                    return buf + text;
+                    try {
+                        const text = await readText();
+                        return buf + text;
+                    } catch (e) {
+                        console.error('Clipboard paste failed:', e);
+                        return null;
+                    }
                 },
             },
         },
