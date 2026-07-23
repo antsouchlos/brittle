@@ -37,9 +37,8 @@
     bottom: 100%;
     left: 0;
     right: 0;
-    background: var(--bg1);
-    border: 1px solid var(--bg3);
-    border-bottom: none;
+    background: var(--bg2);
+    border-top: 1px solid var(--bg3);
     max-height: 200px;
     overflow-y: auto;
 }
