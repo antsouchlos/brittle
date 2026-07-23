@@ -174,6 +174,7 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions = []
     // Auto-focus the input whenever the cmdline becomes visible.
     useEffect(() => {
         if (visible) {
+            setPrefix('');
             blurGuardRef.current = false;
             requestAnimationFrame(() => inputRef.current?.focus());
         }
@@ -208,6 +209,7 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions = []
 
             if (buffer.length === 0) {
                 setShowAllSuggestions(true);
+                setPrefix('');
             }
             return;
         }
