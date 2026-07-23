@@ -13,6 +13,7 @@ import DetailView from '../components/DetailView.tsx';
 
 import { KeymapStateMachine, normalizeKeyEvent } from './KeymapStateMachine.ts'
 import { invoke } from '@tauri-apps/api/core';
+import CmdLine from '../components/CmdLine.tsx';
 
 const samplePdfConfig = {
     src: 'https://snippet.embedpdf.com/ebook.pdf',
@@ -28,6 +29,7 @@ enum Action {
     NextTab,
     PrevTab,
     Submit,
+    OpenCmdLine,
 }
 
 const keymap: Array<[string, Action]> = [
@@ -38,6 +40,7 @@ const keymap: Array<[string, Action]> = [
     ["gt", Action.NextTab],
     ["gT", Action.PrevTab],
     ["Enter", Action.Submit],
+    [":", Action.OpenCmdLine],
 ];
 
 function App() {
@@ -51,6 +54,7 @@ function App() {
 
     const [lib, setLib] = useState<LibraryModel | null>(null);
     const [pubMetadata, setPubMetadata] = useState<Record<string, Metadata>>({});
+    const [cmdLineVisible, setCmdLineVisible] = useState(false);
 
     useEffect(() => {
         invoke<Library>('load_library')
@@ -294,6 +298,9 @@ function App() {
                 } else if (focusedPanelIdx == 2) {
                     setBibTextAreaFocused(true);
                 }
+            } else if (action == Action.OpenCmdLine) {
+                stateMachine.current.abort();
+                setCmdLineVisible(true);
             }
         };
 
@@ -303,44 +310,60 @@ function App() {
         selectedNodeId, expandedNodeIds, selectedPublicationId,
         publicationListItems, pubMetadata]);
 
-    return <TabView
-        fixedTabs={fixedTabs}
-        variableTabs={variableTabs}
-        selectedTabId={selectedTabId}
-        onSelectTab={setSelectedTabId}
-        onCloseTab={(id: string) => {
-            // Remove closed tab
+    const handleCmd = (cmd: string) => {
+        console.log("cmd:", cmd);
+        setCmdLineVisible(false);
+    };
 
-            setVariableTabs(variableTabs.filter((tab) => (tab.id != id)));
-            if (id != selectedTabId) return;
+    return (
+        <div className={styles.appWrapper}>
+            <div className={styles.mainContent}>
+                <TabView
+                    fixedTabs={fixedTabs}
+                    variableTabs={variableTabs}
+                    selectedTabId={selectedTabId}
+                    onSelectTab={setSelectedTabId}
+                    onCloseTab={(id: string) => {
+                        // Remove closed tab
 
-            // Select other tab if the selected one was closed
+                        setVariableTabs(variableTabs.filter((tab) => (tab.id != id)));
+                        if (id != selectedTabId) return;
 
-            const allTabs = fixedTabs.concat(variableTabs);
+                        // Select other tab if the selected one was closed
 
-            const selectedIdx = allTabs.findIndex(
-                (tab) => tab.id == selectedTabId);
+                        const allTabs = fixedTabs.concat(variableTabs);
 
-            if (!selectedIdx) {
-                console.error("Could not find closed tab id");
-                return;
-            }
+                        const selectedIdx = allTabs.findIndex(
+                            (tab) => tab.id == selectedTabId);
 
-            if (selectedIdx + 1 < allTabs.length) {
-                setSelectedTabId(allTabs[selectedIdx + 1].id);
-            } else {
-                setSelectedTabId(allTabs[allTabs.length - 2].id);
-            }
-        }}
-        onReorderTabs={(from: number, to: number) => {
-            setVariableTabs(prev => {
-                const newTabs = [...prev];
-                const [moved] = newTabs.splice(from, 1);
-                newTabs.splice(to, 0, moved);
-                return newTabs;
-            });
-        }}
-    />;
+                        if (!selectedIdx) {
+                            console.error("Could not find closed tab id");
+                            return;
+                        }
+
+                        if (selectedIdx + 1 < allTabs.length) {
+                            setSelectedTabId(allTabs[selectedIdx + 1].id);
+                        } else {
+                            setSelectedTabId(allTabs[allTabs.length - 2].id);
+                        }
+                    }}
+                    onReorderTabs={(from: number, to: number) => {
+                        setVariableTabs(prev => {
+                            const newTabs = [...prev];
+                            const [moved] = newTabs.splice(from, 1);
+                            newTabs.splice(to, 0, moved);
+                            return newTabs;
+                        });
+                    }}
+                />
+            </div>
+            <CmdLine
+                visible={cmdLineVisible}
+                onExecute={handleCmd}
+                onCancel={() => setCmdLineVisible(false)}
+            />
+        </div>
+    );
 }
 
 export default App;
