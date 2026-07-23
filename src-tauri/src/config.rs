@@ -11,10 +11,12 @@ use crate::PublicationMetadata;
 const DEFAULT_LIBRARY_PATH: &str = "~/Documents/literature";
 
 type RefParser = Box<dyn Fn(&mlua::Lua, &str) -> Result<mlua::Value, mlua::Error> + Send + Sync>;
+type CmdHandler = Box<dyn Fn(&mlua::Lua, &str) -> Result<String, String> + Send + Sync>;
 
 struct LuaApi {
     lua: mlua::Lua,
     ref_parsers: HashMap<String, RefParser>,
+    commands: HashMap<String, CmdHandler>,
 }
 
 pub struct Config {
@@ -25,11 +27,7 @@ pub struct Config {
 
 impl Config {
     // TODO: Make the error type not be a string
-    pub fn call_ref_parser(
-        &self,
-        format: &str,
-        raw: &str,
-    ) -> Result<PublicationMetadata, String> {
+    pub fn call_ref_parser(&self, format: &str, raw: &str) -> Result<PublicationMetadata, String> {
         let parser = self
             .lua_api
             .ref_parsers
@@ -56,6 +54,21 @@ impl Config {
         let mut formats: Vec<String> = self.lua_api.ref_parsers.keys().cloned().collect();
         formats.sort();
         formats
+    }
+
+    pub fn execute_command(&self, cmd: &str, args: &str) -> Result<String, String> {
+        let handler = self
+            .lua_api
+            .commands
+            .get(cmd)
+            .ok_or_else(|| format!("Unknown command: {}", cmd))?;
+        handler(&self.lua_api.lua, args)
+    }
+
+    pub fn list_commands(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.lua_api.commands.keys().cloned().collect();
+        names.sort();
+        names
     }
 }
 
@@ -89,6 +102,22 @@ fn define_lua_api(lua: &mlua::Lua) -> Result<(), Error> {
 
         ref_table.set("register_parser", register_parser)?;
         brittle.set("ref", ref_table)?;
+    }
+
+    {
+        let cmd_table = lua.create_table()?;
+        cmd_table.set("_registry", lua.create_table()?)?;
+
+        let register_cmd = lua.create_function(|lua, (name, func): (String, mlua::Function)| {
+            let globals: LuaTable = lua.globals();
+            let api: LuaTable = globals.get("brittle")?;
+            let cmd_table: LuaTable = api.get("command")?;
+            let registry: LuaTable = cmd_table.get("_registry")?;
+            registry.set(name, func)
+        })?;
+
+        cmd_table.set("register", register_cmd)?;
+        brittle.set("command", cmd_table)?;
     }
 
     let globals: LuaTable = lua.globals();
@@ -149,6 +178,7 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
         for pair in parsers.pairs::<String, mlua::Function>() {
             let (name, func) = pair?;
             let key = lua.create_registry_value(func)?;
+
             ref_parsers.insert(
                 name,
                 Box::new(move |lua, raw| {
@@ -161,9 +191,53 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
         // TODO: Log error
     }
 
+    let mut commands: HashMap<String, CmdHandler> = HashMap::new();
+
+    // TODO: Error handling
+    let cmd_table: Result<LuaTable, _> = api.get("command");
+    if let Ok(cmd_table) = cmd_table {
+        let registry: Result<LuaTable, _> = cmd_table.get("_registry");
+
+        if let Ok(registry) = registry {
+            for pair in registry.pairs::<String, mlua::Function>() {
+                if let Ok((name, func)) = pair {
+                    if let Ok(key) = lua.create_registry_value(func) {
+                        commands.insert(
+                            name,
+                            Box::new(move |lua, args| {
+                                let f: mlua::Function =
+                                    lua.registry_value(&key).map_err(|e| e.to_string())?;
+                                let result =
+                                    f.call::<mlua::Value>(args).map_err(|e| e.to_string())?;
+
+                                match result {
+                                    mlua::Value::String(s) => {
+                                        Ok(s.to_str().map_err(|e| e.to_string())?.to_string())
+                                    }
+                                    mlua::Value::Nil => Ok(String::new()),
+                                    other => Ok(format!("{:?}", other)),
+                                }
+                            }),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Out-of-the-box available options
+
+    commands.insert("echo".to_string(), Box::new(|_, args| Ok(args.to_string())));
+    // TODO: Implement closing the app
+    commands.insert("q".to_string(), Box::new(|_, _| Ok(String::new())));
+
     Ok(Config {
         library_path: library_path,
         ui_state_path: data_path.join("ui_state"),
-        lua_api: LuaApi { lua, ref_parsers },
+        lua_api: LuaApi {
+            lua,
+            ref_parsers,
+            commands,
+        },
     })
 }

@@ -53,7 +53,6 @@ function createDefaultBindings(
                 onCancel();
                 return '';
             },
-            'Tab': () => null,
         },
         prefixedKeyMapping: {
             'Ctrl+r': {
@@ -140,9 +139,10 @@ export interface CmdLineProps {
     visible: boolean;
     onExecute: (cmd: string) => void;
     onCancel: () => void;
+    suggestions?: string[];
 }
 
-export default function CmdLine({ visible, onExecute, onCancel }: CmdLineProps) {
+export default function CmdLine({ visible, onExecute, onCancel, suggestions = [] }: CmdLineProps) {
     const bindings = useMemo(
         () => createDefaultBindings(onExecute, onCancel),
         [onExecute, onCancel],
@@ -150,6 +150,26 @@ export default function CmdLine({ visible, onExecute, onCancel }: CmdLineProps) 
     const { buffer, setBuffer, feed } = useCmdLineInput(bindings);
     const inputRef = useRef<HTMLInputElement>(null);
     const blurGuardRef = useRef(false);
+    const [prefix, setPrefix] = useState('');
+    const [showAllSuggestions, setShowAllSuggestions] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+    const filteredSuggestions = useMemo(() => {
+        if (prefix.length === 0) return suggestions;
+        return suggestions.filter(s => s.startsWith(prefix));
+    }, [suggestions, prefix]);
+
+    const showDropdown = showAllSuggestions || buffer.length > 0 && filteredSuggestions.length > 0;
+
+    const navigateSuggestion = useCallback((direction: 1 | -1) => {
+        const items = showAllSuggestions ? suggestions : filteredSuggestions;
+        if (items.length === 0) return;
+        setHighlightedIndex(prev => {
+            const next = ((prev + direction) % items.length + items.length) % items.length;
+            setBuffer(items[next]);
+            return next;
+        });
+    }, [suggestions, filteredSuggestions, showAllSuggestions]);
 
     // Auto-focus the input whenever the cmdline becomes visible.
     useEffect(() => {
@@ -163,6 +183,38 @@ export default function CmdLine({ visible, onExecute, onCancel }: CmdLineProps) 
         const combo = normalizeKeyCombo(event);
         if (combo === null) return;
 
+        if (combo === 'Ctrl+n') {
+            event.preventDefault();
+            event.stopPropagation();
+            navigateSuggestion(1);
+            return;
+        }
+
+        if (combo === 'Ctrl+p') {
+            event.preventDefault();
+            event.stopPropagation();
+            navigateSuggestion(-1);
+            return;
+        }
+
+        if (combo === 'Tab') {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (showDropdown) {
+                navigateSuggestion(1);
+                return;
+            }
+
+            if (buffer.length === 0) {
+                setShowAllSuggestions(true);
+            }
+            return;
+        }
+
+        setShowAllSuggestions(false);
+        setHighlightedIndex(-1);
+
         const wasHandled = feed(combo);
         if (wasHandled) {
             event.preventDefault();
@@ -175,7 +227,10 @@ export default function CmdLine({ visible, onExecute, onCancel }: CmdLineProps) 
     };
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setBuffer(event.target.value);
+        const newVal = event.target.value;
+        setBuffer(newVal);
+        setPrefix(newVal);
+        setHighlightedIndex(-1);
     };
 
     const handleBlur = () => {
@@ -201,6 +256,20 @@ export default function CmdLine({ visible, onExecute, onCancel }: CmdLineProps) 
                 spellCheck={false}
                 autoComplete="off"
             />
+            {showDropdown && filteredSuggestions.length > 0 && (
+                <div className={styles.suggestions}>
+                    {filteredSuggestions.map((s, i) => (
+                        <div key={s}
+                            className={`${styles.suggestionItem} ${i === highlightedIndex ? styles.suggestionSelected : ''}`}
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                setBuffer(s);
+                                setHighlightedIndex(i);
+                            }}
+                        >{s}</div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

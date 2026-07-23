@@ -147,7 +147,9 @@ pub fn run() {
             load_library,
             parse_publication,
             load_ui_state,
-            save_ui_state
+            save_ui_state,
+            list_commands,
+            execute_command
         ])
         .run(tauri::generate_context!());
 
@@ -253,3 +255,13 @@ fn load_ui_state(config: State<Config>) -> Option<SerializedUiState> {
 /// to `app_config_dir()/ui-state.json`.
 #[tauri::command]
 fn save_ui_state(config: State<Config>, _state: SerializedUiState) {}
+
+#[tauri::command]
+fn list_commands(config: State<Config>) -> Vec<String> {
+    config.list_commands()
+}
+
+#[tauri::command]
+fn execute_command(cmd: String, args: String, config: State<Config>) -> Result<String, String> {
+    config.execute_command(&cmd, &args)
+}

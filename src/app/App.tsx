@@ -55,6 +55,13 @@ function App() {
     const [lib, setLib] = useState<LibraryModel | null>(null);
     const [pubMetadata, setPubMetadata] = useState<Record<string, Metadata>>({});
     const [cmdLineVisible, setCmdLineVisible] = useState(false);
+    const [commandList, setCommandList] = useState<string[]>([]);
+
+    useEffect(() => {
+        invoke<string[]>('list_commands')
+            .then(setCommandList)
+            .catch(e => console.error('Failed to list commands:', e));
+    }, []);
 
     useEffect(() => {
         invoke<Library>('load_library')
@@ -310,8 +317,14 @@ function App() {
         selectedNodeId, expandedNodeIds, selectedPublicationId,
         publicationListItems, pubMetadata]);
 
-    const handleCmd = (cmd: string) => {
-        console.log("cmd:", cmd);
+    const handleCmd = (cmdLine: string) => {
+        const spaceIdx = cmdLine.indexOf(' ');
+        const cmd = spaceIdx === -1 ? cmdLine : cmdLine.slice(0, spaceIdx);
+        const args = spaceIdx === -1 ? '' : cmdLine.slice(spaceIdx + 1);
+
+        invoke<string>('execute_command', { cmd, args })
+            .then(message => { if (message) console.log(message); })
+            .catch(e => console.error(e));
         setCmdLineVisible(false);
     };
 
@@ -361,6 +374,7 @@ function App() {
                 visible={cmdLineVisible}
                 onExecute={handleCmd}
                 onCancel={() => setCmdLineVisible(false)}
+                suggestions={commandList}
             />
         </div>
     );
