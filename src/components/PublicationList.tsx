@@ -1,3 +1,4 @@
+import { useEffect, useRef, RefObject } from 'react';
 import styles from './PublicationList.module.css';
 
 interface Publication {
@@ -14,13 +15,28 @@ interface PublicationListProps {
     onSelectPublication: (key: string) => void;
 }
 
+function useScrollToSelected(
+    containerRef: RefObject<HTMLDivElement | null>,
+    selectedId: string,
+) {
+    useEffect(() => {
+        containerRef.current
+            ?.querySelector<HTMLElement>('[data-selected="true"]')
+            ?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    }, [selectedId]);
+}
+
 function PublicationList({
     publications,
     selectedPublicationId,
     onSelectPublication,
 }: PublicationListProps) {
+    const listRef = useRef<HTMLDivElement>(null);
+
+    useScrollToSelected(listRef, selectedPublicationId);
+
     return (
-        <div className={styles.publicationList}>
+        <div className={styles.publicationList} ref={listRef}>
             <div className={styles.list}>
                 {publications.map((pub) => (
                     <div
