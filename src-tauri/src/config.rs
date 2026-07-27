@@ -21,6 +21,7 @@ struct LuaApi {
 
 pub struct Config {
     pub library_path: PathBuf,
+    pub library_ignore_patterns: Vec<String>,
     pub ui_state_path: PathBuf,
     lua_api: LuaApi,
 }
@@ -136,7 +137,7 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
     let config_path = app
         .path()
         .app_config_dir()
-        .expect("Config dir should be set by tauri")
+        .expect("The config directory should be set by tauri")
         .join("init.lua");
 
     if config_path.exists() {
@@ -144,7 +145,7 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
             Ok(source) => {
                 if let Err(e) = lua.load(&source).set_name("init.lua").exec() {
                     // TODO: Propagate the error to the caller
-                    log::error!("Failed to exec init.lua: {}", e);
+                    log::error!("Failed to execute init.lua: {}", e);
                 }
             }
             // TODO: Propagate the error to the caller
@@ -169,6 +170,21 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
     let data_path = match data_path {
         Some(path) => expand_tilde(&path),
         None => app.path().app_local_data_dir()?,
+    };
+
+    let library_ignore_patterns: Option<LuaTable> =
+        api.get::<LuaTable>("library_ignore_patterns").ok();
+    let library_ignore_patterns: Vec<String> = match library_ignore_patterns {
+        Some(patterns) => patterns
+            .sequence_values::<String>()
+            .filter_map(|res| {
+                if let Err(e) = &res {
+                    log::error!("Invalid library ignore path: {}", e);
+                }
+                res.ok()
+            })
+            .collect(),
+        None => vec![],
     };
 
     let mut ref_parsers: HashMap<String, RefParser> = HashMap::new();
@@ -232,7 +248,8 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
     commands.insert("q".to_string(), Box::new(|_, _| Ok(String::new())));
 
     Ok(Config {
-        library_path: library_path,
+        library_path,
+        library_ignore_patterns,
         ui_state_path: data_path.join("ui_state"),
         lua_api: LuaApi {
             lua,
