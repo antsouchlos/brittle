@@ -86,7 +86,7 @@ pub fn load_library(library_root: &Path) -> Result<Library, LoadError> {
         },
     );
 
-    scan_directory(&root_id, library_root, &mut directories, &mut publications)?;
+    populate_library_from_directory(&root_id, library_root, &mut directories, &mut publications)?;
 
     Ok(Library {
         directories,
@@ -94,7 +94,8 @@ pub fn load_library(library_root: &Path) -> Result<Library, LoadError> {
     })
 }
 
-fn scan_directory(
+/// This is called recursively for every directory in the library
+fn populate_library_from_directory(
     dir_id: &str,
     library_root: &Path,
     directories: &mut HashMap<String, DirectoryEntry>,
@@ -135,7 +136,7 @@ fn scan_directory(
     for name in &subdir_names {
         let subdir_id = Path::new(dir_id).join(name).to_string_lossy().to_string();
         child_directory_ids.push(subdir_id.clone());
-        scan_directory(&subdir_id, library_root, directories, publications)?;
+        populate_library_from_directory(&subdir_id, library_root, directories, publications)?;
     }
 
     let mut publication_ids = Vec::new();
