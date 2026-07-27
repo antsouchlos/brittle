@@ -209,7 +209,11 @@ struct SerializedUiState {
 
 #[tauri::command]
 fn load_library(config: State<Config>) -> Result<library::Library, String> {
-    library::load_library(&config.inner().library_path).map_err(|e| e.to_string())
+    library::load_library(
+        &config.inner().library_path,
+        &config.inner().library_ignore_patterns,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
