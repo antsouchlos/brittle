@@ -53,7 +53,7 @@ pub struct Library {
     pub publications: HashMap<String, PublicationEntry>,
 }
 
-pub fn load_library(library_root: &Path) -> Result<Library, LoadError> {
+pub fn load_library(library_root: &Path, ignore_patterns: &Vec<String>) -> Result<Library, LoadError> {
     if !library_root.exists() {
         return Err(LoadError::LibraryNotFound);
     }
@@ -212,7 +212,7 @@ mod tests {
     #[test]
     fn empty_directory() {
         let (_dir, root_path, root_name) = create_literature_env(&[]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
         let root_id = root_name.clone();
 
         assert_eq!(lib.directories.len(), 1);
@@ -225,7 +225,7 @@ mod tests {
     #[test]
     fn single_publication_root() {
         let (_dir, root_path, root_name) = create_literature_env(&["paper.pdf", "paper.bib"]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
         let root_id = root_name.clone();
         let pub_id = format!("{}/paper", root_name);
 
@@ -242,7 +242,7 @@ mod tests {
     fn single_publication_subdir() {
         let (_dir, root_path, root_name) =
             create_literature_env(&["sub/paper.pdf", "sub/paper.bib"]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
         let root_id = root_name.clone();
         let subdir_id = format!("{}/sub", root_name);
         let pub_id = format!("{}/sub/paper", root_name);
@@ -273,7 +273,7 @@ mod tests {
             "x/y/c.pdf",
             "x/y/c.bib",
         ]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
         let root_id = root_name.clone();
 
         assert_eq!(lib.directories.len(), 3);
@@ -318,7 +318,7 @@ mod tests {
     fn multiple_publications_in_directory() {
         let (_dir, root_path, root_name) =
             create_literature_env(&["a.pdf", "a.bib", "b.pdf", "b.bib", "c.pdf", "c.bib"]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
         let root_id = root_name.clone();
 
         assert_eq!(lib.publications.len(), 3);
@@ -337,7 +337,7 @@ mod tests {
             "cover.jpg",
             "README.md",
         ]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
 
         assert_eq!(lib.publications.len(), 1);
         assert!(lib
@@ -348,7 +348,7 @@ mod tests {
     #[test]
     fn orphan_pdf_skipped() {
         let (_dir, root_path, _root_name) = create_literature_env(&["paper.pdf"]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
 
         assert!(lib.publications.is_empty());
     }
@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn orphan_bib_skipped() {
         let (_dir, root_path, _root_name) = create_literature_env(&["paper.bib"]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
 
         assert!(lib.publications.is_empty());
     }
@@ -365,7 +365,7 @@ mod tests {
     fn unicode_filenames() {
         let (_dir, root_path, root_name) =
             create_literature_env(&["über-paper.pdf", "über-paper.bib", "论文.pdf", "论文.bib"]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
 
         assert_eq!(lib.publications.len(), 2);
         assert!(lib
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn library_not_found() {
-        let err = load_library(Path::new("/nonexistent/path")).unwrap_err();
+        let err = load_library(Path::new("/nonexistent/path"), &vec![]).unwrap_err();
 
         assert!(matches!(err, LoadError::LibraryNotFound));
     }
@@ -388,7 +388,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let file_path = dir.path().join("some_file.txt");
         fs::write(&file_path, b"").unwrap();
-        let err = load_library(&file_path).unwrap_err();
+        let err = load_library(&file_path, &vec![]).unwrap_err();
 
         assert!(matches!(err, LoadError::NotADirectory));
     }
@@ -396,7 +396,7 @@ mod tests {
     #[test]
     fn root_id_uses_directory_name() {
         let (_dir, root_path, root_name) = create_literature_env(&[]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
         let root_id = root_name.clone();
         let root = &lib.directories[&root_id];
 
@@ -413,7 +413,7 @@ mod tests {
             "sub/sub2/b.pdf",
             "sub/sub2/b.bib",
         ]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
         let root_id = root_name.clone();
 
         assert_eq!(
@@ -441,7 +441,7 @@ mod tests {
             "sub/d.bib",
             "sub/e.pdf",
         ]);
-        let lib = load_library(&root_path).unwrap();
+        let lib = load_library(&root_path, &vec![]).unwrap();
 
         assert_eq!(lib.publications.len(), 2);
         assert!(lib.publications.contains_key(&format!("{}/a", root_name)));
