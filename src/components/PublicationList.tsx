@@ -244,13 +244,10 @@ function PublicationList({
                         placeholder="journal · title · author · year"
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                                e.preventDefault();
                                 onSubmit?.();
                             } else if (e.key === 'Escape') {
-                                e.preventDefault();
                                 onCloseFuzzyFind();
                             } else if ((e.key === 'n' && e.ctrlKey) || (e.key === 'p' && e.ctrlKey)) {
-                                e.preventDefault();
                                 navigate(e.key === 'n' ? 1 : -1);
                             } else if (e.key === 'Tab') {
                                 e.preventDefault();
