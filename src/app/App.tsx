@@ -171,6 +171,7 @@ function App() {
                                             setSelectedPublicationId(id)
                                         }}
                                         fuzzyFindVisible={fuzzyFindVisible}
+                                        isActive={focusedPanelIdx === 1}
                                         onCloseFuzzyFind={() => setFuzzyFindVisible(false)}
                                     />
                                 </div>

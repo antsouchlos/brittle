@@ -15,6 +15,7 @@ interface PublicationListProps {
     selectedPublicationId: string;
     onSelectPublication: (key: string) => void;
     fuzzyFindVisible: boolean;
+    isActive: boolean;
     onCloseFuzzyFind: () => void;
 }
 
@@ -161,12 +162,23 @@ function PublicationList({
     selectedPublicationId,
     onSelectPublication,
     fuzzyFindVisible,
+    isActive,
     onCloseFuzzyFind,
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
     const fuzzyInputRef = useRef<HTMLInputElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     useScrollToSelected(listRef, selectedPublicationId);
+
+    useEffect(() => {
+        if (!fuzzyFindVisible || !fuzzyInputRef.current) return;
+        if (isActive) {
+            fuzzyInputRef.current.focus();
+        } else {
+            fuzzyInputRef.current.blur();
+        }
+    }, [isActive, fuzzyFindVisible]);
 
     const { query, setQuery, displayItems, effectiveIdx, navigate, selectByClick } =
         useFuzzySearch(
@@ -178,7 +190,14 @@ function PublicationList({
         );
 
     return (
-        <div className={styles.publicationList}>
+        <div className={styles.publicationList} ref={containerRef}
+            onMouseDown={(e) => {
+                if (fuzzyFindVisible && fuzzyInputRef.current) {
+                    e.preventDefault();
+                    fuzzyInputRef.current.focus();
+                }
+            }}
+        >
             {fuzzyFindVisible && (
                 <div className={styles.fuzzyBar}>
                     <span className={styles.fuzzyPrompt}>&gt;</span>
@@ -194,6 +213,9 @@ function PublicationList({
                             } else if ((e.key === 'n' && e.ctrlKey) || (e.key === 'p' && e.ctrlKey)) {
                                 e.preventDefault();
                                 navigate(e.key === 'n' ? 1 : -1);
+                            } else if (e.key === 'Tab') {
+                                e.preventDefault();
+                                navigate(e.shiftKey ? -1 : 1);
                             }
                         }}
                         spellCheck={false}
