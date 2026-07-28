@@ -1,5 +1,12 @@
 .publicationList {
     height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.listContainer {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
 }
 
@@ -59,4 +66,43 @@
     color: var(--accent1);
     line-height: 1.1;
     font-size: 0.85rem;
+}
+
+.fuzzyBar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    background: var(--bg1);
+    border-bottom: 1px solid var(--bg3);
+    padding: 0.3em 0.8em;
+    font-family: var(--font-family);
+}
+
+.fuzzyPrompt {
+    color: var(--accent1);
+    user-select: none;
+    margin-right: 0.3em;
+}
+
+.fuzzyInput {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--fg1);
+    font: inherit;
+    font-size: inherit;
+    caret-color: var(--accent1);
+}
+
+.fuzzyInput::placeholder {
+    color: var(--fg3);
+    opacity: 1;
+}
+
+.highlight {
+    font-weight: bold;
+    background: color-mix(in srgb, var(--accent5) 35%, transparent);
+    border-radius: 2px;
+    padding: 0 2px;
 }
