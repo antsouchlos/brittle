@@ -30,6 +30,7 @@ enum Action {
     PrevTab,
     Submit,
     OpenCmdLine,
+    OpenFuzzyFind,
 }
 
 const keymap: Array<[string, Action]> = [
@@ -41,6 +42,7 @@ const keymap: Array<[string, Action]> = [
     ["gT", Action.PrevTab],
     ["Enter", Action.Submit],
     [":", Action.OpenCmdLine],
+    [" ff", Action.OpenFuzzyFind],
 ];
 
 function App() {
@@ -55,6 +57,7 @@ function App() {
     const [lib, setLib] = useState<LibraryModel | null>(null);
     const [pubMetadata, setPubMetadata] = useState<Record<string, Metadata>>({});
     const [cmdLineVisible, setCmdLineVisible] = useState(false);
+    const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
     const [commandList, setCommandList] = useState<string[]>([]);
 
     useEffect(() => {
@@ -167,6 +170,8 @@ function App() {
                                             setFocusedPanelIdx(1);
                                             setSelectedPublicationId(id)
                                         }}
+                                        fuzzyFindVisible={fuzzyFindVisible}
+                                        onCloseFuzzyFind={() => setFuzzyFindVisible(false)}
                                     />
                                 </div>
                             ),
@@ -308,6 +313,9 @@ function App() {
             } else if (action == Action.OpenCmdLine) {
                 stateMachine.current.abort();
                 setCmdLineVisible(true);
+            } else if (action == Action.OpenFuzzyFind) {
+                setFuzzyFindVisible(true);
+                setFocusedPanelIdx(1);
             }
         };
 
