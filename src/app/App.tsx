@@ -176,7 +176,7 @@ function App() {
                                             setSelectedPublicationId(id)
                                         }}
                                         fuzzyFindVisible={fuzzyFindVisible}
-                                        isActive={focusedPanelIdx === 1}
+                                        isActive={focusedPanelIdx === 1 && selectedTabId === 'Lib'}
                                         onCloseFuzzyFind={() => setFuzzyFindVisible(false)}
                                         onSubmit={handlePublicationSubmit}
                                     />
