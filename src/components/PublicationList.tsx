@@ -130,6 +130,9 @@ function useFuzzySearch(
 ) {
     const [query, setQuery] = useState('');
     const [selectedIdx, setSelectedIdx] = useState(-1);
+    // Incremented on each fuzzy-bar close to trigger a scroll effect that
+    // fires reliably after the full list DOM has been committed.
+    const [scrollVersion, setScrollVersion] = useState(0);
 
     const fzf = useMemo(
         () => new Fzf(publications, {
@@ -158,8 +161,17 @@ function useFuzzySearch(
 
     useEffect(() => {
         if (!fuzzyFindVisible) {
+            // Sync the App-level selection to the currently highlighted
+            // publication before clearing the filtered view. At this point
+            // selectedIdx and displayItems still reflect the last fuzzy-find
+            // state, so the ID we pick here is the one the user saw as selected.
+            if (displayItems.length > 0) {
+                const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
+                onSelectPublication(displayItems[idx].pub.id);
+            }
             setSelectedIdx(-1);
             setQuery('');
+            setScrollVersion(v => v + 1);
             return;
         }
         setSelectedIdx(0);
@@ -168,6 +180,16 @@ function useFuzzySearch(
         }
         listRef.current?.scrollTo({ top: 0, behavior: 'instant' });
     }, [fuzzyFindVisible]);
+
+    // After closing the fuzzy bar the full list is committed to the DOM
+    // (query reset above triggers that render).  Scroll to the selected
+    // publication once the new DOM is in place.
+    useEffect(() => {
+        if (scrollVersion === 0) return;
+        listRef.current
+            ?.querySelector<HTMLElement>('[data-selected="true"]')
+            ?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    }, [scrollVersion]);
 
     const navigate = (delta: number) => {
         if (displayItems.length === 0) return;
