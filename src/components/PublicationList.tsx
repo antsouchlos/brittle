@@ -17,6 +17,7 @@ interface PublicationListProps {
     fuzzyFindVisible: boolean;
     isActive: boolean;
     onCloseFuzzyFind: () => void;
+    onSubmit?: () => void;
 }
 
 interface HighlightPart {
@@ -190,6 +191,7 @@ function PublicationList({
     fuzzyFindVisible,
     isActive,
     onCloseFuzzyFind,
+    onSubmit,
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
 
@@ -219,7 +221,11 @@ function PublicationList({
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="journal · title · author · year"
                         onKeyDown={(e) => {
-                            if (e.key === 'Escape') {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                onSubmit?.();
+                            } else if (e.key === 'Escape') {
+                                e.preventDefault();
                                 onCloseFuzzyFind();
                             } else if ((e.key === 'n' && e.ctrlKey) || (e.key === 'p' && e.ctrlKey)) {
                                 e.preventDefault();

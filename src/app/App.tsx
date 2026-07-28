@@ -60,6 +60,11 @@ function App() {
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
     const [commandList, setCommandList] = useState<string[]>([]);
 
+    const handlePublicationSubmit = () => {
+        console.log("Open PDF");
+        // TODO: Open / go to PDF tab
+    };
+
     useEffect(() => {
         invoke<string[]>('list_commands')
             .then(setCommandList)
@@ -173,6 +178,7 @@ function App() {
                                         fuzzyFindVisible={fuzzyFindVisible}
                                         isActive={focusedPanelIdx === 1}
                                         onCloseFuzzyFind={() => setFuzzyFindVisible(false)}
+                                        onSubmit={handlePublicationSubmit}
                                     />
                                 </div>
                             ),
@@ -306,8 +312,7 @@ function App() {
                         }
                     }
                 } else if (focusedPanelIdx == 1) {
-                    console.log("Open PDF");
-                    // TODO: Open / go to PDF tab
+                    handlePublicationSubmit();
                 } else if (focusedPanelIdx == 2) {
                     setBibTextAreaFocused(true);
                 }
