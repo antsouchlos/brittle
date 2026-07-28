@@ -82,6 +82,34 @@ function HighlightedText({ text, matchPositions }: { text: string; matchPosition
     );
 }
 
+function useFuzzyInputFocus(
+    fuzzyFindVisible: boolean,
+    isActive: boolean,
+): {
+    inputRef: RefObject<HTMLInputElement | null>;
+    onContainerMouseDown: (e: React.MouseEvent) => void;
+} {
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (!fuzzyFindVisible || !inputRef.current) return;
+        if (isActive) {
+            inputRef.current.focus();
+        } else {
+            inputRef.current.blur();
+        }
+    }, [isActive, fuzzyFindVisible]);
+
+    const onContainerMouseDown = (e: React.MouseEvent) => {
+        if (fuzzyFindVisible && inputRef.current) {
+            e.preventDefault();
+            inputRef.current.focus();
+        }
+    };
+
+    return { inputRef, onContainerMouseDown };
+}
+
 function useScrollToSelected(
     containerRef: RefObject<HTMLDivElement | null>,
     selectedId: string,
@@ -98,7 +126,6 @@ function useFuzzySearch(
     publications: Publication[],
     onSelectPublication: (id: string) => void,
     listRef: RefObject<HTMLDivElement | null>,
-    inputRef: RefObject<HTMLInputElement | null>,
 ) {
     const [query, setQuery] = useState('');
     const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -139,7 +166,6 @@ function useFuzzySearch(
             onSelectPublication(publications[0].id);
         }
         listRef.current?.scrollTo({ top: 0, behavior: 'instant' });
-        requestAnimationFrame(() => inputRef.current?.focus());
     }, [fuzzyFindVisible]);
 
     const navigate = (delta: number) => {
@@ -166,19 +192,8 @@ function PublicationList({
     onCloseFuzzyFind,
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
-    const fuzzyInputRef = useRef<HTMLInputElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
 
     useScrollToSelected(listRef, selectedPublicationId);
-
-    useEffect(() => {
-        if (!fuzzyFindVisible || !fuzzyInputRef.current) return;
-        if (isActive) {
-            fuzzyInputRef.current.focus();
-        } else {
-            fuzzyInputRef.current.blur();
-        }
-    }, [isActive, fuzzyFindVisible]);
 
     const { query, setQuery, displayItems, effectiveIdx, navigate, selectByClick } =
         useFuzzySearch(
@@ -186,17 +201,13 @@ function PublicationList({
             publications,
             onSelectPublication,
             listRef,
-            fuzzyInputRef,
         );
+    const { inputRef: fuzzyInputRef, onContainerMouseDown } =
+        useFuzzyInputFocus(fuzzyFindVisible, isActive);
 
     return (
-        <div className={styles.publicationList} ref={containerRef}
-            onMouseDown={(e) => {
-                if (fuzzyFindVisible && fuzzyInputRef.current) {
-                    e.preventDefault();
-                    fuzzyInputRef.current.focus();
-                }
-            }}
+        <div className={styles.publicationList}
+            onMouseDown={onContainerMouseDown}
         >
             {fuzzyFindVisible && (
                 <div className={styles.fuzzyBar}>
