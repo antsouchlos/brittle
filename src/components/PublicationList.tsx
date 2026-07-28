@@ -188,7 +188,7 @@ function useFuzzySearch(
         if (scrollVersion === 0) return;
         listRef.current
             ?.querySelector<HTMLElement>('[data-selected="true"]')
-            ?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+            ?.scrollIntoView({ block: 'center', behavior: 'instant' });
     }, [scrollVersion]);
 
     const navigate = (delta: number) => {
