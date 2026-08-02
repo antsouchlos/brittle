@@ -24,6 +24,7 @@ pub struct Config {
     pub library_ignore_patterns: Vec<String>,
     pub data_path: PathBuf,
     pub log_path: PathBuf,
+    pub pdf_viewer: String,
     lua_api: LuaApi,
 }
 
@@ -179,6 +180,19 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
         None => app.path().app_log_dir()?,
     };
 
+    let pdf_viewer: Option<String> = api.get::<String>("pdf_viewer").ok();
+    let pdf_viewer = match pdf_viewer {
+        Some(v) if v == "external" => v,
+        Some(v) if v != "external" && v != "brittle" => {
+            log::warn!(
+                "Unrecognized pdf_viewer '{}'. Setting option to 'brittle'",
+                v
+            );
+            "brittle".to_string()
+        }
+        _ => "brittle".to_string(),
+    };
+
     let library_ignore_patterns: Option<LuaTable> =
         api.get::<LuaTable>("library_ignore_patterns").ok();
     let library_ignore_patterns: Vec<String> = match library_ignore_patterns {
@@ -280,6 +294,7 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
         library_ignore_patterns,
         data_path,
         log_path: log_path.clone(),
+        pdf_viewer,
         lua_api: LuaApi {
             lua,
             ref_parsers,

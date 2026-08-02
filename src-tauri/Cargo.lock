@@ -367,6 +367,7 @@ dependencies = [
  "log",
  "log-panics",
  "mlua",
+ "open",
  "serde",
  "serde_json",
  "tauri",
