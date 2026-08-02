@@ -135,19 +135,60 @@ function useCmdLineInput(bindings: CmdLineBindings) {
     return { buffer, setBuffer, feed, clear };
 }
 
+function useCmdHistory(commandHistory: string[], buffer: string) {
+    const [historyPosition, setHistoryPosition] = useState(-1);
+    const savedBufferRef = useRef('');
+
+    const historyNavigate = useCallback((direction: -1 | 1): string | null => {
+        if (commandHistory.length === 0) return null;
+
+        if (direction === -1) {
+            if (historyPosition === -1) {
+                savedBufferRef.current = buffer;
+                setHistoryPosition(commandHistory.length - 1);
+                return commandHistory[commandHistory.length - 1];
+            }
+            if (historyPosition > 0) {
+                setHistoryPosition(historyPosition - 1);
+                return commandHistory[historyPosition - 1];
+            }
+            return null;
+        }
+
+        if (historyPosition === -1) return null;
+
+        if (historyPosition < commandHistory.length - 1) {
+            setHistoryPosition(historyPosition + 1);
+            return commandHistory[historyPosition + 1];
+        }
+
+        setHistoryPosition(-1);
+        return savedBufferRef.current;
+    }, [commandHistory, historyPosition, buffer]);
+
+    const resetHistoryPosition = useCallback(() => {
+        setHistoryPosition(-1);
+        savedBufferRef.current = '';
+    }, []);
+
+    return { historyNavigate, resetHistoryPosition };
+}
+
 export interface CmdLineProps {
     visible: boolean;
     onExecute: (cmd: string) => void;
     onCancel: () => void;
-    suggestions?: string[];
+    suggestions: string[];
+    commandHistory: string[];
 }
 
-export default function CmdLine({ visible, onExecute, onCancel, suggestions = [] }: CmdLineProps) {
+export default function CmdLine({ visible, onExecute, onCancel, suggestions, commandHistory }: CmdLineProps) {
     const bindings = useMemo(
         () => createDefaultBindings(onExecute, onCancel),
         [onExecute, onCancel],
     );
     const { buffer, setBuffer, feed } = useCmdLineInput(bindings);
+    const { historyNavigate, resetHistoryPosition } = useCmdHistory(commandHistory, buffer);
     const inputRef = useRef<HTMLInputElement>(null);
     const blurGuardRef = useRef(false);
     const [prefix, setPrefix] = useState('');
@@ -175,6 +216,7 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions = []
     useEffect(() => {
         if (visible) {
             setPrefix('');
+            resetHistoryPosition();
             blurGuardRef.current = false;
             requestAnimationFrame(() => inputRef.current?.focus());
         }
@@ -183,6 +225,13 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions = []
     const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
         const combo = normalizeKeyCombo(event);
         if (combo === null) return;
+
+        if (combo === 'ArrowUp' || combo === 'ArrowDown') {
+            event.preventDefault();
+            const result = historyNavigate(combo === 'ArrowUp' ? -1 : 1);
+            if (result !== null) setBuffer(result);
+            return;
+        }
 
         if (combo === 'Ctrl+n') {
             event.preventDefault();
@@ -233,6 +282,7 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions = []
         setBuffer(newVal);
         setPrefix(newVal);
         setHighlightedIndex(-1);
+        resetHistoryPosition();
     };
 
     const handleBlur = () => {

@@ -59,6 +59,7 @@ function App() {
     const [cmdLineVisible, setCmdLineVisible] = useState(false);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
     const [commandList, setCommandList] = useState<string[]>([]);
+    const [commandHistory, setCommandHistory] = useState<string[]>([]);
 
     const handlePublicationSubmit = () => {
         console.log("Open PDF");
@@ -340,6 +341,11 @@ function App() {
             .then(message => { if (message) console.log(message); })
             .catch(e => console.error(e));
         setCmdLineVisible(false);
+
+        setCommandHistory(prevHistory => {
+            if (prevHistory.length > 0 && prevHistory[prevHistory.length - 1] === cmdLine) return prevHistory;
+            return [...prevHistory, cmdLine];
+        });
     };
 
     return (
@@ -389,6 +395,7 @@ function App() {
                 onExecute={handleCmd}
                 onCancel={() => setCmdLineVisible(false)}
                 suggestions={commandList}
+                commandHistory={commandHistory}
             />
         </div>
     );
