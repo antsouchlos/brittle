@@ -1,5 +1,6 @@
 import { PointerEvent as ReactPointerEvent, Fragment, ReactNode, RefObject, useRef, useState } from 'react';
 import styles from './HorizontalPanelLayout.module.css';
+import { logger } from '../app/logger';
 
 interface DragData {
     separatorIdx: number;
@@ -61,7 +62,7 @@ function usePanelResize(
 
             const panelLayout = panelLayoutRef.current;
             if (!panelLayout) {
-                console.error("No panel layout found");
+                logger.error("No panel layout found");
                 return;
             }
 
@@ -87,7 +88,7 @@ function usePanelResize(
 
         const panelLayout = panelLayoutRef.current;
         if (!panelLayout) {
-            console.error("No panel layout found");
+            logger.error("No panel layout found");
             return;
         }
 

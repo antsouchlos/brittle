@@ -188,7 +188,8 @@ pub fn run() {
             list_commands,
             execute_command,
             load_command_history,
-            save_command_history
+            save_command_history,
+            ts_log
         ])
         .run(tauri::generate_context!());
 
@@ -338,4 +339,15 @@ fn save_command_history(config: State<Config>, history: Vec<String>) -> Result<(
     std::fs::write(&tmp_path, &content).map_err(|e| format!("Failed to write history: {}", e))?;
     std::fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to save history: {}", e))?;
     Ok(())
+}
+
+#[tauri::command]
+fn ts_log(level: String, message: String) {
+    match level.as_str() {
+        "error" => log::error!("[TS] {}", message),
+        "warn" => log::warn!("[TS] {}", message),
+        "info" => log::info!("[TS] {}", message),
+        "debug" => log::debug!("[TS] {}", message),
+        _ => log::trace!("[TS] {}", message),
+    }
 }

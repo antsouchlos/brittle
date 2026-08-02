@@ -1,5 +1,6 @@
 import { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject, useCallback, useRef, useState, useEffect } from 'react';
 import styles from './TabView.module.css';
+import { logger } from '../app/logger';
 
 export interface TabData {
     id: string;
@@ -56,7 +57,7 @@ export function useTabGestures(
 
         const tabBar = tabBarRef.current;
         if (!tabBar) {
-            console.error("No tab bar found");
+            logger.error("No tab bar found");
             return;
         };
 
@@ -70,7 +71,7 @@ export function useTabGestures(
 
         const fromIndex = tabRects.findIndex((r) => r.id === id);
         if (fromIndex < 0) {
-            console.error("Unable to find tab that was clicked");
+            logger.error("Unable to find tab that was clicked");
             return
         };
 
@@ -129,7 +130,7 @@ export function useTabGestures(
 
     const endGesture = (commit: boolean, id: string) => {
         if (!dragData) {
-            console.error("'dragData' is unset. This should never happen");
+            logger.error("'dragData' is unset. This should never happen");
             return;
         };
 
@@ -185,7 +186,7 @@ export function useTabGestures(
 
         const index = dragData.tabRects.findIndex((r) => r.id === id);
         if (index < 0) {
-            console.error("Unable to find tab that was clicked");
+            logger.error("Unable to find tab that was clicked");
             return {};
         }
 
@@ -299,7 +300,7 @@ export default function TabView({
                 visitedOrder.map((id) => {
                     const tab = tabsById.get(id);
                     if (!tab) {
-                        console.error("Visited tab not found");
+                        logger.error("Visited tab not found");
                         return null
                     };
                     return (
