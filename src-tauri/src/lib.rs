@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::io::{self, Write};
 
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -61,6 +62,24 @@ impl From<std::io::Error> for Error {
 
 impl std::error::Error for Error {}
 
+struct DualLogWriter {
+    file: std::fs::File,
+    stderr: io::Stderr,
+}
+
+impl Write for DualLogWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.stderr.write_all(buf)?;
+        self.file.write_all(buf)?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.stderr.flush()?;
+        self.file.flush()
+    }
+}
+
 /// On Linux, Tauri's WebKitGTK webview intercepts trackpad pinch as page zoom
 /// before JS sees it. This attaches a GTK gesture controller that captures the
 /// pinch in the `Capture` phase and claims it (preventing WebKit from also
@@ -114,8 +133,26 @@ pub fn run() {
     let result = tauri::Builder::default()
         .setup(|app| {
             {
+                // Load config
+
                 let config = config::load_config(app)?;
+                let log_path = config.log_path.clone().join("brittle.log");
                 app.manage(config);
+
+                // Set up logging
+
+                if let Some(parent) = log_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                let log_file = std::fs::File::create(&log_path)?;
+
+                let writer = DualLogWriter {
+                    file: log_file,
+                    stderr: io::stderr(),
+                };
+                env_logger::Builder::new()
+                    .target(env_logger::Target::Pipe(Box::new(writer)))
+                    .init();
             }
             #[cfg(target_os = "linux")]
             {

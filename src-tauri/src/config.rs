@@ -23,6 +23,7 @@ pub struct Config {
     pub library_path: PathBuf,
     pub library_ignore_patterns: Vec<String>,
     pub data_path: PathBuf,
+    pub log_path: PathBuf,
     lua_api: LuaApi,
 }
 
@@ -172,6 +173,12 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
         None => app.path().app_local_data_dir()?,
     };
 
+    let log_path: Option<String> = api.get::<String>("log_path").ok();
+    let log_path = match log_path {
+        Some(path) => expand_tilde(&path),
+        None => app.path().app_log_dir()?,
+    };
+
     let library_ignore_patterns: Option<LuaTable> =
         api.get::<LuaTable>("library_ignore_patterns").ok();
     let library_ignore_patterns: Vec<String> = match library_ignore_patterns {
@@ -250,7 +257,8 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
     Ok(Config {
         library_path,
         library_ignore_patterns,
-        data_path: data_path,
+        data_path,
+        log_path: log_path.clone(),
         lua_api: LuaApi {
             lua,
             ref_parsers,
