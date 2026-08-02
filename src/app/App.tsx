@@ -256,6 +256,10 @@ function App() {
                 return;
             }
 
+            if (event.ctrlKey && event.key === 'c') {
+                return;
+            }
+
             event.stopPropagation();
             event.preventDefault();
 
