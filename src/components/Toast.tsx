@@ -14,6 +14,8 @@ interface ToastContextValue {
     log: ToastItem[];
     addToast: (message: string, severity: ToastSeverity) => void;
     dismissToast: (id: number) => void;
+    clearToastTimer: (id: number) => void;
+    resetToastTimer: (id: number, timeoutMs: number) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -35,6 +37,20 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
         setToasts(prev => prev.filter(t => t.id !== id));
     }, []);
+
+    const clearToastTimer = useCallback((id: number) => {
+        const timer = timersRef.current.get(id);
+        if (timer !== undefined) {
+            window.clearTimeout(timer);
+            timersRef.current.delete(id);
+        }
+    }, []);
+
+    const resetToastTimer = useCallback((id: number, timeoutMs: number) => {
+        clearToastTimer(id);
+        const timer = window.setTimeout(() => dismissToast(id), timeoutMs);
+        timersRef.current.set(id, timer);
+    }, [clearToastTimer, dismissToast]);
 
     const addToast = useCallback((message: string, severity: ToastSeverity) => {
         const id = nextId++;
@@ -75,7 +91,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }, [addToast]);
 
     return (
-        <ToastContext.Provider value={{ toasts, log, addToast, dismissToast }}>
+        <ToastContext.Provider value={{
+            toasts,
+            log,
+            addToast,
+            dismissToast,
+            clearToastTimer,
+            resetToastTimer,
+        }}>
             {children}
         </ToastContext.Provider>
     );
@@ -88,26 +111,94 @@ export function useToast() {
     return { toast: ctx.addToast, log: ctx.log };
 }
 
+const EXTEND_TIMEOUT = 15000;
+
+function useToastTimerPause(
+    id: number,
+    clearTimer: (id: number) => void,
+    resetTimer: (id: number, timeoutMs: number) => void,
+) {
+    const docListenerRef = useRef<(() => void) | null>(null);
+
+    const onMouseDown = () => {
+        clearTimer(id);
+
+        const onDocMouseUp = () => {
+            resetTimer(id, EXTEND_TIMEOUT);
+            document.removeEventListener('mouseup', onDocMouseUp);
+            docListenerRef.current = null;
+        };
+        document.addEventListener('mouseup', onDocMouseUp);
+        docListenerRef.current = onDocMouseUp;
+    };
+
+    const onMouseUp = () => {
+        resetTimer(id, EXTEND_TIMEOUT);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (docListenerRef.current) {
+                document.removeEventListener('mouseup', docListenerRef.current);
+            }
+        };
+    }, [id]);
+
+    return { onMouseDown, onMouseUp };
+}
+
+function ToastItemView({
+    item,
+    dismissToast,
+    clearToastTimer,
+    resetToastTimer,
+}: {
+    item: ToastItem;
+    dismissToast: (id: number) => void;
+    clearToastTimer: (id: number) => void;
+    resetToastTimer: (id: number, timeoutMs: number) => void;
+}) {
+    const { onMouseDown, onMouseUp } = useToastTimerPause(
+        item.id,
+        clearToastTimer,
+        resetToastTimer,
+    );
+
+    return (
+        <div
+            className={`${styles.toast} ${styles[item.severity]}`}
+            onMouseDown={onMouseDown}
+            onMouseUp={onMouseUp}
+        >
+            <span className={styles.toastMessage}>{item.message}</span>
+            <button
+                className={styles.toastClose}
+                onClick={() => dismissToast(item.id)}
+            >
+                ×
+            </button>
+        </div>
+    );
+}
+
 export function ToastContainer() {
     const ctx = useContext(ToastContext);
     if (!ctx) return null;
 
-    const { toasts, dismissToast } = ctx;
+    const { toasts, dismissToast, clearToastTimer, resetToastTimer } = ctx;
 
     if (toasts.length === 0) return null;
 
     return (
         <div className={styles.toastArea}>
             {toasts.map(item => (
-                <div key={item.id} className={`${styles.toast} ${styles[item.severity]}`}>
-                    <span className={styles.toastMessage}>{item.message}</span>
-                    <button
-                        className={styles.toastClose}
-                        onClick={() => dismissToast(item.id)}
-                    >
-                        ×
-                    </button>
-                </div>
+                <ToastItemView
+                    key={item.id}
+                    item={item}
+                    dismissToast={dismissToast}
+                    clearToastTimer={clearToastTimer}
+                    resetToastTimer={resetToastTimer}
+                />
             ))}
         </div>
     );
