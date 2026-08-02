@@ -174,6 +174,48 @@ function useCmdHistory(commandHistory: string[], buffer: string) {
     return { historyNavigate, resetHistoryPosition };
 }
 
+function useCmdSuggestions(suggestions: string[], buffer: string) {
+    const [prefix, setSuggestionPrefix] = useState('');
+    const [showAllSuggestions, setShowAllSuggestions] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+    const filteredSuggestions = useMemo(() => {
+        if (prefix.length === 0) return suggestions;
+        return suggestions.filter(s => s.startsWith(prefix));
+    }, [suggestions, prefix]);
+
+    const showDropdown = showAllSuggestions || buffer.length > 0 && filteredSuggestions.length > 0;
+
+    const navigateSuggestion = useCallback((direction: 1 | -1): string | null => {
+        const items = showAllSuggestions ? suggestions : filteredSuggestions;
+        if (items.length === 0) return null;
+        const next = ((highlightedIndex + direction) % items.length + items.length) % items.length;
+        setHighlightedIndex(next);
+        return items[next];
+    }, [suggestions, filteredSuggestions, showAllSuggestions, highlightedIndex]);
+
+    const resetSuggestionHighlight = useCallback(() => {
+        setHighlightedIndex(-1);
+    }, []);
+
+    const resetSuggestionDropdown = useCallback(() => {
+        setShowAllSuggestions(false);
+        setHighlightedIndex(-1);
+    }, []);
+
+    return {
+        filteredSuggestions,
+        showDropdown,
+        highlightedIndex,
+        setHighlightedIndex,
+        setSuggestionPrefix,
+        setShowAllSuggestions,
+        navigateSuggestion,
+        resetSuggestionHighlight,
+        resetSuggestionDropdown,
+    };
+}
+
 export interface CmdLineProps {
     visible: boolean;
     onExecute: (cmd: string) => void;
@@ -189,33 +231,25 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
     );
     const { buffer, setBuffer, feed } = useCmdLineInput(bindings);
     const { historyNavigate, resetHistoryPosition } = useCmdHistory(commandHistory, buffer);
+    const {
+        filteredSuggestions,
+        showDropdown,
+        highlightedIndex,
+        setHighlightedIndex,
+        setSuggestionPrefix,
+        setShowAllSuggestions,
+        navigateSuggestion,
+        resetSuggestionHighlight,
+        resetSuggestionDropdown,
+    } = useCmdSuggestions(suggestions, buffer);
+
     const inputRef = useRef<HTMLInputElement>(null);
     const blurGuardRef = useRef(false);
-    const [prefix, setPrefix] = useState('');
-    const [showAllSuggestions, setShowAllSuggestions] = useState(false);
-    const [highlightedIndex, setHighlightedIndex] = useState(-1);
-
-    const filteredSuggestions = useMemo(() => {
-        if (prefix.length === 0) return suggestions;
-        return suggestions.filter(s => s.startsWith(prefix));
-    }, [suggestions, prefix]);
-
-    const showDropdown = showAllSuggestions || buffer.length > 0 && filteredSuggestions.length > 0;
-
-    const navigateSuggestion = useCallback((direction: 1 | -1) => {
-        const items = showAllSuggestions ? suggestions : filteredSuggestions;
-        if (items.length === 0) return;
-        setHighlightedIndex(prev => {
-            const next = ((prev + direction) % items.length + items.length) % items.length;
-            setBuffer(items[next]);
-            return next;
-        });
-    }, [suggestions, filteredSuggestions, showAllSuggestions]);
 
     // Auto-focus the input whenever the cmdline becomes visible.
     useEffect(() => {
         if (visible) {
-            setPrefix('');
+            setSuggestionPrefix('');
             resetHistoryPosition();
             blurGuardRef.current = false;
             requestAnimationFrame(() => inputRef.current?.focus());
@@ -236,14 +270,16 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
         if (combo === 'Ctrl+n') {
             event.preventDefault();
             event.stopPropagation();
-            navigateSuggestion(1);
+            const result = navigateSuggestion(1);
+            if (result !== null) setBuffer(result);
             return;
         }
 
         if (combo === 'Ctrl+p') {
             event.preventDefault();
             event.stopPropagation();
-            navigateSuggestion(-1);
+            const result = navigateSuggestion(-1);
+            if (result !== null) setBuffer(result);
             return;
         }
 
@@ -252,19 +288,19 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
             event.stopPropagation();
 
             if (showDropdown) {
-                navigateSuggestion(1);
+                const result = navigateSuggestion(1);
+                if (result !== null) setBuffer(result);
                 return;
             }
 
             if (buffer.length === 0) {
                 setShowAllSuggestions(true);
-                setPrefix('');
+                setSuggestionPrefix('');
             }
             return;
         }
 
-        setShowAllSuggestions(false);
-        setHighlightedIndex(-1);
+        resetSuggestionDropdown();
 
         const wasHandled = feed(combo);
         if (wasHandled) {
@@ -280,8 +316,8 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const newVal = event.target.value;
         setBuffer(newVal);
-        setPrefix(newVal);
-        setHighlightedIndex(-1);
+        setSuggestionPrefix(newVal);
+        resetSuggestionHighlight();
         resetHistoryPosition();
     };
 
