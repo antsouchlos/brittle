@@ -48,8 +48,8 @@ const keymap: Array<[string, Action]> = [
 ];
 
 function App() {
-    const [panel1Width, setPanel1Width] = useState(0.33);
-    const [panel2Width, setPanel2Width] = useState(0.33);
+    const [panel1Width, setPanel1Width] = useState(0.25);
+    const [panel2Width, setPanel2Width] = useState(0.4);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>([]);
     const [selectedPublicationId, setSelectedPublicationId] = useState<string | null>(null);
@@ -65,8 +65,9 @@ function App() {
     const historyLoadedRef = useRef(false);
 
     const handlePublicationSubmit = () => {
-        logger.info("Open PDF");
-        // TODO: Open / go to PDF tab
+        if (!selectedPublicationId) return;
+        invoke('open_publication', { pubId: selectedPublicationId })
+            .catch(e => logger.error(String(e)));
     };
 
     useEffect(() => {
@@ -225,21 +226,21 @@ function App() {
     const [selectedTabId, setSelectedTabId] = useState(fixedTabs[0].id);
 
     const [variableTabs, setVariableTabs] = useState(() => [
-        {
-            id: 'A', label: 'A.pdf', renderContent: () => (
-                <PDFViewer style={pdfStyle} config={samplePdfConfig} />
-            )
-        },
-        {
-            id: 'B', label: 'B.pdf', renderContent: () => (
-                <PDFViewer style={pdfStyle} config={samplePdfConfig} />
-            )
-        },
-        {
-            id: 'C', label: 'C.pdf', renderContent: () => (
-                <PDFViewer style={pdfStyle} config={samplePdfConfig} />
-            )
-        },
+        // {
+        //     id: 'A', label: 'A.pdf', renderContent: () => (
+        //         <PDFViewer style={pdfStyle} config={samplePdfConfig} />
+        //     )
+        // },
+        // {
+        //     id: 'B', label: 'B.pdf', renderContent: () => (
+        //         <PDFViewer style={pdfStyle} config={samplePdfConfig} />
+        //     )
+        // },
+        // {
+        //     id: 'C', label: 'C.pdf', renderContent: () => (
+        //         <PDFViewer style={pdfStyle} config={samplePdfConfig} />
+        //     )
+        // },
     ]);
 
     const stateMachine = useRef(new KeymapStateMachine(keymap));

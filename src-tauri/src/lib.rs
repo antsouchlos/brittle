@@ -189,7 +189,8 @@ pub fn run() {
             execute_command,
             load_command_history,
             save_command_history,
-            ts_log
+            ts_log,
+            open_publication,
         ])
         .run(tauri::generate_context!());
 
@@ -338,6 +339,27 @@ fn save_command_history(config: State<Config>, history: Vec<String>) -> Result<(
     let tmp_path = path.with_extension("tmp");
     std::fs::write(&tmp_path, &content).map_err(|e| format!("Failed to write history: {}", e))?;
     std::fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to save history: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn open_publication(pub_id: String, config: State<Config>) -> Result<(), String> {
+    let parent = config
+        .library_path
+        .parent()
+        .ok_or_else(|| "Library path has no parent directory".to_string())?;
+    let pdf_path = parent.join(&pub_id).with_extension("pdf");
+
+    if !pdf_path.exists() {
+        return Err(format!("PDF not found: {}", pdf_path.display()));
+    }
+
+    if config.pdf_viewer == "external" {
+        open::that(&pdf_path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    } else {
+        return Err("Built-in PDF viewer not yet implemented".to_string());
+    }
+
     Ok(())
 }
 
