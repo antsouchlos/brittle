@@ -314,12 +314,12 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
             event.stopPropagation();
 
             if (showSuggestionDropdown) {
-                const result = navigateSuggestion(1);
+                const result = navigateSuggestion(event.shiftKey ? -1 : 1);
                 if (result !== null) setBuffer(result);
                 return;
             }
 
-            if (buffer.length === 0) {
+            if (buffer.length === 0 && !event.shiftKey) {
                 setShowAllSuggestions(true);
                 setSuggestionPrefix('');
             }
