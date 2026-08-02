@@ -372,6 +372,7 @@ function App() {
         <ToastProvider>
         <div className={styles.appWrapper}>
             <div className={styles.mainContent}>
+                <ToastContainer />
                 <TabView
                     fixedTabs={fixedTabs}
                     variableTabs={variableTabs}
@@ -418,7 +419,6 @@ function App() {
                 suggestions={commandList}
                 commandHistory={commandHistory}
             />
-            <ToastContainer />
         </div>
         </ToastProvider>
     );
