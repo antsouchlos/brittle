@@ -22,7 +22,7 @@ struct LuaApi {
 pub struct Config {
     pub library_path: PathBuf,
     pub library_ignore_patterns: Vec<String>,
-    pub ui_state_path: PathBuf,
+    pub data_path: PathBuf,
     lua_api: LuaApi,
 }
 
@@ -250,7 +250,7 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
     Ok(Config {
         library_path,
         library_ignore_patterns,
-        ui_state_path: data_path.join("ui_state"),
+        data_path: data_path,
         lua_api: LuaApi {
             lua,
             ref_parsers,

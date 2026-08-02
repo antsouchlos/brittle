@@ -59,6 +59,8 @@ function App() {
     const [cmdLineVisible, setCmdLineVisible] = useState(false);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
     const [commandList, setCommandList] = useState<string[]>([]);
+    const [commandHistory, setCommandHistory] = useState<string[]>([]);
+    const historyLoadedRef = useRef(false);
 
     const handlePublicationSubmit = () => {
         console.log("Open PDF");
@@ -69,6 +71,13 @@ function App() {
         invoke<string[]>('list_commands')
             .then(setCommandList)
             .catch(e => console.error('Failed to list commands:', e));
+    }, []);
+
+    useEffect(() => {
+        invoke<string[]>('load_command_history')
+            .then(history => setCommandHistory(history))
+            .catch(e => console.error('Failed to load command history:', e))
+            .finally(() => { historyLoadedRef.current = true; });
     }, []);
 
     useEffect(() => {
@@ -340,7 +349,18 @@ function App() {
             .then(message => { if (message) console.log(message); })
             .catch(e => console.error(e));
         setCmdLineVisible(false);
+
+        setCommandHistory(prevHistory => {
+            if (prevHistory.length > 0 && prevHistory[prevHistory.length - 1] === cmdLine) return prevHistory;
+            return [...prevHistory, cmdLine];
+        });
     };
+
+    useEffect(() => {
+        if (!historyLoadedRef.current) return;
+        invoke('save_command_history', { history: commandHistory })
+            .catch(e => console.error('Failed to save command history:', e));
+    }, [commandHistory]);
 
     return (
         <div className={styles.appWrapper}>
@@ -389,6 +409,7 @@ function App() {
                 onExecute={handleCmd}
                 onCancel={() => setCmdLineVisible(false)}
                 suggestions={commandList}
+                commandHistory={commandHistory}
             />
         </div>
     );
