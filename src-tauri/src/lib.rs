@@ -149,7 +149,9 @@ pub fn run() {
             load_ui_state,
             save_ui_state,
             list_commands,
-            execute_command
+            execute_command,
+            load_command_history,
+            save_command_history
         ])
         .run(tauri::generate_context!());
 
@@ -268,4 +270,35 @@ fn list_commands(config: State<Config>) -> Vec<String> {
 #[tauri::command]
 fn execute_command(cmd: String, args: String, config: State<Config>) -> Result<String, String> {
     config.execute_command(&cmd, &args)
+}
+
+#[tauri::command]
+fn load_command_history(config: State<Config>) -> Result<Vec<String>, String> {
+    let path = config.data_path.join("cmdline_history");
+
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+
+    Ok(content
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| l.to_string())
+        .collect())
+}
+
+#[tauri::command]
+fn save_command_history(config: State<Config>, history: Vec<String>) -> Result<(), String> {
+    let path = config.data_path.join("cmdline_history");
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+    let content = history.join("\n");
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, &content).map_err(|e| format!("Failed to write history: {}", e))?;
+    std::fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to save history: {}", e))?;
+    Ok(())
 }
