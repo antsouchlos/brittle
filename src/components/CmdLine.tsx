@@ -175,7 +175,7 @@ function useCmdHistory(commandHistory: string[], buffer: string) {
 }
 
 function useCmdSuggestions(suggestions: string[], buffer: string) {
-    const [prefix, setSuggestionPrefix] = useState('');
+    const [prefix, setPrefix] = useState('');
     const [showAllSuggestions, setShowAllSuggestions] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
@@ -194,26 +194,53 @@ function useCmdSuggestions(suggestions: string[], buffer: string) {
         return items[next];
     }, [suggestions, filteredSuggestions, showAllSuggestions, highlightedIndex]);
 
-    const resetSuggestionHighlight = useCallback(() => {
+    const resetHighlight = useCallback(() => {
         setHighlightedIndex(-1);
     }, []);
 
-    const resetSuggestionDropdown = useCallback(() => {
+    const resetDropdown = useCallback(() => {
         setShowAllSuggestions(false);
         setHighlightedIndex(-1);
     }, []);
 
     return {
         filteredSuggestions,
-        showDropdown,
-        highlightedIndex,
-        setHighlightedIndex,
-        setSuggestionPrefix,
+        showSuggestionDropdown: showDropdown,
+        highlightedSuggestionIndex: highlightedIndex,
+        setHighlightedSuggestionIndex: setHighlightedIndex,
+        setSuggestionPrefix: setPrefix,
         setShowAllSuggestions,
         navigateSuggestion,
-        resetSuggestionHighlight,
-        resetSuggestionDropdown,
+        resetSuggestionHighlight: resetHighlight,
+        resetSuggestionDropdown: resetDropdown,
     };
+}
+
+function useCmdFocus(onCancel: () => void) {
+    const inputRef = useRef<HTMLInputElement>(null);
+    const blurGuardRef = useRef(false);
+
+    const focusInput = useCallback(() => {
+        requestAnimationFrame(() => inputRef.current?.focus());
+    }, []);
+
+    const handleBlur = useCallback(() => {
+        if (blurGuardRef.current) {
+            blurGuardRef.current = false;
+            return;
+        }
+        onCancel();
+    }, [onCancel]);
+
+    const guardBlur = useCallback(() => {
+        blurGuardRef.current = true;
+    }, []);
+
+    const resetBlurGuard = useCallback(() => {
+        blurGuardRef.current = false;
+    }, []);
+
+    return { inputRef, focusInput, handleBlur, guardBlur, resetBlurGuard };
 }
 
 export interface CmdLineProps {
@@ -233,9 +260,9 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
     const { historyNavigate, resetHistoryPosition } = useCmdHistory(commandHistory, buffer);
     const {
         filteredSuggestions,
-        showDropdown,
-        highlightedIndex,
-        setHighlightedIndex,
+        showSuggestionDropdown,
+        highlightedSuggestionIndex,
+        setHighlightedSuggestionIndex,
         setSuggestionPrefix,
         setShowAllSuggestions,
         navigateSuggestion,
@@ -243,16 +270,15 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
         resetSuggestionDropdown,
     } = useCmdSuggestions(suggestions, buffer);
 
-    const inputRef = useRef<HTMLInputElement>(null);
-    const blurGuardRef = useRef(false);
+    const { inputRef, focusInput, handleBlur, guardBlur, resetBlurGuard } = useCmdFocus(onCancel);
 
     // Auto-focus the input whenever the cmdline becomes visible.
     useEffect(() => {
         if (visible) {
             setSuggestionPrefix('');
             resetHistoryPosition();
-            blurGuardRef.current = false;
-            requestAnimationFrame(() => inputRef.current?.focus());
+            resetBlurGuard();
+            focusInput();
         }
     }, [visible]);
 
@@ -287,7 +313,7 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
             event.preventDefault();
             event.stopPropagation();
 
-            if (showDropdown) {
+            if (showSuggestionDropdown) {
                 const result = navigateSuggestion(1);
                 if (result !== null) setBuffer(result);
                 return;
@@ -308,7 +334,7 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
             event.stopPropagation();
 
             if (combo === 'Enter' || combo === 'Escape') {
-                blurGuardRef.current = true;
+                guardBlur();
             }
         }
     };
@@ -319,14 +345,6 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
         setSuggestionPrefix(newVal);
         resetSuggestionHighlight();
         resetHistoryPosition();
-    };
-
-    const handleBlur = () => {
-        if (blurGuardRef.current) {
-            blurGuardRef.current = false;
-            return;
-        }
-        onCancel();
     };
 
     if (!visible) return null;
@@ -344,15 +362,15 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
                 spellCheck={false}
                 autoComplete="off"
             />
-            {showDropdown && filteredSuggestions.length > 0 && (
+            {showSuggestionDropdown && filteredSuggestions.length > 0 && (
                 <div className={styles.suggestions}>
                     {filteredSuggestions.map((s, i) => (
                         <div key={s}
-                            className={`${styles.suggestionItem} ${i === highlightedIndex ? styles.suggestionSelected : ''}`}
+                            className={`${styles.suggestionItem} ${i === highlightedSuggestionIndex ? styles.suggestionSelected : ''}`}
                             onMouseDown={(e) => {
                                 e.preventDefault();
                                 setBuffer(s);
-                                setHighlightedIndex(i);
+                                setHighlightedSuggestionIndex(i);
                             }}
                         >{s}</div>
                     ))}
