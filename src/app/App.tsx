@@ -15,6 +15,7 @@ import DetailView from '../components/DetailView.tsx';
 import { KeymapStateMachine, normalizeKeyEvent } from './KeymapStateMachine.ts'
 import { invoke } from '@tauri-apps/api/core';
 import CmdLine from '../components/CmdLine.tsx';
+import { ToastProvider, ToastContainer } from '../components/Toast';
 
 const samplePdfConfig = {
     src: 'https://snippet.embedpdf.com/ebook.pdf',
@@ -364,6 +365,7 @@ function App() {
     }, [commandHistory]);
 
     return (
+        <ToastProvider>
         <div className={styles.appWrapper}>
             <div className={styles.mainContent}>
                 <TabView
@@ -412,7 +414,9 @@ function App() {
                 suggestions={commandList}
                 commandHistory={commandHistory}
             />
+            <ToastContainer />
         </div>
+        </ToastProvider>
     );
 }
 
