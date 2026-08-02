@@ -1,6 +1,7 @@
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './CmdLine.module.css';
+import { logger } from '../app/logger';
 
 // Converts a React keyboard event into a canonical combo string
 // used for lookup in the key mapping tables.
@@ -61,7 +62,7 @@ function createDefaultBindings(
                         const text = await readText();
                         return buf + text;
                     } catch (e) {
-                        console.error('Clipboard paste failed:', e);
+                        logger.error(`Clipboard paste failed: ${e}`);
                         return null;
                     }
                 },

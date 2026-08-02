@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { logger } from "./logger";
 import "../theme.css";
 import App from "./App";
 import { setupTauriPinchAdapter } from "./tauriPinchAdapter";
@@ -7,7 +8,7 @@ import { setupTauriPinchAdapter } from "./tauriPinchAdapter";
 // Re-dispatch captured touchpad zoom events as ctrl+wheel zoom events
 {
     const pinchTeardown = setupTauriPinchAdapter().catch((err) => {
-        console.error("pinch adapter failed", err);
+        logger.error(`pinch adapter failed: ${err}`);
         return () => { };
     });
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { LibraryModel, Library, Metadata } from './LibraryModel';
+import { logger } from './logger';
 
 import styles from './App.module.css'
 import './App.css';
@@ -14,6 +15,7 @@ import DetailView from '../components/DetailView.tsx';
 import { KeymapStateMachine, normalizeKeyEvent } from './KeymapStateMachine.ts'
 import { invoke } from '@tauri-apps/api/core';
 import CmdLine from '../components/CmdLine.tsx';
+import { ToastProvider, ToastContainer } from '../components/Toast';
 
 const samplePdfConfig = {
     src: 'https://snippet.embedpdf.com/ebook.pdf',
@@ -63,20 +65,20 @@ function App() {
     const historyLoadedRef = useRef(false);
 
     const handlePublicationSubmit = () => {
-        console.log("Open PDF");
+        logger.info("Open PDF");
         // TODO: Open / go to PDF tab
     };
 
     useEffect(() => {
         invoke<string[]>('list_commands')
             .then(setCommandList)
-            .catch(e => console.error('Failed to list commands:', e));
+            .catch(e => logger.error(`Failed to list commands: ${e}`));
     }, []);
 
     useEffect(() => {
         invoke<string[]>('load_command_history')
             .then(history => setCommandHistory(history))
-            .catch(e => console.error('Failed to load command history:', e))
+            .catch(e => logger.error(`Failed to load command history: ${e}`))
             .finally(() => { historyLoadedRef.current = true; });
     }, []);
 
@@ -104,7 +106,7 @@ function App() {
                     setSelectedPublicationId(ids[0]);
                 }
             })
-            .catch(e => console.error(e));
+            .catch(e => logger.error(String(e)));
     }, []);
 
     const treeRoot = useMemo(() => {
@@ -254,6 +256,10 @@ function App() {
                 return;
             }
 
+            if (event.ctrlKey && event.key === 'c') {
+                return;
+            }
+
             event.stopPropagation();
             event.preventDefault();
 
@@ -346,8 +352,8 @@ function App() {
         const args = spaceIdx === -1 ? '' : cmdLine.slice(spaceIdx + 1);
 
         invoke<string>('execute_command', { cmd, args })
-            .then(message => { if (message) console.log(message); })
-            .catch(e => console.error(e));
+            .then(message => { if (message) logger.info(message); })
+            .catch(e => logger.error(String(e)));
         setCmdLineVisible(false);
 
         setCommandHistory(prevHistory => {
@@ -359,12 +365,14 @@ function App() {
     useEffect(() => {
         if (!historyLoadedRef.current) return;
         invoke('save_command_history', { history: commandHistory })
-            .catch(e => console.error('Failed to save command history:', e));
+            .catch(e => logger.error(`Failed to save command history: ${e}`));
     }, [commandHistory]);
 
     return (
+        <ToastProvider>
         <div className={styles.appWrapper}>
             <div className={styles.mainContent}>
+                <ToastContainer />
                 <TabView
                     fixedTabs={fixedTabs}
                     variableTabs={variableTabs}
@@ -384,7 +392,7 @@ function App() {
                             (tab) => tab.id == selectedTabId);
 
                         if (!selectedIdx) {
-                            console.error("Could not find closed tab id");
+                            logger.error("Could not find closed tab id");
                             return;
                         }
 
@@ -412,6 +420,7 @@ function App() {
                 commandHistory={commandHistory}
             />
         </div>
+        </ToastProvider>
     );
 }
 
