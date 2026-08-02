@@ -254,6 +254,27 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
     // TODO: Implement closing the app
     commands.insert("q".to_string(), Box::new(|_, _| Ok(String::new())));
 
+    // TODO: Make this implementable in lua
+    let config_path_str = config_path.display().to_string();
+    commands.insert(
+        "config_path".to_string(),
+        Box::new(move |_, _| Ok(config_path_str.clone())),
+    );
+
+    // TODO: Make this implementable in lua
+    let log_path_str = log_path.display().to_string();
+    commands.insert(
+        "log_path".to_string(),
+        Box::new(move |_, _| Ok(log_path_str.clone())),
+    );
+
+    // TODO: Make this implementable in lua
+    let data_path_str = data_path.display().to_string();
+    commands.insert(
+        "data_path".to_string(),
+        Box::new(move |_, _| Ok(data_path_str.clone())),
+    );
+
     Ok(Config {
         library_path,
         library_ignore_patterns,
