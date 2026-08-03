@@ -153,7 +153,7 @@ function App() {
                 id,
                 title: pubMetadata[id].title,
                 author: pubMetadata[id].author,
-                journal: pubMetadata[id].journal,
+                publisher: pubMetadata[id].publisher,
                 date: String(pubMetadata[id].year),
             }));
     }, [visiblePubIds, pubMetadata]);
@@ -228,7 +228,7 @@ function App() {
                             data-selected={focusedPanelIdx == 2}
                         >
                             <DetailView
-                                journal={selectedMeta?.journal ?? ''}
+                                publisher={selectedMeta?.publisher ?? ''}
                                 author={selectedMeta?.author ?? ''}
                                 date={selectedMeta?.year ? String(selectedMeta.year) : ''}
                                 collection={selectedPub ? lib!.nameOf(selectedPub.parentDirectoryId) : ''}

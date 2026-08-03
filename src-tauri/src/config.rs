@@ -1,6 +1,3 @@
-use std::io;
-
-use gtk::cairo::IoError;
 use tauri::{App, Manager};
 
 use crate::Error;
@@ -35,7 +32,7 @@ pub mod config {
         pub title: String,
         pub author: String,
         pub year: i32,
-        pub journal: String,
+        pub publication: String,
     }
 
     #[lua_newtype(to = "string")]
@@ -194,11 +191,13 @@ pub mod config {
                 }
             };
 
+            // TODO: Isn't there a nicer way to get a PublicationMetadata struct from a lua table
+            // than parsing it by hand?
             Ok(crate::PublicationMetadata {
                 title: table.get("title").unwrap_or_default(),
                 author: table.get("author").unwrap_or_default(),
                 year: table.get("year").unwrap_or(0),
-                journal: table.get("journal").unwrap_or_default(),
+                publisher: table.get("publisher").unwrap_or_default(),
             })
         }
 

@@ -324,7 +324,7 @@ pub struct PublicationMetadata {
     pub title: String,
     pub author: String,
     pub year: i32,
-    pub journal: String,
+    pub publisher: String,
 }
 
 #[tauri::command]

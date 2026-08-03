@@ -3,7 +3,7 @@ import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
 
 interface DetailViewProps {
-    journal: string,
+    publisher: string,
     author: string,
     date: string,
     collection: string,
@@ -14,7 +14,7 @@ interface DetailViewProps {
 }
 
 function DetailView(
-    { journal, author, date, collection, filename, bibSource, bibTextAreaFocused,
+    { publisher, author, date, collection, filename, bibSource, bibTextAreaFocused,
         setBibTextAreaFocused }: DetailViewProps
 ) {
     const [bibContent, setBibContent] = useState('');
@@ -26,7 +26,7 @@ function DetailView(
     return (
         <div className={styles.detailPane}>
             <div className={styles.detailBadgeRow}>
-                <span className={styles.detailBadge}>{journal}</span>
+                <span className={styles.detailBadge}>{publisher}</span>
             </div>
 
             <dl className={styles.detailGrid}>
