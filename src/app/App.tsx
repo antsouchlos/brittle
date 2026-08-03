@@ -5,10 +5,11 @@ import { logger } from './logger';
 import styles from './App.module.css'
 import './App.css';
 import TabView from '../components/TabView.tsx';
+import type { TabData } from '../components/TabView.tsx';
 import HorizontalPanelLayout from '../components/HorizontalPanelLayout.tsx';
 import TreeView from '../components/TreeView.tsx';
 
-import { PDFViewer } from '@embedpdf/react-pdf-viewer';
+// import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 import PublicationList from '../components/PublicationList.tsx';
 import DetailView from '../components/DetailView.tsx';
 
@@ -17,11 +18,11 @@ import { invoke } from '@tauri-apps/api/core';
 import CmdLine from '../components/CmdLine.tsx';
 import { ToastProvider, ToastContainer } from '../components/Toast';
 
-const samplePdfConfig = {
-    src: 'https://snippet.embedpdf.com/ebook.pdf',
-    theme: { preference: 'dark' as const },
-};
-const pdfStyle = { width: '100%', height: '100%' };
+// const samplePdfConfig = {
+//     src: 'https://snippet.embedpdf.com/ebook.pdf',
+//     theme: { preference: 'dark' as const },
+// };
+// const pdfStyle = { width: '100%', height: '100%' };
 
 enum Action {
     MoveLeft,
@@ -137,7 +138,7 @@ function App() {
         ? lib.publications[selectedPublicationId] ?? null
         : null;
 
-    const fixedTabs = [
+    const fixedTabs: TabData[] = [
         {
             id: 'Lib',
             label: 'Library',
@@ -225,7 +226,7 @@ function App() {
 
     const [selectedTabId, setSelectedTabId] = useState(fixedTabs[0].id);
 
-    const [variableTabs, setVariableTabs] = useState(() => [
+    const [variableTabs, setVariableTabs] = useState<TabData[]>(() => [
         // {
         //     id: 'A', label: 'A.pdf', renderContent: () => (
         //         <PDFViewer style={pdfStyle} config={samplePdfConfig} />
