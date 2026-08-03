@@ -226,17 +226,14 @@ pub fn run() {
                     ),
                 };
             }
-            #[cfg(debug_assertions)]
-            {
-                use tauri::Manager;
-                if let Some(win) = app.get_webview_window("main") {
-                    win.open_devtools();
-                }
-            }
-            setup_library_watcher(
-                app.handle().clone(),
-                app.state::<Config>().opts.library_path.clone().into(),
-            );
+            // #[cfg(debug_assertions)]
+            // {
+            //     use tauri::Manager;
+            //     if let Some(win) = app.get_webview_window("main") {
+            //         win.open_devtools();
+            //     }
+            // }
+            // setup_library_watcher(app.handle().clone(), app.state::<Config>().library_path.clone());
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
