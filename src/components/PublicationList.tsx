@@ -181,6 +181,12 @@ function useFuzzySearch(
         listRef.current?.scrollTo({ top: 0, behavior: 'instant' });
     }, [fuzzyFindVisible]);
 
+    useEffect(() => {
+        if (!fuzzyFindVisible || displayItems.length === 0) return;
+        const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
+        onSelectPublication(displayItems[idx].pub.id);
+    }, [query]);
+
     // After closing the fuzzy bar the full list is committed to the DOM
     // (query reset above triggers that render).  Scroll to the selected
     // publication once the new DOM is in place.
