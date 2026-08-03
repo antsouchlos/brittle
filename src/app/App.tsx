@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { LibraryModel, Library, Metadata } from './LibraryModel';
 import { logger } from './logger';
 
@@ -15,6 +15,7 @@ import DetailView from '../components/DetailView.tsx';
 
 import { KeymapStateMachine, normalizeKeyEvent } from './KeymapStateMachine.ts'
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import CmdLine from '../components/CmdLine.tsx';
 import { ToastProvider, ToastContainer } from '../components/Toast';
 
@@ -84,32 +85,56 @@ function App() {
             .finally(() => { historyLoadedRef.current = true; });
     }, []);
 
+    const prevSelectedPubId = useRef(selectedPublicationId);
+    const prevSelectedNodeId = useRef(selectedNodeId);
+    const prevExpandedNodeIds = useRef(expandedNodeIds);
+
     useEffect(() => {
-        invoke<Library>('load_library')
-            .then(async (data) => {
-                const model = new LibraryModel(data);
-                setLib(model);
+        prevSelectedPubId.current = selectedPublicationId;
+        prevSelectedNodeId.current = selectedNodeId;
+        prevExpandedNodeIds.current = expandedNodeIds;
+    });
 
-                const rootId = model.rootId;
-                if (rootId) {
-                    setSelectedNodeId(rootId);
-                    setExpandedNodeIds([rootId]);
-                }
+    const loadLibraryData = useCallback(async () => {
+        const data = await invoke<Library>('load_library');
+        const model = new LibraryModel(data);
+        setLib(model);
 
-                const ids = Object.keys(data.publications);
-                const metas = await Promise.all(
-                    ids.map(id => invoke<Metadata>('parse_publication', { id }))
-                );
-                const metaMap: Record<string, Metadata> = {};
-                ids.forEach((id, i) => { metaMap[id] = metas[i]; });
-                setPubMetadata(metaMap);
+        const rootId = model.rootId;
 
-                if (rootId && ids.length > 0) {
-                    setSelectedPublicationId(ids[0]);
-                }
-            })
-            .catch(e => logger.error(String(e)));
+        const nodeId = prevSelectedNodeId.current && model.directories[prevSelectedNodeId.current]
+            ? prevSelectedNodeId.current
+            : rootId;
+        setSelectedNodeId(nodeId);
+
+        const expIds = prevExpandedNodeIds.current.filter(id => model.directories[id]);
+        setExpandedNodeIds(expIds.length > 0 ? expIds : (rootId ? [rootId] : []));
+
+        const ids = Object.keys(data.publications);
+        const metas = await Promise.all(
+            ids.map(id => invoke<Metadata>('parse_publication', { id }))
+        );
+        const metaMap: Record<string, Metadata> = {};
+        ids.forEach((id, i) => { metaMap[id] = metas[i]; });
+        setPubMetadata(metaMap);
+
+        const pubId = prevSelectedPubId.current && data.publications[prevSelectedPubId.current]
+            ? prevSelectedPubId.current
+            : (ids.length > 0 ? ids[0] : null);
+        setSelectedPublicationId(pubId);
     }, []);
+
+    useEffect(() => {
+        loadLibraryData().catch(e => logger.error(String(e)));
+
+        const promise = listen('library-changed', () => {
+            loadLibraryData().catch(e => logger.error(String(e)));
+        });
+
+        return () => {
+            promise.then(unlisten => unlisten());
+        };
+    }, [loadLibraryData]);
 
     const treeRoot = useMemo(() => {
         if (!lib) return null;

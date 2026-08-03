@@ -29,6 +29,7 @@ log = "0.4.29"
 env_logger = "0.11.10"
 mlua = { version = "0.12.0", features = ["lua55", "send"] }
 ignore = "0.4.31"
+notify = "6"
 
 [target."cfg(target_os = \"linux\")".dependencies]
 gtk = "0.18.2"

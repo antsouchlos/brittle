@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::{self, Write};
+use std::sync::mpsc::{sync_channel, RecvTimeoutError};
+use std::time::Duration;
 
 use log::error;
+use notify::{Watcher, RecursiveMode};
 use serde::{Deserialize, Serialize};
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 use crate::config::Config;
 
@@ -128,6 +131,57 @@ fn setup_linux_pinch(window: &tauri::WebviewWindow) -> Result<(), Error> {
     Ok(())
 }
 
+fn setup_library_watcher(app_handle: tauri::AppHandle, library_path: std::path::PathBuf) {
+    std::thread::spawn(move || {
+        let (tx, rx) = sync_channel(1);
+
+        let mut watcher = match notify::recommended_watcher(move |res| {
+            if let Ok(event) = res {
+                let _ = tx.send(event);
+            }
+        }) {
+            Ok(w) => w,
+            Err(e) => {
+                error!("Failed to create filesystem watcher: {}", e);
+                return;
+            }
+        };
+
+        if let Err(e) = watcher.watch(&library_path, RecursiveMode::Recursive) {
+            error!(
+                "Failed to watch library path '{}': {}",
+                library_path.display(),
+                e,
+            );
+            return;
+        }
+
+        log::info!(
+            "Watching library path '{}' for changes",
+            library_path.display(),
+        );
+
+        loop {
+            match rx.recv() {
+                Ok(_) => {}
+                Err(_) => break,
+            }
+
+            loop {
+                match rx.recv_timeout(Duration::from_secs(2)) {
+                    Ok(_) => continue,
+                    Err(RecvTimeoutError::Timeout) => break,
+                    Err(RecvTimeoutError::Disconnected) => return,
+                }
+            }
+
+            if let Err(e) = app_handle.emit("library-changed", ()) {
+                error!("Failed to emit library-changed event: {}", e);
+            }
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let result = tauri::Builder::default()
@@ -176,6 +230,7 @@ pub fn run() {
                     win.open_devtools();
                 }
             }
+            setup_library_watcher(app.handle().clone(), app.state::<Config>().library_path.clone());
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
