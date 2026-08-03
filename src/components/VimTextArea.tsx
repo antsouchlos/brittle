@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 
 import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { drawSelection, KeyBinding, keymap } from '@codemirror/view';
-import { cursorDocEnd, cursorDocStart, cursorGroupLeft, cursorGroupRight, cursorLineBoundaryBackward, cursorLineBoundaryForward, cursorLineBoundaryLeft, cursorLineBoundaryRight, cursorLineDown, cursorLineUp, cursorPageDown, cursorPageUp, deleteGroupBackward, deleteGroupForward, deleteLineBoundaryBackward, deleteLineBoundaryForward, emacsStyleKeymap, history, historyKeymap, selectAll, selectDocEnd, selectDocStart, selectGroupLeft, selectGroupRight, selectLineBoundaryBackward, selectLineBoundaryForward, selectLineBoundaryLeft, selectLineBoundaryRight, selectLineDown, selectLineUp, selectPageDown, selectPageUp, standardKeymap } from '@codemirror/commands';
+// import { cursorDocEnd, cursorDocStart, cursorGroupLeft, cursorGroupRight, cursorLineBoundaryBackward, cursorLineBoundaryForward, cursorLineBoundaryLeft, cursorLineBoundaryRight, cursorLineDown, cursorLineUp, cursorPageDown, cursorPageUp, deleteGroupBackward, deleteGroupForward, deleteLineBoundaryBackward, deleteLineBoundaryForward, emacsStyleKeymap, history, historyKeymap, selectAll, selectDocEnd, selectDocStart, selectGroupLeft, selectGroupRight, selectLineBoundaryBackward, selectLineBoundaryForward, selectLineBoundaryLeft, selectLineBoundaryRight, selectLineDown, selectLineUp, selectPageDown, selectPageUp, standardKeymap } from '@codemirror/commands';
+import { cursorGroupLeft, cursorGroupRight, cursorLineBoundaryBackward, cursorLineBoundaryForward, cursorLineBoundaryLeft, cursorLineBoundaryRight, cursorLineDown, cursorLineUp, cursorPageDown, cursorPageUp, emacsStyleKeymap, history, selectGroupLeft, selectGroupRight, selectLineBoundaryBackward, selectLineBoundaryForward, selectLineBoundaryLeft, selectLineBoundaryRight, selectLineDown, selectLineUp, selectPageDown, selectPageUp } from '@codemirror/commands';
 import { vim, getCM, Vim } from '@replit/codemirror-vim';
 import { EditorState, Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
@@ -81,26 +82,26 @@ const minimumFunctionalKeymap: readonly KeyBinding[] = ([
     { key: "Delete", run: deleteCharForward, preventDefault: true },
 ] as KeyBinding[]).concat(emacsStyleKeymap.map(b => ({ mac: b.key, run: b.run, shift: b.shift })));
 
-// Selection of auxiliary key bindings, not absolutely required for proper
-// operation but usually existing in text editors by convention.
-// This is a subset of the `standardKeymap` defined by the code mirror library.
-// TODO: Use this when not in vim mode
-const auxKeymap: readonly KeyBinding[] = ([
-    { mac: "Cmd-ArrowUp", run: cursorDocStart, shift: selectDocStart },
-    { mac: "Ctrl-ArrowUp", run: cursorPageUp, shift: selectPageUp },
-    { mac: "Cmd-ArrowDown", run: cursorDocEnd, shift: selectDocEnd },
-    { mac: "Ctrl-ArrowDown", run: cursorPageDown, shift: selectPageDown },
-
-    { key: "Mod-Home", run: cursorDocStart, shift: selectDocStart },
-    { key: "Mod-End", run: cursorDocEnd, shift: selectDocEnd },
-
-    { key: "Mod-a", run: selectAll },
-
-    { key: "Mod-Backspace", mac: "Alt-Backspace", run: deleteGroupBackward, preventDefault: true },
-    { key: "Mod-Delete", mac: "Alt-Delete", run: deleteGroupForward, preventDefault: true },
-    { mac: "Mod-Backspace", run: deleteLineBoundaryBackward, preventDefault: true },
-    { mac: "Mod-Delete", run: deleteLineBoundaryForward, preventDefault: true }
-] as KeyBinding[]).concat(emacsStyleKeymap.map(b => ({ mac: b.key, run: b.run, shift: b.shift })));
+// // Selection of auxiliary key bindings, not absolutely required for proper
+// // operation but usually existing in text editors by convention.
+// // This is a subset of the `standardKeymap` defined by the code mirror library.
+// // TODO: Use this when not in vim mode
+// const auxKeymap: readonly KeyBinding[] = ([
+//     { mac: "Cmd-ArrowUp", run: cursorDocStart, shift: selectDocStart },
+//     { mac: "Ctrl-ArrowUp", run: cursorPageUp, shift: selectPageUp },
+//     { mac: "Cmd-ArrowDown", run: cursorDocEnd, shift: selectDocEnd },
+//     { mac: "Ctrl-ArrowDown", run: cursorPageDown, shift: selectPageDown },
+//
+//     { key: "Mod-Home", run: cursorDocStart, shift: selectDocStart },
+//     { key: "Mod-End", run: cursorDocEnd, shift: selectDocEnd },
+//
+//     { key: "Mod-a", run: selectAll },
+//
+//     { key: "Mod-Backspace", mac: "Alt-Backspace", run: deleteGroupBackward, preventDefault: true },
+//     { key: "Mod-Delete", mac: "Alt-Delete", run: deleteGroupForward, preventDefault: true },
+//     { mac: "Mod-Backspace", run: deleteLineBoundaryBackward, preventDefault: true },
+//     { mac: "Mod-Delete", run: deleteLineBoundaryForward, preventDefault: true }
+// ] as KeyBinding[]).concat(emacsStyleKeymap.map(b => ({ mac: b.key, run: b.run, shift: b.shift })));
 
 
 interface VimTextAreaProps {
