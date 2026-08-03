@@ -87,6 +87,7 @@ fn list_and_filter_dir_contents(
             file_type,
         });
     }
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(entries)
 }
 
@@ -186,6 +187,8 @@ fn populate_library_from_directory(
         }
     }
 
+    subdir_names.sort();
+
     let mut child_directory_ids = Vec::new();
     for name in &subdir_names {
         let subdir_id = Path::new(dir_id).join(name).to_string_lossy().to_string();
@@ -200,7 +203,9 @@ fn populate_library_from_directory(
     }
 
     let mut publication_ids = Vec::new();
-    for stem in pdf_stems.keys() {
+    let mut stems: Vec<&String> = pdf_stems.keys().collect();
+    stems.sort();
+    for stem in stems {
         if !bib_stems.contains_key(stem) {
             let path_str = Path::new(dir_id).join(stem).to_string_lossy().to_string();
             log::warn!("Publication missing bib file: {}.pdf", path_str);
