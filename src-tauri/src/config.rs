@@ -9,6 +9,7 @@ use brittle_lua;
 
 #[brittle_lua::lua_module(crate = "brittle_lua")]
 pub mod config {
+    /// Metadata extracted from a publication reference file
     #[luaclass(annotation)]
     struct PublicationMetadata {
         pub title: String,
@@ -17,38 +18,55 @@ pub mod config {
         pub journal: String,
     }
 
+    /// A user-defined command with a name and handler function.
     #[luaclass]
     #[derive(Clone, Debug)]
     pub struct Command {
+        /// Command name used to invoke it.
         pub name: String,
+        /// Handler: receives the argument string, returns the output string.
         #[lua(signature = "fun(string): string")]
         pub func: mlua::Function,
     }
 
+    /// Parses reference files of a specific format into PublicationMetadata.
     #[luaclass]
     #[derive(Clone, Debug)]
     pub struct RefParser {
+        /// File extension this parser handles (e.g. "bib").
         pub file_extension: String,
+        /// Parser: receives the file contents as a string, returns metadata.
         #[lua(signature = "fun(string): PublicationMetadata")]
         pub parser: mlua::Function,
     }
 
+    /// User-configurable options.
     #[luaclass]
     #[derive(Clone, Debug)]
     pub struct Opts {
+        /// Absolute path to the literature library root.
+        // TODO: Make this not have to be absolute and support tilde
         pub library_path: String,
+        /// Glob patterns for directories to ignore during library scans.
         pub library_ignore_patterns: Vec<String>,
+        /// Directory for persistent application data.
+        // TODO: Make this not have to be absolute and support tilde
         pub data_path: String,
+        /// PDF viewer: "brittle" for built-in or "external".
         pub pdf_viewer: String,
     }
 
+    /// Top-level application configuration.
     #[luaclass]
     #[derive(Clone, Debug)]
     pub struct Config {
         #[lua(skip)]
         pub lua: Option<mlua::Lua>,
+        /// User-configurable options.
         pub opts: Opts,
+        /// Per-format reference parsers.
         pub ref_parsers: Vec<RefParser>,
+        /// User-defined commands.
         pub commands: Vec<Command>,
     }
 
