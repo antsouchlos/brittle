@@ -206,3 +206,24 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
 
     Ok(config)
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn addon_matches_emmylua_generation() {
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let addon_path = manifest_dir.join("../brittle-api-luals-addon/library/brittle.lua");
+
+        let actual = std::fs::read_to_string(&addon_path)
+            .expect("addon file missing; run `cargo run --example generate_luals_addon`");
+
+        let expected = super::config::EMMY_LUA;
+
+        assert_eq!(
+            actual,
+            expected,
+            "addon is out of sync with the current API definition; \
+             run `cargo run --example generate_luals_addon`",
+        );
+    }
+}
