@@ -1,6 +1,3 @@
-use std::env;
-use std::path::PathBuf;
-
 use tauri::{App, Manager};
 
 use crate::Error;
@@ -12,8 +9,17 @@ pub mod config {
     use std::path::PathBuf;
 
     //
-    // Helper types
+    // Helper functions and types
     //
+
+    pub fn expand_tilde(path: &str) -> PathBuf {
+        if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~")) {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+            PathBuf::from(home).join(rest)
+        } else {
+            PathBuf::from(path)
+        }
+    }
 
     /// Metadata extracted from a publication reference file
     #[luaclass(annotation)]
@@ -45,7 +51,7 @@ pub mod config {
     impl mlua::FromLua for LuaPath {
         fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
             let s: String = mlua::FromLua::from_lua(value, lua)?;
-            Ok(LuaPath(PathBuf::from(s)))
+            Ok(LuaPath(PathBuf::from(expand_tilde(s.as_str()))))
         }
     }
 
@@ -78,7 +84,6 @@ pub mod config {
         /// Command name used to invoke it.
         pub name: String,
         /// Handler: receives the argument string, returns the output string.
-        // TODO: Make sure the function args are interpreted correctly
         #[lua(signature = "fun(args): string")]
         pub func: mlua::Function,
     }
@@ -90,7 +95,6 @@ pub mod config {
         /// File extension this parser handles (e.g. "bib").
         pub file_extension: String,
         /// Parser: receives the file contents as a string, returns metadata.
-        // TODO: Make sure the function args are interpreted correctly
         #[lua(signature = "fun(src: string): PublicationMetadata")]
         pub parser: mlua::Function,
     }
@@ -100,12 +104,10 @@ pub mod config {
     #[derive(Clone, Debug)]
     pub struct Opts {
         /// Absolute path to the literature library root.
-        // TODO: Make this not have to be absolute and support tilde
         pub library_path: LuaPath,
         /// Glob patterns for directories to ignore during library scans.
         pub library_ignore_patterns: Vec<String>,
         /// Directory for persistent application data.
-        // TODO: Make this not have to be absolute and support tilde
         pub data_path: LuaPath,
         /// PDF viewer: "brittle" for built-in or "external".
         pub pdf_viewer: String,
@@ -214,16 +216,6 @@ pub mod config {
     }
 }
 
-// TODO: Make sure this is used appropriately
-fn expand_tilde(path: &str) -> PathBuf {
-    if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~")) {
-        let home = env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-        PathBuf::from(home).join(rest)
-    } else {
-        PathBuf::from(path)
-    }
-}
-
 pub use config::{Command, Config, Opts, RefParser};
 
 pub fn load_config(app: &mut App) -> Result<Config, Error> {
@@ -231,7 +223,7 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
     let default_config = Config {
         lua: None,
         opts: Opts {
-            library_path: expand_tilde("~/Documents/literature/").into(),
+            library_path: config::expand_tilde("~/Documents/literature/").into(),
             library_ignore_patterns: vec![".git".to_string()],
             data_path: app.path().app_local_data_dir()?.into(),
             pdf_viewer: "external".to_string(),
