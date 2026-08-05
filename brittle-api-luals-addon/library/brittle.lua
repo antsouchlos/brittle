@@ -28,7 +28,7 @@
 --- Metadata extracted from a publication reference file
 --- @class PublicationMetadata
 --- @field author string
---- @field journal string
+--- @field publisher string
 --- @field title string
 --- @field year integer
 

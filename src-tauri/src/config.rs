@@ -27,12 +27,12 @@ pub mod config {
     }
 
     /// Metadata extracted from a publication reference file
-    #[luaclass(annotation)]
+    #[luaclass]
     struct PublicationMetadata {
         pub title: String,
         pub author: String,
         pub year: i32,
-        pub publication: String,
+        pub publisher: String,
     }
 
     #[lua_newtype(to = "string")]
@@ -155,6 +155,17 @@ pub mod config {
     // Convenience function
     //
 
+    impl From<PublicationMetadata> for crate::PublicationMetadata {
+        fn from(other: PublicationMetadata) -> Self {
+            crate::PublicationMetadata {
+                title: other.title,
+                author: other.author,
+                year: other.year,
+                publisher: other.publisher,
+            }
+        }
+    }
+
     impl Config {
         pub fn get_parser_formats(&self) -> Vec<String> {
             self.ref_parsers
@@ -176,29 +187,12 @@ pub mod config {
                 .find(|parser| parser.file_extension.eq(extension))
                 .ok_or_else(|| format!("No parser registered for extension '{}'", extension))?;
 
-            let value: mlua::Value = parser
+            let value: PublicationMetadata = parser
                 .parser
                 .call(src.as_str())
                 .map_err(|e| format!("Parser error: {}", e))?;
 
-            let table = match value {
-                mlua::Value::Table(t) => t,
-                other => {
-                    return Err(format!(
-                        "Parser returned {}, expected table",
-                        other.type_name()
-                    ))
-                }
-            };
-
-            // TODO: Isn't there a nicer way to get a PublicationMetadata struct from a lua table
-            // than parsing it by hand?
-            Ok(crate::PublicationMetadata {
-                title: table.get("title").unwrap_or_default(),
-                author: table.get("author").unwrap_or_default(),
-                year: table.get("year").unwrap_or(0),
-                publisher: table.get("publisher").unwrap_or_default(),
-            })
+            Ok(value.into())
         }
 
         pub fn list_commands(&self) -> Vec<String> {
