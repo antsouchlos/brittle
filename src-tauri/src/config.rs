@@ -9,6 +9,12 @@ use brittle_lua;
 
 #[brittle_lua::lua_module(crate = "brittle_lua")]
 pub mod config {
+    use std::path::PathBuf;
+
+    //
+    // Helper types
+    //
+
     /// Metadata extracted from a publication reference file
     #[luaclass(annotation)]
     struct PublicationMetadata {
@@ -17,6 +23,53 @@ pub mod config {
         pub year: i32,
         pub journal: String,
     }
+
+    #[lua_newtype(to = "string")]
+    #[derive(Debug, Clone)]
+    pub struct LuaPath(pub PathBuf);
+
+    impl std::ops::Deref for LuaPath {
+        type Target = PathBuf;
+
+        fn deref(&self) -> &PathBuf {
+            &self.0
+        }
+    }
+
+    impl std::ops::DerefMut for LuaPath {
+        fn deref_mut(&mut self) -> &mut PathBuf {
+            &mut self.0
+        }
+    }
+
+    impl mlua::FromLua for LuaPath {
+        fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
+            let s: String = mlua::FromLua::from_lua(value, lua)?;
+            Ok(LuaPath(PathBuf::from(s)))
+        }
+    }
+
+    impl mlua::IntoLua for LuaPath {
+        fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
+            self.0.to_string_lossy().into_owned().into_lua(lua)
+        }
+    }
+
+    impl From<PathBuf> for LuaPath {
+        fn from(p: PathBuf) -> Self {
+            LuaPath(p)
+        }
+    }
+
+    impl From<LuaPath> for PathBuf {
+        fn from(p: LuaPath) -> Self {
+            p.0
+        }
+    }
+
+    //
+    // Lua API
+    //
 
     /// A user-defined command with a name and handler function.
     #[luaclass]
@@ -48,14 +101,12 @@ pub mod config {
     pub struct Opts {
         /// Absolute path to the literature library root.
         // TODO: Make this not have to be absolute and support tilde
-        // TODO: Turn this from a string into a PathBuf
-        pub library_path: String,
+        pub library_path: LuaPath,
         /// Glob patterns for directories to ignore during library scans.
         pub library_ignore_patterns: Vec<String>,
         /// Directory for persistent application data.
         // TODO: Make this not have to be absolute and support tilde
-        // TODO: Turn this from a string into a PathBuf
-        pub data_path: String,
+        pub data_path: LuaPath,
         /// PDF viewer: "brittle" for built-in or "external".
         pub pdf_viewer: String,
     }
@@ -64,14 +115,17 @@ pub mod config {
     #[luaclass]
     #[derive(Clone, Debug)]
     pub struct Config {
-        #[lua(skip)]
-        pub lua: Option<mlua::Lua>,
         /// User-configurable options.
         pub opts: Opts,
         /// Per-format reference parsers.
         pub ref_parsers: Vec<RefParser>,
         /// User-defined commands.
         pub commands: Vec<Command>,
+
+        #[lua(skip)]
+        pub lua: Option<mlua::Lua>,
+    }
+
     }
 
     impl Config {
@@ -165,11 +219,9 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
     let default_config = Config {
         lua: None,
         opts: Opts {
-            library_path: expand_tilde("~/Documents/literature/")
-                .display()
-                .to_string(),
+            library_path: expand_tilde("~/Documents/literature/").into(),
             library_ignore_patterns: vec![".git".to_string()],
-            data_path: app.path().app_local_data_dir()?.display().to_string(),
+            data_path: app.path().app_local_data_dir()?.into(),
             pdf_viewer: "external".to_string(),
         },
         ref_parsers: vec![],
@@ -226,8 +278,7 @@ mod tests {
         let expected = super::config::EMMY_LUA;
 
         assert_eq!(
-            actual,
-            expected,
+            actual, expected,
             "addon is out of sync with the current API definition; \
              run `cargo run --example generate_luals_addon`",
         );

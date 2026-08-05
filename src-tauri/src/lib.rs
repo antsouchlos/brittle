@@ -235,7 +235,7 @@ pub fn run() {
             }
             setup_library_watcher(
                 app.handle().clone(),
-                PathBuf::from(app.state::<Config>().opts.library_path.clone()),
+                app.state::<Config>().opts.library_path.clone().into(),
             );
             Ok(())
         })

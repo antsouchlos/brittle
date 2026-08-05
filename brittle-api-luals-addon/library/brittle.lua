@@ -39,5 +39,9 @@
 --- Parser: receives the file contents as a string, returns metadata.
 --- @field parser fun(string): PublicationMetadata
 
+--- @param level string
+--- @param msg string
+function log(level, msg) end
+
 
 return {}
