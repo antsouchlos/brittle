@@ -3,7 +3,7 @@
 --- Command name used to invoke it.
 --- @field name string
 --- Handler: receives the argument string, returns the output string.
---- @field func fun(string): string
+--- @field func fun(args): string
 
 --- Top-level application configuration.
 --- @class Config
@@ -37,7 +37,7 @@
 --- File extension this parser handles (e.g. "bib").
 --- @field file_extension string
 --- Parser: receives the file contents as a string, returns metadata.
---- @field parser fun(string): PublicationMetadata
+--- @field parser fun(src: string): PublicationMetadata
 
 --- @param level string
 --- @param msg string

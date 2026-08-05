@@ -79,7 +79,7 @@ pub mod config {
         pub name: String,
         /// Handler: receives the argument string, returns the output string.
         // TODO: Make sure the function args are interpreted correctly
-        #[lua(signature = "fun(string): string")]
+        #[lua(signature = "fun(args): string")]
         pub func: mlua::Function,
     }
 
@@ -91,7 +91,7 @@ pub mod config {
         pub file_extension: String,
         /// Parser: receives the file contents as a string, returns metadata.
         // TODO: Make sure the function args are interpreted correctly
-        #[lua(signature = "fun(string): PublicationMetadata")]
+        #[lua(signature = "fun(src: string): PublicationMetadata")]
         pub parser: mlua::Function,
     }
 
