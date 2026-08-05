@@ -1,304 +1,286 @@
-use std::collections::HashMap;
-use std::env;
-use std::path::PathBuf;
+use std::io;
 
-use mlua::prelude::LuaTable;
+use gtk::cairo::IoError;
 use tauri::{App, Manager};
 
 use crate::Error;
-use crate::PublicationMetadata;
 
-const DEFAULT_LIBRARY_PATH: &str = "~/Documents/literature";
+use brittle_lua;
 
-type RefParser = Box<dyn Fn(&mlua::Lua, &str) -> Result<mlua::Value, mlua::Error> + Send + Sync>;
-type CmdHandler = Box<dyn Fn(&mlua::Lua, &str) -> Result<String, String> + Send + Sync>;
+#[brittle_lua::lua_module(crate = "brittle_lua")]
+pub mod config {
+    use std::path::PathBuf;
 
-struct LuaApi {
-    lua: mlua::Lua,
-    ref_parsers: HashMap<String, RefParser>,
-    commands: HashMap<String, CmdHandler>,
+    //
+    // Helper constructs
+    //
+
+    // The default data path depends on the `app` object provided by tauri and
+    // is therefore not known at compile time. The OnceLock, initialized in
+    // `load_config`, gets around this
+    pub static DEFAULT_DATA_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+    pub fn expand_tilde(path: &str) -> PathBuf {
+        if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~")) {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+            PathBuf::from(home).join(rest)
+        } else {
+            PathBuf::from(path)
+        }
+    }
+
+    /// Metadata extracted from a publication reference file
+    #[luaclass(annotation)]
+    struct PublicationMetadata {
+        pub title: String,
+        pub author: String,
+        pub year: i32,
+        pub journal: String,
+    }
+
+    #[lua_newtype(to = "string")]
+    #[derive(Debug, Clone)]
+    pub struct LuaPath(pub PathBuf);
+
+    impl std::ops::Deref for LuaPath {
+        type Target = PathBuf;
+
+        fn deref(&self) -> &PathBuf {
+            &self.0
+        }
+    }
+
+    impl std::ops::DerefMut for LuaPath {
+        fn deref_mut(&mut self) -> &mut PathBuf {
+            &mut self.0
+        }
+    }
+
+    impl mlua::FromLua for LuaPath {
+        fn from_lua(value: mlua::Value, lua: &mlua::Lua) -> mlua::Result<Self> {
+            let s: String = mlua::FromLua::from_lua(value, lua)?;
+            Ok(LuaPath(PathBuf::from(expand_tilde(s.as_str()))))
+        }
+    }
+
+    impl mlua::IntoLua for LuaPath {
+        fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
+            self.0.to_string_lossy().into_owned().into_lua(lua)
+        }
+    }
+
+    impl From<PathBuf> for LuaPath {
+        fn from(p: PathBuf) -> Self {
+            LuaPath(p)
+        }
+    }
+
+    impl From<LuaPath> for PathBuf {
+        fn from(p: LuaPath) -> Self {
+            p.0
+        }
+    }
+
+    //
+    // Lua API
+    //
+
+    /// A user-defined command with a name and handler function.
+    #[luaclass]
+    #[derive(Clone, Debug)]
+    pub struct Command {
+        /// Command name used to invoke it.
+        pub name: String,
+        /// Handler: receives the argument string, returns the output string.
+        #[lua(signature = "fun(args): string")]
+        pub func: mlua::Function,
+    }
+
+    /// Parses reference files of a specific format into PublicationMetadata.
+    #[luaclass]
+    #[derive(Clone, Debug)]
+    pub struct RefParser {
+        /// File extension this parser handles (e.g. "bib").
+        pub file_extension: String,
+        /// Parser: receives the file contents as a string, returns metadata.
+        #[lua(signature = "fun(src: string): PublicationMetadata")]
+        pub parser: mlua::Function,
+    }
+
+    /// User-configurable options.
+    #[luaclass]
+    #[derive(Clone, Debug)]
+    pub struct Opts {
+        /// Absolute path to the literature library root.
+        #[lua(default = r#"expand_tilde("~/Documents/literature/").into()"#)]
+        pub library_path: LuaPath,
+        /// Glob patterns for directories to ignore during library scans.
+        #[lua(default = r#"vec![".git".to_string()]"#)]
+        pub library_ignore_patterns: Vec<String>,
+        /// Directory for persistent application data.
+        #[lua(
+            default = r#"DEFAULT_DATA_PATH.get().expect("DEFAULT_DATA_PATH should have been set in load_config()").clone().into()"#
+        )]
+        pub data_path: LuaPath,
+        /// PDF viewer: "brittle" for built-in or "external".
+        #[lua(default = r#""default".to_string()"#)]
+        pub pdf_viewer: String,
+    }
+
+    /// Top-level application configuration.
+    #[luaclass]
+    #[derive(Clone, Debug)]
+    pub struct Config {
+        /// User-configurable options.
+        pub opts: Opts,
+        /// Per-format reference parsers.
+        #[lua(default = "vec![]")]
+        pub ref_parsers: Vec<RefParser>,
+        /// User-defined commands.
+        #[lua(default = "vec![]")]
+        pub commands: Vec<Command>,
+
+        #[lua(skip)]
+        pub lua: Option<mlua::Lua>,
+    }
+
+    #[luafunction]
+    fn log(level: String, msg: String) {
+        match level.as_str() {
+            "error" => log::error!("{}", msg),
+            "warn" => log::warn!("{}", msg),
+            "info" => log::info!("{}", msg),
+            _ => log::error!("Unknown log level: {}. \n{}", level, msg),
+        }
+    }
+
+    //
+    // Convenience function
+    //
+
+    impl Config {
+        pub fn get_parser_formats(&self) -> Vec<String> {
+            self.ref_parsers
+                .iter()
+                .map(|parser| parser.file_extension.clone())
+                .collect()
+        }
+
+        pub fn call_ref_parser(
+            &self,
+            extension: &String,
+            src: &String,
+        ) -> Result<crate::PublicationMetadata, String> {
+            let _ = self.lua.as_ref().ok_or("Lua state unavailable")?;
+
+            let parser = self
+                .ref_parsers
+                .iter()
+                .find(|parser| parser.file_extension.eq(extension))
+                .ok_or_else(|| format!("No parser registered for extension '{}'", extension))?;
+
+            let value: mlua::Value = parser
+                .parser
+                .call(src.as_str())
+                .map_err(|e| format!("Parser error: {}", e))?;
+
+            let table = match value {
+                mlua::Value::Table(t) => t,
+                other => {
+                    return Err(format!(
+                        "Parser returned {}, expected table",
+                        other.type_name()
+                    ))
+                }
+            };
+
+            Ok(crate::PublicationMetadata {
+                title: table.get("title").unwrap_or_default(),
+                author: table.get("author").unwrap_or_default(),
+                year: table.get("year").unwrap_or(0),
+                journal: table.get("journal").unwrap_or_default(),
+            })
+        }
+
+        pub fn list_commands(&self) -> Vec<String> {
+            self.commands
+                .iter()
+                .map(|command| command.name.clone())
+                .collect()
+        }
+
+        pub fn execute_command(&self, command: &String, args: &String) -> Result<String, String> {
+            let _ = self.lua.as_ref().ok_or("Lua state unavailable")?;
+
+            let cmd = self
+                .commands
+                .iter()
+                .find(|cmd| cmd.name.eq(command))
+                .ok_or_else(|| format!("Unknown command: {}", command))?;
+
+            let value: mlua::Value = cmd
+                .func
+                .call(args.as_str())
+                .map_err(|e| format!("Command error: {}", e))?;
+
+            match value {
+                mlua::Value::String(s) => Ok(s.to_str().map_err(|e| format!("{}", e))?.to_string()),
+                mlua::Value::Nil => Ok(String::new()),
+                other => Ok(format!("{:?}", other)),
+            }
+        }
+    }
 }
 
-pub struct Config {
-    pub library_path: PathBuf,
-    pub library_ignore_patterns: Vec<String>,
-    pub data_path: PathBuf,
-    pub log_path: PathBuf,
-    pub pdf_viewer: String,
-    lua_api: LuaApi,
-}
-
-impl Config {
-    // TODO: Make the error type not be a string
-    pub fn call_ref_parser(&self, format: &str, raw: &str) -> Result<PublicationMetadata, String> {
-        let parser = self
-            .lua_api
-            .ref_parsers
-            .get(format)
-            .ok_or_else(|| format!("No parser registered for '{}'", format))?;
-
-        let value = parser(&self.lua_api.lua, raw).map_err(|e| e.to_string())?;
-
-        let table = match value {
-            mlua::Value::Table(t) => t,
-            _ => return Err("Parser did not return a table".to_string()),
-        };
-
-        // TODO: Make all of these return an error
-        Ok(PublicationMetadata {
-            title: table.get::<String>("title").unwrap_or_default(),
-            author: table.get::<String>("author").unwrap_or_default(),
-            year: table.get::<f64>("year").unwrap_or(0.0) as i32,
-            journal: table.get::<String>("journal").unwrap_or_default(),
-        })
-    }
-
-    pub fn get_parser_formats(&self) -> Vec<String> {
-        let mut formats: Vec<String> = self.lua_api.ref_parsers.keys().cloned().collect();
-        formats.sort();
-        formats
-    }
-
-    pub fn execute_command(&self, cmd: &str, args: &str) -> Result<String, String> {
-        let handler = self
-            .lua_api
-            .commands
-            .get(cmd)
-            .ok_or_else(|| format!("Unknown command: {}", cmd))?;
-        handler(&self.lua_api.lua, args)
-    }
-
-    pub fn list_commands(&self) -> Vec<String> {
-        let mut names: Vec<String> = self.lua_api.commands.keys().cloned().collect();
-        names.sort();
-        names
-    }
-}
-
-fn expand_tilde(path: &str) -> PathBuf {
-    if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~")) {
-        let home = env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-        PathBuf::from(home).join(rest)
-    } else {
-        PathBuf::from(path)
-    }
-}
-
-fn define_lua_api(lua: &mlua::Lua) -> Result<(), Error> {
-    let brittle = lua.create_table()?;
-
-    {
-        let ref_table = lua.create_table()?;
-        ref_table.set("_parsers", lua.create_table()?)?;
-
-        let register_parser =
-            lua.create_function(|lua, (name, func): (String, mlua::Function)| {
-                let globals: LuaTable = lua.globals(); // We can't use the tables from outside the
-                                                       // closure because the closure may outlive them
-                let api: LuaTable = globals.get("brittle")?;
-                let ref_table: LuaTable = api.get("ref")?;
-                let parsers: LuaTable = ref_table.get("_parsers")?; // Internal variable the map of
-                                                                    // functions will later be
-                                                                    // extracted from
-                parsers.set(name, func)
-            })?;
-
-        ref_table.set("register_parser", register_parser)?;
-        brittle.set("ref", ref_table)?;
-    }
-
-    {
-        let cmd_table = lua.create_table()?;
-        cmd_table.set("_registry", lua.create_table()?)?;
-
-        let register_cmd = lua.create_function(|lua, (name, func): (String, mlua::Function)| {
-            let globals: LuaTable = lua.globals();
-            let api: LuaTable = globals.get("brittle")?;
-            let cmd_table: LuaTable = api.get("command")?;
-            let registry: LuaTable = cmd_table.get("_registry")?;
-            registry.set(name, func)
-        })?;
-
-        cmd_table.set("register", register_cmd)?;
-        brittle.set("command", cmd_table)?;
-    }
-
-    let globals: LuaTable = lua.globals();
-    globals.set("brittle", brittle)?;
-
-    Ok(())
-}
+pub use config::{Command, Config, Opts, RefParser};
 
 pub fn load_config(app: &mut App) -> Result<Config, Error> {
     let lua = unsafe { mlua::Lua::unsafe_new() };
+    config::register(&lua)?;
 
-    define_lua_api(&lua)?;
-
-    // Run config
+    config::DEFAULT_DATA_PATH
+        .set(app.path().app_local_data_dir()?.into())
+        .ok();
 
     let config_path = app
         .path()
         .app_config_dir()
         .expect("The config directory should be set by tauri")
         .join("init.lua");
-
-    if config_path.exists() {
-        match std::fs::read_to_string(&config_path) {
-            Ok(source) => {
-                if let Err(e) = lua.load(&source).set_name("init.lua").exec() {
-                    // TODO: Propagate the error to the caller
-                    log::error!("Failed to execute init.lua: {}", e);
-                }
-            }
-            // TODO: Propagate the error to the caller
-            Err(e) => log::error!("Failed to read init.lua: {}", e),
-        }
-    } else {
-        // TODO: Warn the user no config was found
+    if !config_path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!(
+                "No config file found at '{}'",
+                config_path.display().to_string()
+            ),
+        )
+        .into());
     }
 
-    // Extract config results
+    let src = std::fs::read_to_string(&config_path)?;
+    let mut config: Config = lua.load(&src).eval()?;
 
-    let globals: LuaTable = lua.globals();
-    let api: LuaTable = globals.get("brittle")?;
+    config.lua = Some(lua);
+    Ok(config)
+}
 
-    let library_path: Option<String> = api.get("library_path").ok();
-    let library_path = match library_path {
-        Some(path) => expand_tilde(&path),
-        None => expand_tilde(DEFAULT_LIBRARY_PATH),
-    };
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn addon_matches_emmylua_generation() {
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let addon_path = manifest_dir.join("../brittle-api-luals-addon/library/brittle.lua");
 
-    let data_path: Option<String> = api.get::<String>("data_path").ok();
-    let data_path = match data_path {
-        Some(path) => expand_tilde(&path),
-        None => app.path().app_local_data_dir()?,
-    };
+        let actual = std::fs::read_to_string(&addon_path)
+            .expect("addon file missing; run `cargo run --example generate_luals_addon`");
 
-    let log_path: Option<String> = api.get::<String>("log_path").ok();
-    let log_path = match log_path {
-        Some(path) => expand_tilde(&path),
-        None => app.path().app_log_dir()?,
-    };
+        let expected = super::config::EMMY_LUA;
 
-    let pdf_viewer: Option<String> = api.get::<String>("pdf_viewer").ok();
-    let pdf_viewer = match pdf_viewer {
-        Some(v) if v == "external" => v,
-        Some(v) if v != "external" && v != "brittle" => {
-            log::warn!(
-                "Unrecognized pdf_viewer '{}'. Setting option to 'brittle'",
-                v
-            );
-            "brittle".to_string()
-        }
-        _ => "brittle".to_string(),
-    };
-
-    let library_ignore_patterns: Option<LuaTable> =
-        api.get::<LuaTable>("library_ignore_patterns").ok();
-    let library_ignore_patterns: Vec<String> = match library_ignore_patterns {
-        Some(patterns) => patterns
-            .sequence_values::<String>()
-            .filter_map(|res| {
-                if let Err(e) = &res {
-                    log::error!("Invalid library ignore path: {}", e);
-                }
-                res.ok()
-            })
-            .collect(),
-        None => vec![],
-    };
-
-    let mut ref_parsers: HashMap<String, RefParser> = HashMap::new();
-    let ref_table: LuaTable = api.get("ref")?;
-    let parsers: Result<LuaTable, _> = ref_table.get("_parsers");
-    if let Ok(parsers) = parsers {
-        for pair in parsers.pairs::<String, mlua::Function>() {
-            let (name, func) = pair?;
-            let key = lua.create_registry_value(func)?;
-
-            ref_parsers.insert(
-                name,
-                Box::new(move |lua, raw| {
-                    let f: mlua::Function = lua.registry_value(&key)?;
-                    f.call::<mlua::Value>(raw.to_string())
-                }),
-            );
-        }
-    } else {
-        // TODO: Log error
+        assert_eq!(
+            actual, expected,
+            "addon is out of sync with the current API definition; \
+             run `cargo run --example generate_luals_addon`",
+        );
     }
-
-    let mut commands: HashMap<String, CmdHandler> = HashMap::new();
-
-    // TODO: Error handling
-    let cmd_table: Result<LuaTable, _> = api.get("command");
-    if let Ok(cmd_table) = cmd_table {
-        let registry: Result<LuaTable, _> = cmd_table.get("_registry");
-
-        if let Ok(registry) = registry {
-            for pair in registry.pairs::<String, mlua::Function>() {
-                if let Ok((name, func)) = pair {
-                    if let Ok(key) = lua.create_registry_value(func) {
-                        commands.insert(
-                            name,
-                            Box::new(move |lua, args| {
-                                let f: mlua::Function =
-                                    lua.registry_value(&key).map_err(|e| e.to_string())?;
-                                let result =
-                                    f.call::<mlua::Value>(args).map_err(|e| e.to_string())?;
-
-                                match result {
-                                    mlua::Value::String(s) => {
-                                        Ok(s.to_str().map_err(|e| e.to_string())?.to_string())
-                                    }
-                                    mlua::Value::Nil => Ok(String::new()),
-                                    other => Ok(format!("{:?}", other)),
-                                }
-                            }),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    // Out-of-the-box available options
-
-    commands.insert("echo".to_string(), Box::new(|_, args| Ok(args.to_string())));
-    // TODO: Implement closing the app
-    commands.insert("q".to_string(), Box::new(|_, _| Ok(String::new())));
-
-    // TODO: Make this implementable in lua
-    let config_path_str = config_path.display().to_string();
-    commands.insert(
-        "config_path".to_string(),
-        Box::new(move |_, _| Ok(config_path_str.clone())),
-    );
-
-    // TODO: Make this implementable in lua
-    let log_path_str = log_path.display().to_string();
-    commands.insert(
-        "log_path".to_string(),
-        Box::new(move |_, _| Ok(log_path_str.clone())),
-    );
-
-    // TODO: Make this implementable in lua
-    let data_path_str = data_path.display().to_string();
-    commands.insert(
-        "data_path".to_string(),
-        Box::new(move |_, _| Ok(data_path_str.clone())),
-    );
-
-    Ok(Config {
-        library_path,
-        library_ignore_patterns,
-        data_path,
-        log_path: log_path.clone(),
-        pdf_viewer,
-        lua_api: LuaApi {
-            lua,
-            ref_parsers,
-            commands,
-        },
-    })
 }
