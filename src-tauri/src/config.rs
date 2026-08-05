@@ -1,3 +1,6 @@
+use std::io;
+
+use gtk::cairo::IoError;
 use tauri::{App, Manager};
 
 use crate::Error;
@@ -9,8 +12,13 @@ pub mod config {
     use std::path::PathBuf;
 
     //
-    // Helper functions and types
+    // Helper constructs
     //
+
+    // The default data path depends on the `app` object provided by tauri and
+    // is therefore not known at compile time. The OnceLock, initialized in
+    // `load_config`, gets around this
+    pub static DEFAULT_DATA_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
     pub fn expand_tilde(path: &str) -> PathBuf {
         if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~")) {
@@ -104,12 +112,18 @@ pub mod config {
     #[derive(Clone, Debug)]
     pub struct Opts {
         /// Absolute path to the literature library root.
+        #[lua(default = r#"expand_tilde("~/Documents/literature/").into()"#)]
         pub library_path: LuaPath,
         /// Glob patterns for directories to ignore during library scans.
+        #[lua(default = r#"vec![".git".to_string()]"#)]
         pub library_ignore_patterns: Vec<String>,
         /// Directory for persistent application data.
+        #[lua(
+            default = r#"DEFAULT_DATA_PATH.get().expect("DEFAULT_DATA_PATH should have been set in load_config()").clone().into()"#
+        )]
         pub data_path: LuaPath,
         /// PDF viewer: "brittle" for built-in or "external".
+        #[lua(default = r#""default".to_string()"#)]
         pub pdf_viewer: String,
     }
 
@@ -120,8 +134,10 @@ pub mod config {
         /// User-configurable options.
         pub opts: Opts,
         /// Per-format reference parsers.
+        #[lua(default = "vec![]")]
         pub ref_parsers: Vec<RefParser>,
         /// User-defined commands.
+        #[lua(default = "vec![]")]
         pub commands: Vec<Command>,
 
         #[lua(skip)]
@@ -219,24 +235,12 @@ pub mod config {
 pub use config::{Command, Config, Opts, RefParser};
 
 pub fn load_config(app: &mut App) -> Result<Config, Error> {
-    // TODO: Integrate this with the API definition to allow non-specified fields to be defaulted
-    let default_config = Config {
-        lua: None,
-        opts: Opts {
-            library_path: config::expand_tilde("~/Documents/literature/").into(),
-            library_ignore_patterns: vec![".git".to_string()],
-            data_path: app.path().app_local_data_dir()?.into(),
-            pdf_viewer: "external".to_string(),
-        },
-        ref_parsers: vec![],
-        commands: vec![],
-    };
-
     let lua = unsafe { mlua::Lua::unsafe_new() };
-    if let Err(e) = config::register(&lua) {
-        log::warn!("{}. Using default config.", e);
-        return Ok(default_config);
-    }
+    config::register(&lua)?;
+
+    config::DEFAULT_DATA_PATH
+        .set(app.path().app_local_data_dir()?.into())
+        .ok();
 
     let config_path = app
         .path()
@@ -244,32 +248,20 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
         .expect("The config directory should be set by tauri")
         .join("init.lua");
     if !config_path.exists() {
-        log::warn!(
-            "No config file found at '{}'. Using default config",
-            config_path.display().to_string()
-        );
-
-        return Ok(default_config);
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!(
+                "No config file found at '{}'",
+                config_path.display().to_string()
+            ),
+        )
+        .into());
     }
 
-    let config_result = (|| -> Result<Config, String> {
-        let src = std::fs::read_to_string(&config_path)
-            .map_err(|e| format!("Failed to read init.lua: {}", e))?;
-        lua.load(&src)
-            .eval()
-            .map_err(|e| format!("Failed to evaluate init.lua: {}", e))
-    })();
-
-    let mut config = match config_result {
-        Ok(c) => c,
-        Err(e) => {
-            log::warn!("{}. Using default config.", e);
-            return Ok(default_config);
-        }
-    };
+    let src = std::fs::read_to_string(&config_path)?;
+    let mut config: Config = lua.load(&src).eval()?;
 
     config.lua = Some(lua);
-
     Ok(config)
 }
 

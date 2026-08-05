@@ -360,7 +360,7 @@ dependencies = [
 [[package]]
 name = "brittle-lua"
 version = "0.1.0"
-source = "git+ssh://git@100.123.176.93:2222/an.tsouchlos/brittle-lua-api-def.git#d8b8e62d67f08681bdfd9c00a78bd3e7b62a6b3a"
+source = "git+ssh://git@100.123.176.93:2222/an.tsouchlos/brittle-lua-api-def.git#0115986c070ab2239f35787872b1ff474fdd8ad0"
 dependencies = [
  "brittle-lua-core",
  "brittle-lua-macros",
@@ -370,7 +370,7 @@ dependencies = [
 [[package]]
 name = "brittle-lua-core"
 version = "0.1.0"
-source = "git+ssh://git@100.123.176.93:2222/an.tsouchlos/brittle-lua-api-def.git#d8b8e62d67f08681bdfd9c00a78bd3e7b62a6b3a"
+source = "git+ssh://git@100.123.176.93:2222/an.tsouchlos/brittle-lua-api-def.git#0115986c070ab2239f35787872b1ff474fdd8ad0"
 dependencies = [
  "mlua",
 ]
@@ -378,7 +378,7 @@ dependencies = [
 [[package]]
 name = "brittle-lua-macros"
 version = "0.1.0"
-source = "git+ssh://git@100.123.176.93:2222/an.tsouchlos/brittle-lua-api-def.git#d8b8e62d67f08681bdfd9c00a78bd3e7b62a6b3a"
+source = "git+ssh://git@100.123.176.93:2222/an.tsouchlos/brittle-lua-api-def.git#0115986c070ab2239f35787872b1ff474fdd8ad0"
 dependencies = [
  "brittle-lua-core",
  "proc-macro2",

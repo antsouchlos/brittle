@@ -1,36 +1,36 @@
 --- A user-defined command with a name and handler function.
 --- @class Command
---- Command name used to invoke it.
---- @field name string
 --- Handler: receives the argument string, returns the output string.
 --- @field func fun(args): string
+--- Command name used to invoke it.
+--- @field name string
 
 --- Top-level application configuration.
 --- @class Config
+--- User-defined commands.
+--- @field commands? Command[]
 --- User-configurable options.
 --- @field opts Opts
 --- Per-format reference parsers.
---- @field ref_parsers RefParser[]
---- User-defined commands.
---- @field commands Command[]
+--- @field ref_parsers? RefParser[]
 
 --- User-configurable options.
 --- @class Opts
---- Absolute path to the literature library root.
---- @field library_path string
---- Glob patterns for directories to ignore during library scans.
---- @field library_ignore_patterns string[]
 --- Directory for persistent application data.
---- @field data_path string
+--- @field data_path? string
+--- Glob patterns for directories to ignore during library scans.
+--- @field library_ignore_patterns? string[]
+--- Absolute path to the literature library root.
+--- @field library_path? string
 --- PDF viewer: "brittle" for built-in or "external".
---- @field pdf_viewer string
+--- @field pdf_viewer? string
 
 --- Metadata extracted from a publication reference file
 --- @class PublicationMetadata
---- @field title string
 --- @field author string
---- @field year integer
 --- @field journal string
+--- @field title string
+--- @field year integer
 
 --- Parses reference files of a specific format into PublicationMetadata.
 --- @class RefParser
