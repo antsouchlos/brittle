@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-use ignore::gitignore::{Gitignore, GitignoreBuilder};
+use ignore::gitignore::{Gitignore};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -91,14 +91,7 @@ fn list_and_filter_dir_contents(
     Ok(entries)
 }
 
-pub fn load_library(library_root: &Path, ignore_patterns: &[String]) -> Result<Library, LoadError> {
-    if !library_root.exists() {
-        return Err(LoadError::LibraryNotFound);
-    }
-    if !library_root.is_dir() {
-        return Err(LoadError::NotADirectory);
-    }
-
+pub fn load_library(library_root: &Path, ignore_filter: &Gitignore) -> Result<Library, LoadError> {
     let root_name = library_root
         .file_name()
         .ok_or_else(|| {
@@ -109,16 +102,6 @@ pub fn load_library(library_root: &Path, ignore_patterns: &[String]) -> Result<L
         })?
         .to_string_lossy()
         .to_string();
-
-    let mut ignore_builder = GitignoreBuilder::new(library_root);
-    for pattern in ignore_patterns {
-        if let Err(e) = ignore_builder.add_line(None, pattern) {
-            log::warn!("Malformed ignore pattern {:?}: {}", pattern, e);
-        }
-    }
-    let ignore_filter = ignore_builder
-        .build()
-        .map_err(|e| LoadError::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e)))?;
 
     let root_id = root_name.clone();
 

@@ -3,16 +3,17 @@ use std::env;
 use std::fmt::Display;
 use std::io::{self, Write};
 use std::path::PathBuf;
-use std::sync::mpsc::{sync_channel, RecvTimeoutError};
-use std::time::Duration;
+use std::sync::mpsc;
 
-use gtk::cairo::Path;
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use log::error;
+use notify::event::{ModifyKind, RenameMode};
 use notify::{RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager, State};
 
-use crate::config::{Command, Config, Opts, RefParser};
+use crate::config::Config;
+use crate::library::LoadError;
 
 mod config;
 mod library;
@@ -140,13 +141,9 @@ fn setup_linux_pinch(window: &tauri::WebviewWindow) -> Result<(), Error> {
 
 fn setup_library_watcher(app_handle: tauri::AppHandle, library_path: std::path::PathBuf) {
     std::thread::spawn(move || {
-        let (tx, rx) = sync_channel(1);
+        let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
 
-        let mut watcher = match notify::recommended_watcher(move |res| {
-            if let Ok(event) = res {
-                let _ = tx.send(event);
-            }
-        }) {
+        let mut watcher = match notify::recommended_watcher(tx) {
             Ok(w) => w,
             Err(e) => {
                 error!("Failed to create filesystem watcher: {}", e);
@@ -168,22 +165,42 @@ fn setup_library_watcher(app_handle: tauri::AppHandle, library_path: std::path::
             library_path.display(),
         );
 
-        loop {
-            match rx.recv() {
-                Ok(_) => {}
-                Err(_) => break,
-            }
+        let library_ignore_filter = app_handle.state::<Gitignore>();
 
-            loop {
-                match rx.recv_timeout(Duration::from_secs(2)) {
-                    Ok(_) => continue,
-                    Err(RecvTimeoutError::Timeout) => break,
-                    Err(RecvTimeoutError::Disconnected) => return,
+        for event in rx {
+            match event {
+                Ok(event) => {
+                    // Filter events to only have one library reload trigger per library change
+                    match event.kind {
+                        notify::EventKind::Modify(ModifyKind::Name(RenameMode::From)) => (),
+                        notify::EventKind::Modify(ModifyKind::Data(_)) => (),
+                        notify::EventKind::Create(_) => (),
+                        notify::EventKind::Remove(_) => (),
+                        _ => continue,
+                    }
+
+                    let mut file_ignored = false;
+                    for path in &event.paths {
+                        let relative = path.strip_prefix(library_path.clone()).unwrap_or(&path);
+
+                        if library_ignore_filter
+                            .matched_path_or_any_parents(relative, path.is_dir())
+                            .is_ignore()
+                        {
+                            file_ignored = true;
+                            break;
+                        }
+                    }
+
+                    if file_ignored {
+                        continue;
+                    }
+
+                    if let Err(e) = app_handle.emit("library-changed", ()) {
+                        error!("Failed to emit library-changed event: {}", e);
+                    }
                 }
-            }
-
-            if let Err(e) = app_handle.emit("library-changed", ()) {
-                error!("Failed to emit library-changed event: {}", e);
+                Err(e) => log::error!("File watch error: {:?}", e),
             }
         }
     });
@@ -208,8 +225,33 @@ pub fn run() {
                     .init();
             }
             {
+                // Load and validate config
+
                 let config = config::load_config(app)?;
+
+                if !config.opts.library_path.exists() {
+                    // TODO: Is just using a question mark for the type conversion proper rust convention?
+                    return Err(LoadError::LibraryNotFound)?;
+                }
+                if !config.opts.library_path.is_dir() {
+                    return Err(LoadError::NotADirectory)?;
+                }
+
+                // Build library ignore filter
+
+                let mut library_ignore_builder =
+                    GitignoreBuilder::new(PathBuf::from(config.opts.library_path.clone()));
+                for pattern in &config.opts.library_ignore_patterns {
+                    if let Err(e) = library_ignore_builder.add_line(None, pattern.as_str()) {
+                        log::warn!("Malformed ignore pattern {:?}: {}", pattern, e);
+                    }
+                }
+                let ignore_filter: Gitignore = library_ignore_builder.build().map_err(|e| {
+                    LoadError::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
+                })?;
+
                 app.manage(config);
+                app.manage(ignore_filter);
             }
             #[cfg(target_os = "linux")]
             {
@@ -233,7 +275,10 @@ pub fn run() {
             //         win.open_devtools();
             //     }
             // }
-            // setup_library_watcher(app.handle().clone(), app.state::<Config>().library_path.clone());
+            setup_library_watcher(
+                app.handle().clone(),
+                app.state::<Config>().opts.library_path.clone().into(),
+            );
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -307,10 +352,13 @@ struct SerializedUiState {
 // ---------- Commands ----------
 
 #[tauri::command]
-fn load_library(config: State<Config>) -> Result<library::Library, String> {
+fn load_library(
+    config: State<Config>,
+    ignore_filter: State<Gitignore>,
+) -> Result<library::Library, String> {
     library::load_library(
         &PathBuf::from(config.inner().opts.library_path.clone()),
-        &config.inner().opts.library_ignore_patterns,
+        &ignore_filter,
     )
     .map_err(|e| e.to_string())
 }
