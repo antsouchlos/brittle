@@ -9,12 +9,19 @@ use brittle_lua;
 
 #[brittle_lua::lua_module(crate = "brittle_lua")]
 pub mod config {
-    use crate::PublicationMetadata;
+    #[luaclass(annotation)]
+    struct PublicationMetadata {
+        pub title: String,
+        pub author: String,
+        pub year: i32,
+        pub journal: String,
+    }
 
     #[luaclass]
     #[derive(Clone, Debug)]
     pub struct Command {
         pub name: String,
+        #[lua(signature = "fun(string): string")]
         pub func: mlua::Function,
     }
 
@@ -22,6 +29,7 @@ pub mod config {
     #[derive(Clone, Debug)]
     pub struct RefParser {
         pub file_extension: String,
+        #[lua(signature = "fun(string): PublicationMetadata")]
         pub parser: mlua::Function,
     }
 
@@ -56,7 +64,7 @@ pub mod config {
             &self,
             extension: &String,
             src: &String,
-        ) -> Result<PublicationMetadata, String> {
+        ) -> Result<crate::PublicationMetadata, String> {
             let _ = self.lua.as_ref().ok_or("Lua state unavailable")?;
 
             let parser = self
@@ -80,7 +88,7 @@ pub mod config {
                 }
             };
 
-            Ok(PublicationMetadata {
+            Ok(crate::PublicationMetadata {
                 title: table.get("title").unwrap_or_default(),
                 author: table.get("author").unwrap_or_default(),
                 year: table.get("year").unwrap_or(0),

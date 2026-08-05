@@ -11,6 +11,12 @@
     $ cargo tauri build --no-bundle
     ```
 
+## Generate Luals Addon
+
+```
+$ cargo run --example generate_luals_addon
+```
+
 ## Troubleshooting
 
 If the UI feels laggy, try

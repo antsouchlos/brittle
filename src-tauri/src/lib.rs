@@ -17,6 +17,10 @@ use crate::config::{Command, Config, Opts, RefParser};
 mod config;
 mod library;
 
+pub fn get_emmy_lua() -> &'static str {
+    crate::config::config::EMMY_LUA
+}
+
 /// Walk the GTK widget tree under `container` and return the first descendant                                                                                            
 /// whose type name starts with `WebKitWebView` (the webkit2gtk webview widget).                                                                                          
 #[cfg(target_os = "linux")]
