@@ -25,6 +25,7 @@ pub mod config {
         /// Command name used to invoke it.
         pub name: String,
         /// Handler: receives the argument string, returns the output string.
+        // TODO: Make sure the function args are interpreted correctly
         #[lua(signature = "fun(string): string")]
         pub func: mlua::Function,
     }
@@ -36,6 +37,7 @@ pub mod config {
         /// File extension this parser handles (e.g. "bib").
         pub file_extension: String,
         /// Parser: receives the file contents as a string, returns metadata.
+        // TODO: Make sure the function args are interpreted correctly
         #[lua(signature = "fun(string): PublicationMetadata")]
         pub parser: mlua::Function,
     }
@@ -46,11 +48,13 @@ pub mod config {
     pub struct Opts {
         /// Absolute path to the literature library root.
         // TODO: Make this not have to be absolute and support tilde
+        // TODO: Turn this from a string into a PathBuf
         pub library_path: String,
         /// Glob patterns for directories to ignore during library scans.
         pub library_ignore_patterns: Vec<String>,
         /// Directory for persistent application data.
         // TODO: Make this not have to be absolute and support tilde
+        // TODO: Turn this from a string into a PathBuf
         pub data_path: String,
         /// PDF viewer: "brittle" for built-in or "external".
         pub pdf_viewer: String,
@@ -144,6 +148,7 @@ pub mod config {
     }
 }
 
+// TODO: Make sure this is used appropriately
 fn expand_tilde(path: &str) -> PathBuf {
     if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~")) {
         let home = env::var("HOME").unwrap_or_else(|_| "/tmp".into());
@@ -156,6 +161,7 @@ fn expand_tilde(path: &str) -> PathBuf {
 pub use config::{Command, Config, Opts, RefParser};
 
 pub fn load_config(app: &mut App) -> Result<Config, Error> {
+    // TODO: Integrate this with the API definition to allow non-specified fields to be defaulted
     let default_config = Config {
         lua: None,
         opts: Opts {
