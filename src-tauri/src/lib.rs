@@ -239,14 +239,14 @@ pub fn run() {
 
                 // Build library ignore filter
 
-                let mut library_ignore_builder =
+                let mut ignore_builder =
                     GitignoreBuilder::new(PathBuf::from(config.opts.library_path.clone()));
                 for pattern in &config.opts.library_ignore_patterns {
-                    if let Err(e) = library_ignore_builder.add_line(None, pattern.as_str()) {
+                    if let Err(e) = ignore_builder.add_line(None, pattern.as_str()) {
                         log::warn!("Malformed ignore pattern {:?}: {}", pattern, e);
                     }
                 }
-                let ignore_filter: Gitignore = library_ignore_builder.build().map_err(|e| {
+                let ignore_filter: Gitignore = ignore_builder.build().map_err(|e| {
                     LoadError::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
                 })?;
 
