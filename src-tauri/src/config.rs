@@ -126,7 +126,19 @@ pub mod config {
         pub lua: Option<mlua::Lua>,
     }
 
+    #[luafunction]
+    fn log(level: String, msg: String) {
+        match level.as_str() {
+            "error" => log::error!("{}", msg),
+            "warn" => log::warn!("{}", msg),
+            "info" => log::info!("{}", msg),
+            _ => log::error!("Unknown log level: {}. \n{}", level, msg),
+        }
     }
+
+    //
+    // Convenience function
+    //
 
     impl Config {
         pub fn get_parser_formats(&self) -> Vec<String> {
@@ -229,6 +241,10 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
     };
 
     let lua = unsafe { mlua::Lua::unsafe_new() };
+    if let Err(e) = config::register(&lua) {
+        log::warn!("{}. Using default config.", e);
+        return Ok(default_config);
+    }
 
     let config_path = app
         .path()
