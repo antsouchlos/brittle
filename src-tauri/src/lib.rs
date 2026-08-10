@@ -230,11 +230,10 @@ pub fn run() {
                 let config = config::load_config(app)?;
 
                 if !config.opts.library_path.exists() {
-                    // TODO: Is just using a question mark for the type conversion proper rust convention?
-                    return Err(LoadError::LibraryNotFound)?;
+                    return Err(Box::new(LoadError::LibraryNotFound));
                 }
                 if !config.opts.library_path.is_dir() {
-                    return Err(LoadError::NotADirectory)?;
+                    return Err(Box::new(LoadError::NotADirectory));
                 }
 
                 // Build library ignore filter
