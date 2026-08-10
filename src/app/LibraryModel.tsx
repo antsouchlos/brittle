@@ -22,7 +22,7 @@ export interface Metadata {
     title: string;
     author: string;
     year: number;
-    journal: string;
+    publisher: string;
 }
 
 export interface TreeNodeData {

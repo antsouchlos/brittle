@@ -72,19 +72,6 @@ function App() {
             .catch(e => logger.error(String(e)));
     };
 
-    useEffect(() => {
-        invoke<string[]>('list_commands')
-            .then(setCommandList)
-            .catch(e => logger.error(`Failed to list commands: ${e}`));
-    }, []);
-
-    useEffect(() => {
-        invoke<string[]>('load_command_history')
-            .then(history => setCommandHistory(history))
-            .catch(e => logger.error(`Failed to load command history: ${e}`))
-            .finally(() => { historyLoadedRef.current = true; });
-    }, []);
-
     const prevSelectedPubId = useRef(selectedPublicationId);
     const prevSelectedNodeId = useRef(selectedNodeId);
     const prevExpandedNodeIds = useRef(expandedNodeIds);
@@ -94,6 +81,19 @@ function App() {
         prevSelectedNodeId.current = selectedNodeId;
         prevExpandedNodeIds.current = expandedNodeIds;
     });
+
+    const loadCommandList = useCallback(() => {
+        invoke<string[]>('list_commands')
+            .then(setCommandList)
+            .catch(e => logger.error(`Failed to list commands: ${e}`));
+    }, []);
+
+    const loadCommandHistory = useCallback(() => {
+        invoke<string[]>('load_command_history')
+            .then(history => setCommandHistory(history))
+            .catch(e => logger.error(`Failed to load command history: ${e}`))
+            .finally(() => { historyLoadedRef.current = true; });
+    }, []);
 
     const loadLibraryData = useCallback(async () => {
         const data = await invoke<Library>('load_library');
@@ -124,17 +124,53 @@ function App() {
         setSelectedPublicationId(pubId);
     }, []);
 
+    const libRef = useRef<LibraryModel | null>(null);
+
+    useEffect(() => {
+        libRef.current = lib;
+    }, [lib]);
+
+    const refreshPubMetadata = useCallback(async () => {
+        const currentLib = libRef.current;
+        if (!currentLib) return;
+
+        const ids = Object.keys(currentLib.publications);
+        const metas = await Promise.all(
+            ids.map(id => invoke<Metadata>('parse_publication', { id }))
+        );
+        const metaMap: Record<string, Metadata> = {};
+
+        ids.forEach((id, i) => { metaMap[id] = metas[i]; });
+        setPubMetadata(metaMap);
+    }, []);
+
     useEffect(() => {
         loadLibraryData().catch(e => logger.error(String(e)));
+        loadCommandList();
+        loadCommandHistory();
 
-        const promise = listen('library-changed', () => {
+        const libraryChanged = listen('library-changed', () => {
             loadLibraryData().catch(e => logger.error(String(e)));
+        });
+        const configChanged = listen('config-changed', () => {
+            loadLibraryData().catch(e => logger.error(String(e)));
+            loadCommandList();
+            loadCommandHistory();
+        });
+        const metadataChanged = listen('publication-metadata-changed', () => {
+            refreshPubMetadata().catch(e => logger.error(String(e)));
+        });
+        const configError = listen('config-reload-error', (event) => {
+            logger.error(String(event.payload));
         });
 
         return () => {
-            promise.then(unlisten => unlisten());
+            libraryChanged.then(unlisten => unlisten());
+            configChanged.then(unlisten => unlisten());
+            metadataChanged.then(unlisten => unlisten());
+            configError.then(unlisten => unlisten());
         };
-    }, [loadLibraryData]);
+    }, [loadLibraryData, loadCommandList, loadCommandHistory, refreshPubMetadata]);
 
     const treeRoot = useMemo(() => {
         if (!lib) return null;
@@ -153,7 +189,7 @@ function App() {
                 id,
                 title: pubMetadata[id].title,
                 author: pubMetadata[id].author,
-                journal: pubMetadata[id].journal,
+                publisher: pubMetadata[id].publisher,
                 date: String(pubMetadata[id].year),
             }));
     }, [visiblePubIds, pubMetadata]);
@@ -228,7 +264,7 @@ function App() {
                             data-selected={focusedPanelIdx == 2}
                         >
                             <DetailView
-                                journal={selectedMeta?.journal ?? ''}
+                                publisher={selectedMeta?.publisher ?? ''}
                                 author={selectedMeta?.author ?? ''}
                                 date={selectedMeta?.year ? String(selectedMeta.year) : ''}
                                 collection={selectedPub ? lib!.nameOf(selectedPub.parentDirectoryId) : ''}

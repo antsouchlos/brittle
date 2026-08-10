@@ -1,6 +1,3 @@
-use std::io;
-
-use gtk::cairo::IoError;
 use tauri::{App, Manager};
 
 use crate::Error;
@@ -30,12 +27,12 @@ pub mod config {
     }
 
     /// Metadata extracted from a publication reference file
-    #[luaclass(annotation)]
+    #[luaclass]
     struct PublicationMetadata {
         pub title: String,
         pub author: String,
         pub year: i32,
-        pub journal: String,
+        pub publisher: String,
     }
 
     #[lua_newtype(to = "string")]
@@ -107,6 +104,23 @@ pub mod config {
         pub parser: mlua::Function,
     }
 
+    /// A user-defined file-system watch entry mapping a path to reload actions.
+    ///
+    /// Directories are always watched recursively. Each entry filters its own
+    /// events through its `ignore` patterns, independently of other entries.
+    #[luaclass]
+    #[derive(Clone, Debug)]
+    pub struct Watch {
+        /// Path to watch (a file or a directory).
+        pub path: LuaPath,
+        /// Reload actions triggered on change (e.g. "library", "config", "publication_metadata").
+        #[lua(default = "vec![]")]
+        pub action: Vec<String>,
+        /// Gitignore-style patterns applied when filtering this entry's watch events.
+        #[lua(default = "vec![]")]
+        pub ignore: Vec<String>,
+    }
+
     /// User-configurable options.
     #[luaclass]
     #[derive(Clone, Debug)]
@@ -125,6 +139,9 @@ pub mod config {
         /// PDF viewer: "brittle" for built-in or "external".
         #[lua(default = r#""default".to_string()"#)]
         pub pdf_viewer: String,
+        /// File-system watch entries mapping paths to reload actions.
+        #[lua(default = "vec![]")]
+        pub watch: Vec<Watch>,
     }
 
     /// Top-level application configuration.
@@ -158,6 +175,17 @@ pub mod config {
     // Convenience function
     //
 
+    impl From<PublicationMetadata> for crate::PublicationMetadata {
+        fn from(other: PublicationMetadata) -> Self {
+            crate::PublicationMetadata {
+                title: other.title,
+                author: other.author,
+                year: other.year,
+                publisher: other.publisher,
+            }
+        }
+    }
+
     impl Config {
         pub fn get_parser_formats(&self) -> Vec<String> {
             self.ref_parsers
@@ -179,27 +207,12 @@ pub mod config {
                 .find(|parser| parser.file_extension.eq(extension))
                 .ok_or_else(|| format!("No parser registered for extension '{}'", extension))?;
 
-            let value: mlua::Value = parser
+            let value: PublicationMetadata = parser
                 .parser
                 .call(src.as_str())
                 .map_err(|e| format!("Parser error: {}", e))?;
 
-            let table = match value {
-                mlua::Value::Table(t) => t,
-                other => {
-                    return Err(format!(
-                        "Parser returned {}, expected table",
-                        other.type_name()
-                    ))
-                }
-            };
-
-            Ok(crate::PublicationMetadata {
-                title: table.get("title").unwrap_or_default(),
-                author: table.get("author").unwrap_or_default(),
-                year: table.get("year").unwrap_or(0),
-                journal: table.get("journal").unwrap_or_default(),
-            })
+            Ok(value.into())
         }
 
         pub fn list_commands(&self) -> Vec<String> {
@@ -232,21 +245,15 @@ pub mod config {
     }
 }
 
-pub use config::{Command, Config, Opts, RefParser};
+pub use config::{Command, Config, Opts, RefParser, Watch};
 
-pub fn load_config(app: &mut App) -> Result<Config, Error> {
+/// Evaluates the config from a concrete path. Shared by startup and runtime
+/// reload, so the reload path (which only has an `AppHandle`) can re-evaluate
+/// without needing the mutable `&mut App` startup context.
+pub fn load_config_from(config_path: &std::path::Path) -> Result<Config, Error> {
     let lua = unsafe { mlua::Lua::unsafe_new() };
     config::register(&lua)?;
 
-    config::DEFAULT_DATA_PATH
-        .set(app.path().app_local_data_dir()?.into())
-        .ok();
-
-    let config_path = app
-        .path()
-        .app_config_dir()
-        .expect("The config directory should be set by tauri")
-        .join("init.lua");
     if !config_path.exists() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -258,11 +265,24 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
         .into());
     }
 
-    let src = std::fs::read_to_string(&config_path)?;
+    let src = std::fs::read_to_string(config_path)?;
     let mut config: Config = lua.load(&src).eval()?;
 
     config.lua = Some(lua);
     Ok(config)
+}
+
+pub fn load_config(app: &mut App) -> Result<Config, Error> {
+    let data_path = app.path().app_local_data_dir()?;
+    config::DEFAULT_DATA_PATH.set(data_path.into()).ok();
+
+    let config_path = app
+        .path()
+        .app_config_dir()
+        .expect("The config directory should be set by tauri")
+        .join("init.lua");
+
+    load_config_from(&config_path)
 }
 
 #[cfg(test)]

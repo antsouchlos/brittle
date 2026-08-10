@@ -24,11 +24,13 @@
 --- @field library_path? string
 --- PDF viewer: "brittle" for built-in or "external".
 --- @field pdf_viewer? string
+--- File-system watch entries mapping paths to reload actions.
+--- @field watch? Watch[]
 
 --- Metadata extracted from a publication reference file
 --- @class PublicationMetadata
 --- @field author string
---- @field journal string
+--- @field publisher string
 --- @field title string
 --- @field year integer
 
@@ -38,6 +40,18 @@
 --- @field file_extension string
 --- Parser: receives the file contents as a string, returns metadata.
 --- @field parser fun(src: string): PublicationMetadata
+
+--- A user-defined file-system watch entry mapping a path to reload actions.
+--- 
+--- Directories are always watched recursively. Each entry filters its own
+--- events through its `ignore` patterns, independently of other entries.
+--- @class Watch
+--- Reload actions triggered on change (e.g. "library", "config", "publication_metadata").
+--- @field action? string[]
+--- Gitignore-style patterns applied when filtering this entry's watch events.
+--- @field ignore? string[]
+--- Path to watch (a file or a directory).
+--- @field path string
 
 --- @param level string
 --- @param msg string

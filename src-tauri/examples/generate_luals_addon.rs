@@ -10,8 +10,11 @@ fn main() {
 
     std::fs::create_dir_all(&library_dir).expect("create library/ dir");
 
-    std::fs::write(library_dir.join("brittle.lua"), brittle_v2_lib::get_emmy_lua())
-        .expect("write brittle.lua");
+    std::fs::write(
+        library_dir.join("brittle.lua"),
+        brittle_v2_lib::get_emmy_lua(),
+    )
+    .expect("write brittle.lua");
 
     std::fs::write(addon_root.join("config.json"), config_json).expect("write config.json");
 

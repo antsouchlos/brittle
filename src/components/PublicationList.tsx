@@ -6,7 +6,7 @@ interface Publication {
     id: string;
     title: string;
     author: string;
-    journal: string;
+    publisher: string;
     date: string;
 }
 
@@ -51,7 +51,7 @@ function splitMatchPositionsByField(
     matchPositions: Set<number>,
     titleLen: number,
     authorLen: number,
-    journalLen: number,
+    publisherLen: number,
 ) {
     const titlePositions = new Set(
         Array.from(matchPositions).filter(p => p < titleLen),
@@ -61,18 +61,18 @@ function splitMatchPositionsByField(
             .filter(p => p >= titleLen && p < titleLen + authorLen)
             .map(p => p - titleLen),
     );
-    const journalPositions = new Set(
+    const publisherPositions = new Set(
         Array.from(matchPositions)
-            .filter(p => p >= titleLen + authorLen && p < titleLen + authorLen + journalLen)
+            .filter(p => p >= titleLen + authorLen && p < titleLen + authorLen + publisherLen)
             .map(p => p - titleLen - authorLen),
     );
     const datePositions = new Set(
         Array.from(matchPositions)
-            .filter(p => p >= titleLen + authorLen + journalLen)
-            .map(p => p - titleLen - authorLen - journalLen),
+            .filter(p => p >= titleLen + authorLen + publisherLen)
+            .map(p => p - titleLen - authorLen - publisherLen),
     );
 
-    return { titlePositions, authorPositions, journalPositions, datePositions };
+    return { titlePositions, authorPositions, publisherPositions, datePositions };
 }
 
 function HighlightedText({ text, matchPositions }: { text: string; matchPositions: Set<number> }) {
@@ -136,7 +136,7 @@ function useFuzzySearch(
 
     const fzf = useMemo(
         () => new Fzf(publications, {
-            selector: (pub: Publication) => pub.title + pub.author + pub.journal + pub.date,
+            selector: (pub: Publication) => pub.title + pub.author + pub.publisher + pub.date,
             match: extendedMatch,
         }),
         [publications],
@@ -147,12 +147,12 @@ function useFuzzySearch(
             pub,
             titlePositions: new Set<number>(),
             authorPositions: new Set<number>(),
-            journalPositions: new Set<number>(),
+            publisherPositions: new Set<number>(),
             datePositions: new Set<number>(),
         }))
         : fzf.find(query).map(r => ({
             pub: r.item,
-            ...splitMatchPositionsByField(r.positions, r.item.title.length, r.item.author.length, r.item.journal.length),
+            ...splitMatchPositionsByField(r.positions, r.item.title.length, r.item.author.length, r.item.publisher.length),
         }));
 
     const effectiveIdx = fuzzyFindVisible && displayItems.length > 0
@@ -253,7 +253,7 @@ function PublicationList({
                         className={styles.fuzzyInput}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="journal · title · author · year"
+                        placeholder="publisher · title · author · year"
                         onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                                 onSubmit?.();
@@ -273,7 +273,7 @@ function PublicationList({
             )}
             <div className={styles.listContainer} ref={listRef}>
                 <div className={styles.list}>
-                    {displayItems.map(({ pub, titlePositions, authorPositions, journalPositions, datePositions }, idx) => (
+                    {displayItems.map(({ pub, titlePositions, authorPositions, publisherPositions: publisherPositions, datePositions }, idx) => (
                         <div
                             key={pub.id}
                             className={styles.card}
@@ -285,8 +285,8 @@ function PublicationList({
                             onClick={() => selectByClick(idx, pub.id)}
                         >
                             <div className={styles.cardTopRow}>
-                                <span className={styles.journal}>
-                                    <HighlightedText text={pub.journal} matchPositions={journalPositions} />
+                                <span className={styles.publisher}>
+                                    <HighlightedText text={pub.publisher} matchPositions={publisherPositions} />
                                 </span>
                                 <span className={styles.dateBadge}>
                                     <HighlightedText text={pub.date} matchPositions={datePositions} />

@@ -3,6 +3,5 @@
 
 fn main() {
     log_panics::init();
-
     brittle_v2_lib::run()
 }
