@@ -250,9 +250,7 @@ pub use config::{Command, Config, Opts, RefParser, Watch};
 /// Evaluates the config from a concrete path. Shared by startup and runtime
 /// reload, so the reload path (which only has an `AppHandle`) can re-evaluate
 /// without needing the mutable `&mut App` startup context.
-pub fn load_config_from(
-    config_path: &std::path::Path,
-) -> Result<Config, Error> {
+pub fn load_config_from(config_path: &std::path::Path) -> Result<Config, Error> {
     let lua = unsafe { mlua::Lua::unsafe_new() };
     config::register(&lua)?;
 

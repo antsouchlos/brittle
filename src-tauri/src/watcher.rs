@@ -1,6 +1,7 @@
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use log::{error, info, warn};
@@ -9,6 +10,14 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::Emitter;
 
 use crate::config::Watch;
+
+/// How long an event burst must stay quiet before it is dispatched as a single
+/// change. Covers editor save transactions (temp-file write + atomic rename)
+/// so reloads never read a file while it is momentarily absent or half-written
+const SETTLE_WINDOW: Duration = Duration::from_millis(150);
+
+/// How often the idle loop polls the control channel when nothing is pending
+const CONTROL_POLL: Duration = Duration::from_millis(100);
 
 #[derive(Clone)]
 pub struct WatchEntry {
@@ -46,6 +55,91 @@ impl WatchRegistry {
     }
 }
 
+// Coalescing component: collapses an event burst into one dispatch.
+
+/// Coalesces a burst of events into one dispatch after the stream has been
+/// quiet for `window`. Pure: the clock is passed in, so tests need no real
+/// time. It records only the union of pending actions, so a burst collapses
+/// to a single logical change
+pub struct SettleBuffer {
+    window: Duration,
+    pending: BTreeSet<String>,
+    last_event: Option<Instant>,
+}
+
+impl SettleBuffer {
+    pub fn new(window: Duration) -> SettleBuffer {
+        SettleBuffer {
+            window,
+            pending: BTreeSet::new(),
+            last_event: None,
+        }
+    }
+
+    /// Queues the actions of one raw event and restarts the quiet timer.
+    /// Duplicate actions do not extend the deadline, so identical re-emits
+    /// cannot keep a burst alive indefinitely
+    pub fn record(&mut self, now: Instant, actions: impl IntoIterator<Item = String>) {
+        let mut changed = false;
+        for action in actions {
+            changed |= self.pending.insert(action);
+        }
+        if changed {
+            self.last_event = Some(now);
+        }
+    }
+
+    pub fn is_pending(&self) -> bool {
+        !self.pending.is_empty()
+    }
+
+    /// Quiet time still to wait before the pending burst may be dispatched
+    pub fn remaining(&self, now: Instant) -> Duration {
+        match self.last_event {
+            Some(last) => self.window.saturating_sub(now.duration_since(last)),
+            None => Duration::ZERO,
+        }
+    }
+
+    /// True when a pending burst has stayed quiet for the full window
+    pub fn due(&self, now: Instant) -> bool {
+        self.last_event
+            .map_or(false, |last| now.duration_since(last) >= self.window)
+    }
+
+    /// Takes the pending actions, sorted and deduplicated, and resets
+    pub fn drain(&mut self) -> Vec<String> {
+        let actions = self.pending.iter().cloned().collect();
+        self.pending.clear();
+        self.last_event = None;
+        actions
+    }
+}
+
+// Dispatch component: maps an action name to its side effect
+
+/// Runs a single watch action to its side effect. Kept behind a trait so the
+/// watcher loop is testable without a live Tauri runtime
+pub trait ActionRunner {
+    fn run(&self, action: &str);
+}
+
+/// Tauri-backed runner: emits change events or triggers a config reload
+pub struct TauriActionRunner {
+    app_handle: tauri::AppHandle,
+}
+
+impl ActionRunner for TauriActionRunner {
+    fn run(&self, action: &str) {
+        match action {
+            "library" => emit(&self.app_handle, "library-changed"),
+            "publication_metadata" => emit(&self.app_handle, "publication-metadata-changed"),
+            "config" => crate::reload_config(&self.app_handle),
+            other => warn!("Unknown watch action '{}'", other),
+        }
+    }
+}
+
 /// Commands sent to the watcher thread
 pub enum WatcherCommand {
     /// Replace the set of watched paths with this registry
@@ -77,11 +171,17 @@ pub fn spawn_watcher(
         diff_registries_and_reregister_watcher(&mut watcher, &active, &initial);
         active = initial;
 
+        let runner = TauriActionRunner { app_handle };
+        let mut settle = SettleBuffer::new(SETTLE_WINDOW);
+
         loop {
-            // Apply pending control commands before blocking on events.
+            // Apply pending control commands before blocking on events. A
+            // registry sync flushes the current burst first so queued changes
+            // are not lost when a config reload re-registers the watches
             loop {
                 match cmd_rx.try_recv() {
                     Ok(WatcherCommand::Sync(new_registry)) => {
+                        flush(&mut settle, &runner, Instant::now());
                         diff_registries_and_reregister_watcher(
                             &mut watcher,
                             &active,
@@ -94,12 +194,22 @@ pub fn spawn_watcher(
                 }
             }
 
-            // Poll with a short timeout so pending control commands (e.g. a
-            // config reload re-sync) are applied without waiting for an event.
-            match evt_rx.recv_timeout(Duration::from_millis(100)) {
-                Ok(Ok(event)) => dispatch_event(&app_handle, &active, &event),
-                Ok(Err(e)) => log::error!("File watch error: {:?}", e),
-                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            // Block for the quieter of the settle deadline and the control
+            // poll interval, so pending control commands stay responsive
+            let timeout = if settle.is_pending() {
+                settle.remaining(Instant::now())
+            } else {
+                CONTROL_POLL
+            };
+
+            match evt_rx.recv_timeout(timeout) {
+                Ok(Ok(event)) => {
+                    settle.record(Instant::now(), get_event_actions(&active, &event));
+                }
+                Ok(Err(e)) => error!("File watch error: {:?}", e),
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    flush(&mut settle, &runner, Instant::now());
+                }
                 Err(mpsc::RecvTimeoutError::Disconnected) => return,
             }
         }
@@ -130,21 +240,22 @@ fn diff_registries_and_reregister_watcher(
     }
 }
 
-fn dispatch_event(app_handle: &tauri::AppHandle, registry: &WatchRegistry, event: &notify::Event) {
-    for action in get_event_actions(registry, event) {
-        match action.as_str() {
-            "library" => emit(app_handle, "library-changed"),
-            "publication_metadata" => emit(app_handle, "publication-metadata-changed"),
-            "config" => crate::reload_config(app_handle),
-            other => warn!("Unknown watch action '{}'", other),
+/// Dispatches the buffered burst once its quiet window has elapsed
+fn flush(settle: &mut SettleBuffer, runner: &dyn ActionRunner, now: Instant) {
+    if settle.due(now) {
+        for action in settle.drain() {
+            runner.run(&action);
         }
     }
 }
 
 fn get_event_actions(registry: &WatchRegistry, event: &notify::Event) -> Vec<String> {
     // Collapse the noisy event kinds into one trigger per logical change.
+    // `To` is included so an atomic rename lands on its destination path and
+    // a file moved into a watched tree is detected
     match event.kind {
         notify::EventKind::Modify(ModifyKind::Name(RenameMode::From)) => (),
+        notify::EventKind::Modify(ModifyKind::Name(RenameMode::To)) => (),
         notify::EventKind::Modify(ModifyKind::Data(_)) => (),
         notify::EventKind::Create(_) => (),
         notify::EventKind::Remove(_) => (),
@@ -191,6 +302,7 @@ mod tests {
     use super::*;
     use notify::event::DataChange;
     use notify::EventKind;
+    use std::cell::RefCell;
     use std::path::Path;
 
     fn registry_with(entries: Vec<WatchEntry>) -> WatchRegistry {
@@ -300,5 +412,116 @@ mod tests {
         let actions = get_event_actions(&registry, &access);
 
         assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn rename_to_fires_actions() {
+        let registry = registry_with(vec![entry("/lit", &["library"], &[])]);
+        let event = notify::Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::To)))
+            .add_path(PathBuf::from("/lit/paper.bib"));
+
+        let actions = get_event_actions(&registry, &event);
+
+        assert_eq!(actions, vec!["library".to_string()]);
+    }
+
+    #[test]
+    fn settle_not_due_before_window() {
+        let mut settle = SettleBuffer::new(Duration::from_millis(150));
+        let t0 = Instant::now();
+        settle.record(t0, vec!["library".to_string()]);
+
+        assert!(settle.is_pending());
+        assert_eq!(settle.remaining(t0), Duration::from_millis(150));
+        assert!(!settle.due(t0 + Duration::from_millis(149)));
+    }
+
+    #[test]
+    fn settle_due_after_window() {
+        let mut settle = SettleBuffer::new(Duration::from_millis(150));
+        let t0 = Instant::now();
+        settle.record(t0, vec!["library".to_string()]);
+
+        assert!(settle.due(t0 + Duration::from_millis(150)));
+        assert_eq!(
+            settle.remaining(t0 + Duration::from_millis(200)),
+            Duration::ZERO
+        );
+    }
+
+    #[test]
+    fn settle_record_extends_deadline() {
+        let mut settle = SettleBuffer::new(Duration::from_millis(150));
+        let t0 = Instant::now();
+        settle.record(t0, vec!["library".to_string()]);
+        settle.record(t0 + Duration::from_millis(100), vec!["config".to_string()]);
+
+        assert!(!settle.due(t0 + Duration::from_millis(150)));
+        assert!(settle.due(t0 + Duration::from_millis(250)));
+    }
+
+    #[test]
+    fn settle_noop_record_keeps_deadline() {
+        let mut settle = SettleBuffer::new(Duration::from_millis(150));
+        let t0 = Instant::now();
+        settle.record(t0, vec!["library".to_string()]);
+        settle.record(t0 + Duration::from_millis(100), Vec::<String>::new());
+
+        assert!(settle.due(t0 + Duration::from_millis(150)));
+    }
+
+    #[test]
+    fn settle_empty_buffer_is_idle() {
+        let settle = SettleBuffer::new(Duration::from_millis(150));
+        let t0 = Instant::now();
+
+        assert!(!settle.is_pending());
+        assert!(!settle.due(t0));
+        assert_eq!(settle.remaining(t0), Duration::ZERO);
+    }
+
+    #[test]
+    fn settle_drain_returns_sorted_unique() {
+        let mut settle = SettleBuffer::new(Duration::from_millis(150));
+        let t0 = Instant::now();
+        settle.record(t0, vec!["config".to_string(), "library".to_string()]);
+        settle.record(t0 + Duration::from_millis(5), vec!["config".to_string()]);
+
+        assert_eq!(
+            settle.drain(),
+            vec!["config".to_string(), "library".to_string()]
+        );
+        assert!(!settle.is_pending());
+    }
+
+    struct RecordingRunner {
+        ran: RefCell<Vec<String>>,
+    }
+
+    impl ActionRunner for RecordingRunner {
+        fn run(&self, action: &str) {
+            self.ran.borrow_mut().push(action.to_string());
+        }
+    }
+
+    #[test]
+    fn flush_dispatches_due_burst_once() {
+        let mut settle = SettleBuffer::new(Duration::from_millis(150));
+        let runner = RecordingRunner {
+            ran: RefCell::new(Vec::new()),
+        };
+        let t0 = Instant::now();
+        settle.record(t0, vec!["library".to_string(), "config".to_string()]);
+        settle.record(t0 + Duration::from_millis(10), vec!["library".to_string()]);
+
+        flush(&mut settle, &runner, t0 + Duration::from_millis(120));
+        assert!(runner.ran.borrow().is_empty());
+
+        flush(&mut settle, &runner, t0 + Duration::from_millis(160));
+        assert_eq!(
+            *runner.ran.borrow(),
+            vec!["config".to_string(), "library".to_string()]
+        );
+        assert!(!settle.is_pending());
     }
 }
