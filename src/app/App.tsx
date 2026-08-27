@@ -112,7 +112,8 @@ function App() {
     }, []);
 
     const loadLibraryData = useCallback(async () => {
-        const data = await invoke<Library>('load_library');
+        const data = await invoke<Library>('scan_library');
+
         const model = new LibraryModel(data);
         setLib(model);
 
@@ -284,9 +285,9 @@ function App() {
                                 title={selectedMeta?.title ?? ''}
                                 author={selectedMeta?.author ?? ''}
                                 date={selectedMeta?.year ? String(selectedMeta.year) : ''}
-                                collection={selectedPub ? lib!.nameOf(selectedPub.parentDirectoryId) : ''}
+                                collection={selectedPub ? lib!.nameOf(selectedPub.parentDirectoryPath) : ''}
                                 filename={selectedPub ? lib!.nameOf(selectedPub.extensionlessPath) : ''}
-                                bibSource={selectedPub?.bibSource ?? ''}
+                                bibSource={''}
                                 bibEditorFocused={bibEditorFocused}
                                 onBibEditorFocusedChange={setBibEditorFocused}
                             />

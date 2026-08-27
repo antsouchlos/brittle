@@ -303,7 +303,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
-            load_library,
+            scan_library,
             parse_publication,
             load_ui_state,
             save_ui_state,
@@ -371,13 +371,19 @@ struct SerializedUiState {
 // ---------- Commands ----------
 
 #[tauri::command]
-fn load_library(state: State<AppState>) -> Result<library::Library, String> {
+fn scan_library(state: State<AppState>) -> Result<library::Library, String> {
     let config = state.config.read().unwrap();
     let scan_ignore = state.scan_ignore.read().unwrap();
 
-    library::load_library(
+    library::scan_library(
         &PathBuf::from(config.opts.library_path.clone()),
         &scan_ignore,
+        &config
+            .ref_parsers
+            .iter()
+            .map(|parser| parser.file_extension.clone())
+            .collect(),
+        &vec!["pdf".to_string(), "html".to_string()],
     )
     .map_err(|e| e.to_string())
 }
