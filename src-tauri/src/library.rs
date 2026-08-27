@@ -9,16 +9,20 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
 pub enum LoadError {
-    LibraryNotFound,
-    NotADirectory,
+    LibraryNotFound(String),
+    NotADirectory(String),
+    UnableToStripPathPrefix(String),
     Io(std::io::Error),
 }
 
 impl fmt::Display for LoadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LoadError::LibraryNotFound => write!(f, "Library not found"),
-            LoadError::NotADirectory => write!(f, "Path is not a directory"),
+            LoadError::LibraryNotFound(s) => write!(f, "Library not found: {}", s),
+            LoadError::NotADirectory(s) => write!(f, "Path is not a directory: {}", s),
+            LoadError::UnableToStripPathPrefix(s) => {
+                write!(f, "Unable to strip prefix from path: {}", s)
+            }
             LoadError::Io(e) => write!(f, "I/O error: {}", e),
         }
     }
@@ -93,10 +97,14 @@ fn list_and_filter_dir_contents(
 
 pub fn load_library(library_root: &Path, ignore_filter: &Gitignore) -> Result<Library, LoadError> {
     if !library_root.exists() {
-        return Err(LoadError::LibraryNotFound);
+        return Err(LoadError::LibraryNotFound(
+            library_root.to_string_lossy().to_string(),
+        ));
     }
     if !library_root.is_dir() {
-        return Err(LoadError::NotADirectory);
+        return Err(LoadError::NotADirectory(
+            library_root.to_string_lossy().to_string(),
+        ));
     }
 
     let root_name = library_root
@@ -448,7 +456,7 @@ mod tests {
     fn library_not_found() {
         let err = load_library(Path::new("/nonexistent/path"), &empty_gitignore()).unwrap_err();
 
-        assert!(matches!(err, LoadError::LibraryNotFound));
+        assert!(matches!(err, LoadError::LibraryNotFound(_)));
     }
 
     #[test]
@@ -458,7 +466,7 @@ mod tests {
         fs::write(&file_path, b"").unwrap();
         let err = load_library(&file_path, &empty_gitignore()).unwrap_err();
 
-        assert!(matches!(err, LoadError::NotADirectory));
+        assert!(matches!(err, LoadError::NotADirectory(_)));
     }
 
     #[test]

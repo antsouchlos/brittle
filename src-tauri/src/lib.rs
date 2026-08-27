@@ -252,10 +252,14 @@ pub fn run() {
                 let config = config::load_config(app)?;
 
                 if !config.opts.library_path.exists() {
-                    return Err(Box::new(LoadError::LibraryNotFound));
+                    return Err(Box::new(LoadError::LibraryNotFound(
+                        config.opts.library_path.to_string_lossy().to_string(),
+                    )));
                 }
                 if !config.opts.library_path.is_dir() {
-                    return Err(Box::new(LoadError::NotADirectory));
+                    return Err(Box::new(LoadError::NotADirectory(
+                        config.opts.library_path.to_string_lossy().to_string(),
+                    )));
                 }
 
                 let scan_ignore = build_scan_ignore(&config.opts)?;
