@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::path::Path;
@@ -80,8 +80,8 @@ pub struct PublicationEntry {
 pub fn scan_library(
     library_root: &Path,
     ignore_filter: &Gitignore,
-    valid_bib_extensions: &Vec<String>,
-    valid_content_extensions: &Vec<String>,
+    valid_bib_extensions: &[String],
+    valid_content_extensions: &[String],
 ) -> Result<Library, LoadError> {
     if !library_root.exists() {
         return Err(LoadError::LibraryNotFound(
@@ -168,6 +168,12 @@ struct FoundFileObject {
     file_type: fs::FileType,
 }
 
+struct ClassifiedFile {
+    stem: String,
+    extension: String,
+    pub_path: String,
+}
+
 /// This is called recursively for every directory in the library
 // TODO: Properly deal with symlinks
 fn populate_library_from_directory(
@@ -176,76 +182,91 @@ fn populate_library_from_directory(
     directories: &mut HashMap<String, DirectoryEntry>,
     publications: &mut HashMap<String, PublicationEntry>,
     ignore_filter: &Gitignore,
-    valid_bib_extensions: &Vec<String>,
-    valid_content_extensions: &Vec<String>,
+    valid_bib_extensions: &[String],
+    valid_content_extensions: &[String],
 ) -> Result<(), LoadError> {
     let dir_path_with_lib = library_root
         .parent()
         .unwrap_or(Path::new(""))
         .join(dir_path);
 
+    let entries = list_and_filter_dir_contents(&dir_path_with_lib, library_root, ignore_filter)?;
+
     let mut child_directory_paths: Vec<String> = vec![];
     let mut publication_paths: Vec<String> = vec![];
 
-    for file in list_and_filter_dir_contents(&dir_path_with_lib, library_root, ignore_filter)? {
-        let file_name = file.name;
-        let file_path = file.path;
-        let file_type = file.file_type;
+    // First pass: recurse into subdirectories
 
-        if file_type.is_dir() {
-            let subdir_path = Path::new(dir_path)
-                .join(file_name)
-                .to_string_lossy()
-                .to_string();
-            child_directory_paths.push(subdir_path.clone());
-
-            populate_library_from_directory(
-                &subdir_path,
-                library_root,
-                directories,
-                publications,
-                ignore_filter,
-                valid_bib_extensions,
-                valid_content_extensions,
-            )?;
-
+    for entry in &entries {
+        if !entry.file_type.is_dir() {
             continue;
         }
 
-        if file_type.is_symlink() {
+        let subdir_path = Path::new(dir_path)
+            .join(&entry.name)
+            .to_string_lossy()
+            .to_string();
+        child_directory_paths.push(subdir_path.clone());
+
+        populate_library_from_directory(
+            &subdir_path,
+            library_root,
+            directories,
+            publications,
+            ignore_filter,
+            valid_bib_extensions,
+            valid_content_extensions,
+        )?;
+    }
+
+    // Second pass: classify the files
+
+    let mut bib_files: Vec<ClassifiedFile> = Vec::new();
+    let mut content_files: Vec<ClassifiedFile> = Vec::new();
+
+    for entry in &entries {
+        if entry.file_type.is_dir() {
+            continue;
+        }
+        if entry.file_type.is_symlink() {
             log::warn!(
                 "Symlinks are not supported at this time. Skipping: {:?}",
-                file_path
+                entry.path
             );
             continue;
         }
 
-        // `is_dir()`, `is_symlink()` and `is_file()` are mutually exclusive.
-        // At this point we know we are dealing with a file
-        if let Some((stem, extension)) = get_stem_and_extension(&file_path) {
+        if let Some((stem, extension)) = get_stem_and_extension(&entry.path) {
             let pub_path = Path::new(dir_path)
                 .join(stem.as_str())
                 .to_string_lossy()
                 .to_string();
 
             if valid_bib_extensions.contains(&extension) {
-                publications.insert(
-                    pub_path.clone(),
-                    PublicationEntry {
-                        extensionless_path: pub_path.clone(),
-                        available_content_file_extensions: vec![],
-                        parent_directory_path: dir_path.to_string(),
-                    },
-                );
-
-                publication_paths.push(pub_path);
+                bib_files.push(ClassifiedFile {
+                    stem,
+                    extension,
+                    pub_path,
+                });
             } else if valid_content_extensions.contains(&extension) {
-                if let Some(p) = &mut publications.get_mut(&pub_path) {
-                    p.available_content_file_extensions.push(extension);
-                }
+                content_files.push(ClassifiedFile {
+                    stem,
+                    extension,
+                    pub_path,
+                });
             }
         }
     }
+
+    // Populate library
+
+    build_publications(
+        &bib_files,
+        &content_files,
+        dir_path,
+        publications,
+        &mut publication_paths,
+    );
 
     directories.insert(
         dir_path.to_string(),
@@ -257,6 +278,66 @@ fn populate_library_from_directory(
     );
 
     Ok(())
+}
+
+fn find_duplicate_bib_stems<'a>(bib_files: &'a [ClassifiedFile], dir_path: &str) -> HashSet<&'a str> {
+    let mut bib_stem_counts: HashMap<&str, usize> = HashMap::new();
+    for f in bib_files {
+        *bib_stem_counts.entry(f.stem.as_str()).or_insert(0) += 1;
+    }
+
+    let conflicted: HashSet<&str> = bib_stem_counts
+        .iter()
+        .filter(|(_, count)| **count > 1)
+        .map(|(stem, _)| *stem)
+        .collect();
+    for stem in &conflicted {
+        log::warn!(
+            "Multiple bib files share stem '{}' in '{}'; ignoring all files with this stem",
+            stem,
+            dir_path
+        );
+    }
+
+    conflicted
+}
+
+fn build_publications(
+    bib_files: &[ClassifiedFile],
+    content_files: &[ClassifiedFile],
+    dir_path: &str,
+    publications: &mut HashMap<String, PublicationEntry>,
+    publication_paths: &mut Vec<String>,
+) {
+    let conflicted_stems = find_duplicate_bib_stems(bib_files, dir_path);
+
+    for f in bib_files {
+        if conflicted_stems.contains(f.stem.as_str()) {
+            continue;
+        }
+
+        publications.insert(
+            f.pub_path.clone(),
+            PublicationEntry {
+                extensionless_path: f.pub_path.clone(),
+                available_content_file_extensions: vec![],
+                parent_directory_path: dir_path.to_string(),
+            },
+        );
+
+        publication_paths.push(f.pub_path.clone());
+    }
+
+    for f in content_files {
+        if conflicted_stems.contains(f.stem.as_str()) {
+            continue;
+        }
+
+        if let Some(p) = &mut publications.get_mut(&f.pub_path) {
+            p.available_content_file_extensions
+                .push(f.extension.clone());
+        }
+    }
 }
 
 fn list_and_filter_dir_contents(

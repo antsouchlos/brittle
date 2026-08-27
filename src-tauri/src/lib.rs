@@ -382,7 +382,7 @@ fn scan_library(state: State<AppState>) -> Result<library::Library, String> {
             .ref_parsers
             .iter()
             .map(|parser| parser.file_extension.clone())
-            .collect(),
+            .collect::<Vec<String>>(),
         &vec!["pdf".to_string(), "html".to_string()],
     )
     .map_err(|e| e.to_string())
