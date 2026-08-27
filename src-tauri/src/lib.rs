@@ -44,7 +44,9 @@ fn find_webview_descendant(container: &gtk::Container) -> Option<gtk::Widget> {
 #[derive(Debug)]
 enum Error {
     WebViewError,
+    #[allow(unused)] // TODO: Properly deal with this warning
     Lua(mlua::Error),
+    #[allow(unused)] // TODO: Properly deal with this warning
     Io(std::io::Error),
 }
 
@@ -160,6 +162,7 @@ fn build_scan_ignore(opts: &Opts) -> Result<Gitignore, LoadError> {
             log::warn!("Malformed ignore pattern {:?}: {}", pattern, e);
         }
     }
+
     builder
         .build()
         .map_err(|e| LoadError::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e)))
