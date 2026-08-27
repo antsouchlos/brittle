@@ -22,7 +22,8 @@ const CONTROL_POLL: Duration = Duration::from_millis(100);
 #[derive(Clone)]
 pub struct WatchEntry {
     pub path: PathBuf,
-    pub actions: Vec<String>,
+    /// Actions that are triggered upon noticing a modification
+    pub actions: Vec<String>, 
     pub gitignore: Option<Gitignore>,
 }
 
