@@ -9,7 +9,7 @@ export interface DirectoryEntry {
 
 export interface PublicationEntry {
     extensionlessPath: string;
-    available_content_file_extensions: string[],
+    availableContentFileExtensions: string[],
     parentDirectoryPath: string;
 }
 

@@ -214,8 +214,9 @@ function App() {
                 author: pubMetadata[id].author,
                 publisher: pubMetadata[id].publisher,
                 date: String(pubMetadata[id].year),
+                contentFiles: lib!.publications[id].availableContentFileExtensions,
             }));
-    }, [visiblePubIds, pubMetadata]);
+    }, [visiblePubIds, pubMetadata, lib]);
 
     const selectedMeta = selectedPublicationId ? pubMetadata[selectedPublicationId] ?? null : null;
     const selectedPub = selectedPublicationId && lib

@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Fzf, extendedMatch } from 'fzf';
+import { FaFilePdf } from 'react-icons/fa';
+import { Globe } from 'lucide-react';
 import styles from './PublicationList.module.css';
 
 interface Publication {
@@ -8,6 +10,7 @@ interface Publication {
     author: string;
     publisher: string;
     date: string;
+    contentFiles: string[];
 }
 
 interface PublicationListProps {
@@ -80,6 +83,22 @@ function HighlightedText({ text, matchPositions }: { text: string; matchPosition
         part.matched
             ? <span key={i} className={styles.highlight}>{part.text}</span>
             : part.text,
+    );
+}
+
+function ContentIndicators({ contentFiles }: { contentFiles: string[] }) {
+    const hasPdf = contentFiles.includes('pdf');
+    const hasHtml = contentFiles.includes('html');
+    const formats = [
+        hasPdf ? 'PDF' : null,
+        hasHtml ? 'HTML' : null,
+    ].filter(Boolean).join(', ');
+
+    return (
+        <span className={styles.contentIndicators} aria-label={`Available as ${formats}`}>
+            {hasPdf && <FaFilePdf className={styles.pdfBadge} aria-hidden="true" />}
+            {hasHtml && <Globe aria-hidden="true" />}
+        </span>
     );
 }
 
@@ -293,6 +312,7 @@ function PublicationList({
                                     <HighlightedText text={pub.publisher} matchPositions={publisherPositions} />
                                 </span>
                                 <span className={styles.dateBadge}>
+                                    <ContentIndicators contentFiles={pub.contentFiles} />
                                     <HighlightedText text={pub.date} matchPositions={datePositions} />
                                 </span>
                             </div>

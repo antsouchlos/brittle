@@ -54,7 +54,28 @@
 }
 
 .dateBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     color: var(--accent4);
+}
+
+.contentIndicators {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transform: translateY(-0.3em);
+}
+
+.contentIndicators svg {
+    display: block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+}
+
+.pdfBadge {
+    color: #d1352e;
 }
 
 .cardTitle {
