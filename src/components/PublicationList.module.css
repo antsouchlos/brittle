@@ -64,6 +64,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    margin-left: 0.5em;
     transform: translateY(-0.3em);
 }
 
