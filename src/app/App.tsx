@@ -38,8 +38,10 @@ enum Action {
 }
 
 const keymap: Array<[string, Action]> = [
-    ["j", Action.SelectNextCollection],
-    ["k", Action.SelectPrevCollection],
+    ["Tab", Action.SelectNextCollection],
+    ["Shift+Tab", Action.SelectPrevCollection],
+    ["j", Action.SelectNextPublication],
+    ["k", Action.SelectPrevPublication],
     ["Ctrl+n", Action.SelectNextPublication],
     ["Ctrl+p", Action.SelectPrevPublication],
     ["gt", Action.NextTab],

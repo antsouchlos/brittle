@@ -11,12 +11,14 @@ export function normalizeKeyEvent(event: KeyboardEvent): string | null {
         return null;
     }
 
-    if (event.ctrlKey && event.key.length === 1) {
-        return 'Ctrl+' + event.key.toLowerCase();
+    // Some WebKit builds report key='Unidentified' for Shift+Tab, so key off
+    // the physical code instead.
+    if (event.key === 'Tab' || event.code === 'Tab') {
+        return event.shiftKey ? 'Shift+Tab' : 'Tab';
     }
 
-    if (event.shiftKey && event.key.length === 1) {
-        return event.key.toUpperCase();
+    if (event.ctrlKey && event.key.length === 1) {
+        return 'Ctrl+' + event.key;
     }
 
     return event.key;
