@@ -214,6 +214,7 @@ function App() {
                 author: pubMetadata[id].author,
                 publisher: pubMetadata[id].publisher,
                 date: String(pubMetadata[id].year),
+                filename: lib!.nameOf(id),
                 contentFiles: lib!.publications[id].availableContentFileExtensions,
             }));
     }, [visiblePubIds, pubMetadata, lib]);

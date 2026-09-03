@@ -10,6 +10,7 @@ interface Publication {
     author: string;
     publisher: string;
     date: string;
+    filename: string;
     contentFiles: string[];
 }
 
@@ -323,7 +324,7 @@ function PublicationList({
                                 <span className={styles.author}>
                                     <HighlightedText text={pub.author} matchPositions={authorPositions} />
                                 </span>
-                                <span className={styles.filenameBadge}>{pub.id.split('/').pop()}</span>
+                                <span className={styles.filenameBadge}>{pub.filename}</span>
                             </div>
                         </div>
                     ))}
