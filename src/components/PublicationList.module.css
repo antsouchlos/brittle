@@ -47,6 +47,13 @@
     line-height: 1.1;
 }
 
+.cardBottomRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    line-height: 1.1;
+}
+
 .publisher {
     color: var(--accent3);
     text-transform: uppercase;
@@ -88,6 +95,12 @@
     color: var(--accent1);
     line-height: 1.1;
     font-size: 0.85rem;
+}
+
+.filenameBadge {
+    color: var(--fg3);
+    font-size: 0.85rem;
+    margin-left: 1.5em;
 }
 
 .fuzzyBar {

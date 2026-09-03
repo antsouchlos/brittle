@@ -319,9 +319,12 @@ function PublicationList({
                             <span className={styles.cardTitle}>
                                 <HighlightedText text={pub.title} matchPositions={titlePositions} />
                             </span>
-                            <span className={styles.author}>
-                                <HighlightedText text={pub.author} matchPositions={authorPositions} />
-                            </span>
+                            <div className={styles.cardBottomRow}>
+                                <span className={styles.author}>
+                                    <HighlightedText text={pub.author} matchPositions={authorPositions} />
+                                </span>
+                                <span className={styles.filenameBadge}>{pub.id.split('/').pop()}</span>
+                            </div>
                         </div>
                     ))}
                 </div>
