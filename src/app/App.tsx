@@ -68,7 +68,6 @@ function App() {
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>([]);
     const [selectedPublicationId, setSelectedPublicationId] = useState<string | null>(null);
-    const [bibTextAreaFocused, setBibTextAreaFocused] = useState(false);
 
     const [lib, setLib] = useState<LibraryModel | null>(null);
     const [pubMetadata, setPubMetadata] = useState<Record<string, Metadata>>({});
@@ -283,10 +282,6 @@ function App() {
                                 collection={selectedPub ? lib!.nameOf(selectedPub.parentDirectoryId) : ''}
                                 filename={selectedPub ? lib!.nameOf(selectedPub.extensionlessPath) : ''}
                                 bibSource={selectedPub?.bibSource ?? ''}
-                                bibTextAreaFocused={bibTextAreaFocused}
-                                setBibTextAreaFocused={(val: boolean) => {
-                                    setBibTextAreaFocused(val);
-                                }}
                             />
                         </div>
                     )}

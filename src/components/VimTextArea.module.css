@@ -11,7 +11,7 @@
     background: var(--bg1);
 }
 
-.editor[data-focused='true'] :global(.cm-editor) {
+.editor :global(.cm-editor.cm-focused) {
     outline: none;
     border: 1px solid var(--accent1);
 }
@@ -35,7 +35,7 @@
     color: var(--bg1) !important;
 }
 
-.editor:not([data-focused='true']) :global(.cm-fat-cursor) {
+.editor :global(.cm-editor:not(.cm-focused)) :global(.cm-fat-cursor) {
     display: none;
 }
 
