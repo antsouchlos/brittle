@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Fzf, extendedMatch } from 'fzf';
 import styles from './PublicationList.module.css';
 
@@ -114,12 +114,16 @@ function useFuzzyInputFocus(
 function useScrollToSelected(
     containerRef: RefObject<HTMLDivElement | null>,
     selectedId: string,
+    displayedPublications: Publication[],
 ) {
-    useEffect(() => {
+    // The displayed list is a dependency on purpose: switching the selected
+    // collection can change the list while leaving the selection id untouched,
+    // and an unchanged id alone would never re-scroll the selection into view.
+    useLayoutEffect(() => {
         containerRef.current
             ?.querySelector<HTMLElement>('[data-selected="true"]')
             ?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-    }, [selectedId]);
+    }, [selectedId, displayedPublications]);
 }
 
 function useFuzzySearch(
@@ -229,7 +233,7 @@ function PublicationList({
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
 
-    useScrollToSelected(listRef, selectedPublicationId);
+    useScrollToSelected(listRef, selectedPublicationId, publications);
 
     const { query, setQuery, displayItems, effectiveIdx, navigate, selectByClick } =
         useFuzzySearch(
