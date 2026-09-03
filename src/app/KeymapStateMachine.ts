@@ -4,11 +4,21 @@ export function normalizeKeyEvent(event: KeyboardEvent): string | null {
     if (MODIFIER_KEYS.has(event.key)) {
         return null;
     }
-    
+
+    // Ignore alt/meta combinations so they can't trigger bare-key bindings
+    // (e.g. Alt+j must not move the tree).
+    if (event.altKey || event.metaKey) {
+        return null;
+    }
+
+    if (event.ctrlKey && event.key.length === 1) {
+        return 'Ctrl+' + event.key.toLowerCase();
+    }
+
     if (event.shiftKey && event.key.length === 1) {
         return event.key.toUpperCase();
     }
-    
+
     return event.key;
 }
 

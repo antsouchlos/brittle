@@ -38,7 +38,3 @@
     box-sizing: border-box;
     background: var(--bg0);
 }
-
-.panelContainer[data-selected="true"] {
-    border-top: 2px solid var(--accent1);
-}
