@@ -56,6 +56,8 @@ function splitMatchPositionsByField(
     titleLen: number,
     authorLen: number,
     publisherLen: number,
+    dateLen: number,
+    filenameLen: number,
 ) {
     const titlePositions = new Set(
         Array.from(matchPositions).filter(p => p < titleLen),
@@ -70,13 +72,20 @@ function splitMatchPositionsByField(
             .filter(p => p >= titleLen + authorLen && p < titleLen + authorLen + publisherLen)
             .map(p => p - titleLen - authorLen),
     );
+    const dateStart = titleLen + authorLen + publisherLen;
+    const dateEnd = dateStart + dateLen;
     const datePositions = new Set(
         Array.from(matchPositions)
-            .filter(p => p >= titleLen + authorLen + publisherLen)
-            .map(p => p - titleLen - authorLen - publisherLen),
+            .filter(p => p >= dateStart && p < dateEnd)
+            .map(p => p - dateStart),
+    );
+    const filenamePositions = new Set(
+        Array.from(matchPositions)
+            .filter(p => p >= dateEnd && p < dateEnd + filenameLen)
+            .map(p => p - dateEnd),
     );
 
-    return { titlePositions, authorPositions, publisherPositions, datePositions };
+    return { titlePositions, authorPositions, publisherPositions, datePositions, filenamePositions };
 }
 
 function HighlightedText({ text, matchPositions }: { text: string; matchPositions: Set<number> }) {
@@ -160,7 +169,7 @@ function useFuzzySearch(
 
     const fzf = useMemo(
         () => new Fzf(publications, {
-            selector: (pub: Publication) => pub.title + pub.author + pub.publisher + pub.date,
+            selector: (pub: Publication) => pub.title + pub.author + pub.publisher + pub.date + pub.filename,
             match: extendedMatch,
         }),
         [publications],
@@ -173,10 +182,11 @@ function useFuzzySearch(
             authorPositions: new Set<number>(),
             publisherPositions: new Set<number>(),
             datePositions: new Set<number>(),
+            filenamePositions: new Set<number>(),
         }))
         : fzf.find(query).map(r => ({
             pub: r.item,
-            ...splitMatchPositionsByField(r.positions, r.item.title.length, r.item.author.length, r.item.publisher.length),
+            ...splitMatchPositionsByField(r.positions, r.item.title.length, r.item.author.length, r.item.publisher.length, r.item.date.length, r.item.filename.length),
         }));
 
     const effectiveIdx = fuzzyFindVisible && displayItems.length > 0
@@ -297,7 +307,7 @@ function PublicationList({
             )}
             <div className={styles.listContainer} ref={listRef}>
                 <div className={styles.list}>
-                    {displayItems.map(({ pub, titlePositions, authorPositions, publisherPositions: publisherPositions, datePositions }, idx) => (
+                    {displayItems.map(({ pub, titlePositions, authorPositions, publisherPositions: publisherPositions, datePositions, filenamePositions }, idx) => (
                         <div
                             key={pub.id}
                             className={styles.card}
@@ -324,7 +334,9 @@ function PublicationList({
                                 <span className={styles.author}>
                                     <HighlightedText text={pub.author} matchPositions={authorPositions} />
                                 </span>
-                                <span className={styles.filenameBadge}>{pub.filename}</span>
+                                <span className={styles.filenameBadge}>
+                                    <HighlightedText text={pub.filename} matchPositions={filenamePositions} />
+                                </span>
                             </div>
                         </div>
                     ))}
