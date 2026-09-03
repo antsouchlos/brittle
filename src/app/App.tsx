@@ -35,6 +35,7 @@ enum Action {
     OpenSelectedPublication,
     OpenCmdLine,
     OpenFuzzyFind,
+    FocusBibEditor,
 }
 
 const keymap: Array<[string, Action]> = [
@@ -47,6 +48,7 @@ const keymap: Array<[string, Action]> = [
     ["gt", Action.NextTab],
     ["gT", Action.PrevTab],
     ["Enter", Action.OpenSelectedPublication],
+    ["b", Action.FocusBibEditor],
     [":", Action.OpenCmdLine],
     [" ff", Action.OpenFuzzyFind],
 ];
@@ -70,6 +72,7 @@ function App() {
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>([]);
     const [selectedPublicationId, setSelectedPublicationId] = useState<string | null>(null);
+    const [bibEditorFocused, setBibEditorFocused] = useState(false);
 
     const [lib, setLib] = useState<LibraryModel | null>(null);
     const [pubMetadata, setPubMetadata] = useState<Record<string, Metadata>>({});
@@ -284,6 +287,8 @@ function App() {
                                 collection={selectedPub ? lib!.nameOf(selectedPub.parentDirectoryId) : ''}
                                 filename={selectedPub ? lib!.nameOf(selectedPub.extensionlessPath) : ''}
                                 bibSource={selectedPub?.bibSource ?? ''}
+                                bibEditorFocused={bibEditorFocused}
+                                onBibEditorFocusedChange={setBibEditorFocused}
                             />
                         </div>
                     )}
@@ -385,7 +390,11 @@ function App() {
                 stateMachine.current.abort();
                 setCmdLineVisible(true);
             } else if (action == Action.OpenFuzzyFind) {
+                if (selectedTabId !== 'Lib') return;
                 setFuzzyFindVisible(true);
+            } else if (action == Action.FocusBibEditor) {
+                if (selectedTabId !== 'Lib') return;
+                setBibEditorFocused(true);
             }
         };
 

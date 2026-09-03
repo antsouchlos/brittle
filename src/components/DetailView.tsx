@@ -10,10 +10,13 @@ interface DetailViewProps {
     collection: string,
     filename: string,
     bibSource: string,
+    bibEditorFocused: boolean,
+    onBibEditorFocusedChange: (value: boolean) => void,
 }
 
 function DetailView(
-    { publisher, title, author, date, collection, filename, bibSource }: DetailViewProps
+    { publisher, title, author, date, collection, filename, bibSource, bibEditorFocused,
+        onBibEditorFocusedChange }: DetailViewProps
 ) {
     const [bibContent, setBibContent] = useState('');
 
@@ -43,6 +46,8 @@ function DetailView(
             <VimTextArea
                 value={bibContent}
                 onChange={setBibContent}
+                focused={bibEditorFocused}
+                onFocusedChange={onBibEditorFocusedChange}
             />
         </div>
     );
