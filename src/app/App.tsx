@@ -49,6 +49,19 @@ const keymap: Array<[string, Action]> = [
     [" ff", Action.OpenFuzzyFind],
 ];
 
+// Selects the first visible publication whenever the current selection is no
+// longer part of the collection shown in the publication list.
+function useNewPublicationSelectOnHidden(
+    selectedPublicationId: string | null,
+    visiblePubIds: string[],
+    onSelectPublication: (id: string | null) => void,
+) {
+    useEffect(() => {
+        if (selectedPublicationId && visiblePubIds.includes(selectedPublicationId)) return;
+        onSelectPublication(visiblePubIds[0] ?? null);
+    }, [selectedPublicationId, visiblePubIds, onSelectPublication]);
+}
+
 function App() {
     const [panel1Width, setPanel1Width] = useState(0.25);
     const [panel2Width, setPanel2Width] = useState(0.4);
@@ -181,6 +194,12 @@ function App() {
         if (!lib || !selectedNodeId) return [];
         return lib.collectPubIds(selectedNodeId);
     }, [lib, selectedNodeId]);
+
+    useNewPublicationSelectOnHidden(
+        selectedPublicationId,
+        visiblePubIds,
+        setSelectedPublicationId,
+    );
 
     const publicationListItems = useMemo(() => {
         return visiblePubIds
