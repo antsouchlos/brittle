@@ -20,36 +20,34 @@ import {
 
 import styles from './VimTextArea.module.css';
 
-// This hook is responsible for syncing the external focus state managed by
-// the caller with the internal one managed by the `CodeMirror` component
+// This hook mirrors a caller-owned `focused` state with CodeMirror's own
+// focus state
 function useCodeMirrorFocusSync(
     editorRef: React.RefObject<ReactCodeMirrorRef | null>,
-    isFocused: boolean,
-    setFocused: (value: boolean) => void
+    focused: boolean,
+    onFocusedChange: (value: boolean) => void,
 ): Extension[] {
-    // Sync external isFocused state to CodeMirror's internal focus state
     useEffect(() => {
         if (editorRef.current?.view) {
-            if (isFocused) {
+            if (focused) {
                 editorRef.current.view?.contentDOM.focus();
             } else {
                 editorRef.current.view?.contentDOM.blur();
             }
         }
-    }, [isFocused, editorRef]);
+    }, [focused, editorRef]);
 
-    // Return extensions that sync internal focus state back to parent
     return [
         EditorView.domEventHandlers({
             focus(_event, _view) {
-                setFocused(true);
+                onFocusedChange(true);
             },
             blur(_event, view) {
                 // Use requestAnimationFrame to avoid race conditions
                 requestAnimationFrame(() => {
                     // Check if focus moved outside the editor
                     if (!view.contentDOM.contains(document.activeElement)) {
-                        setFocused(false);
+                        onFocusedChange(false);
                     }
                 });
             },
@@ -107,23 +105,17 @@ const minimumFunctionalKeymap: readonly KeyBinding[] = ([
 interface VimTextAreaProps {
     value: string;
     onChange: (value: string) => void;
-    isFocused: boolean;
-    setFocused: (value: boolean) => void;
-
+    focused: boolean;
+    onFocusedChange: (value: boolean) => void;
 }
 
-// This component is based on a CodeMirror, which manages its own focus state
-// internally. To allow use of this component as though the focus state is
-// managed by the caller, the external focus state is set up to mirror the 
-// internal one.
-//
 // TODO: Only focus textarea if the actual textarea is clicked, not the area
 // below it
 // TODO: Make vim mode configurable
 // TODO: Make history work as expected
-export default function VimTextArea({ value, onChange, isFocused, setFocused }: VimTextAreaProps) {
+export default function VimTextArea({ value, onChange, focused, onFocusedChange }: VimTextAreaProps) {
     const editorRef = useRef<ReactCodeMirrorRef>(null);
-    const focusSyncExtensions = useCodeMirrorFocusSync(editorRef, isFocused, setFocused);
+    const focusSyncExtensions = useCodeMirrorFocusSync(editorRef, focused, onFocusedChange);
 
     const extensions = [
         history(),
@@ -161,7 +153,7 @@ export default function VimTextArea({ value, onChange, isFocused, setFocused }: 
                         const vimState = (cm as any).state?.vim;
                         // Check if in normal mode (not insert mode AND not visual mode)
                         if (vimState && !vimState.insertMode && !vimState.visualMode) {
-                            setFocused(false);
+                            onFocusedChange(false);
                             return true;
                         }
                     }
@@ -181,7 +173,6 @@ export default function VimTextArea({ value, onChange, isFocused, setFocused }: 
             basicSetup={false}
             className={styles.editor}
             extensions={extensions}
-            data-focused={isFocused ? 'true' : 'false'}
         />
     );
 }

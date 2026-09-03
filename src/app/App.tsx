@@ -26,25 +26,29 @@ import { ToastProvider, ToastContainer } from '../components/Toast';
 // const pdfStyle = { width: '100%', height: '100%' };
 
 enum Action {
-    MoveLeft,
-    MoveRight,
-    MoveUp,
-    MoveDown,
+    SelectNextCollection,
+    SelectPrevCollection,
+    SelectNextPublication,
+    SelectPrevPublication,
     NextTab,
     PrevTab,
-    Submit,
+    OpenSelectedPublication,
     OpenCmdLine,
     OpenFuzzyFind,
+    FocusBibEditor,
 }
 
 const keymap: Array<[string, Action]> = [
-    ["h", Action.MoveLeft],
-    ["l", Action.MoveRight],
-    ["k", Action.MoveUp],
-    ["j", Action.MoveDown],
+    ["Tab", Action.SelectNextCollection],
+    ["Shift+Tab", Action.SelectPrevCollection],
+    ["j", Action.SelectNextPublication],
+    ["k", Action.SelectPrevPublication],
+    ["Ctrl+n", Action.SelectNextPublication],
+    ["Ctrl+p", Action.SelectPrevPublication],
     ["gt", Action.NextTab],
     ["gT", Action.PrevTab],
-    ["Enter", Action.Submit],
+    ["Enter", Action.OpenSelectedPublication],
+    ["b", Action.FocusBibEditor],
     [":", Action.OpenCmdLine],
     [" ff", Action.OpenFuzzyFind],
 ];
@@ -68,8 +72,7 @@ function App() {
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>([]);
     const [selectedPublicationId, setSelectedPublicationId] = useState<string | null>(null);
-    const [focusedPanelIdx, setFocusedPanelIdx] = useState(0);
-    const [bibTextAreaFocused, setBibTextAreaFocused] = useState(false);
+    const [bibEditorFocused, setBibEditorFocused] = useState(false);
 
     const [lib, setLib] = useState<LibraryModel | null>(null);
     const [pubMetadata, setPubMetadata] = useState<Record<string, Metadata>>({});
@@ -229,9 +232,7 @@ function App() {
                             width: panel1Width,
                             setWidth: setPanel1Width,
                             renderContent: () => (
-                                <div className={styles.panelContainer}
-                                    data-selected={focusedPanelIdx == 0}
-                                >
+                                <div className={styles.panelContainer}>
                                     {treeRoot && selectedNodeId && (
                                         <TreeView
                                             root={treeRoot}
@@ -245,7 +246,6 @@ function App() {
                                                 ));
                                             }}
                                             onSelectNode={(id) => {
-                                                setFocusedPanelIdx(0);
                                                 setSelectedNodeId(id);
                                             }}
                                         />
@@ -259,17 +259,15 @@ function App() {
                             renderContent: () => (
                                 <div
                                     className={styles.panelContainer}
-                                    data-selected={focusedPanelIdx == 1}
                                 >
                                     <PublicationList
                                         publications={publicationListItems}
                                         selectedPublicationId={selectedPublicationId ?? ''}
                                         onSelectPublication={(id) => {
-                                            setFocusedPanelIdx(1);
                                             setSelectedPublicationId(id)
                                         }}
                                         fuzzyFindVisible={fuzzyFindVisible}
-                                        isActive={focusedPanelIdx === 1 && selectedTabId === 'Lib'}
+                                        isActive={selectedTabId === 'Lib'}
                                         onCloseFuzzyFind={() => setFuzzyFindVisible(false)}
                                         onSubmit={handlePublicationSubmit}
                                     />
@@ -280,7 +278,6 @@ function App() {
                     renderLastPanelContent={() => (
                         <div
                             className={styles.panelContainer}
-                            data-selected={focusedPanelIdx == 2}
                         >
                             <DetailView
                                 publisher={selectedMeta?.publisher ?? ''}
@@ -290,13 +287,8 @@ function App() {
                                 collection={selectedPub ? lib!.nameOf(selectedPub.parentDirectoryId) : ''}
                                 filename={selectedPub ? lib!.nameOf(selectedPub.extensionlessPath) : ''}
                                 bibSource={selectedPub?.bibSource ?? ''}
-                                bibTextAreaFocused={bibTextAreaFocused}
-                                setBibTextAreaFocused={(val: boolean) => {
-                                    setBibTextAreaFocused(val);
-                                    if (val) {
-                                        setFocusedPanelIdx(2);
-                                    }
-                                }}
+                                bibEditorFocused={bibEditorFocused}
+                                onBibEditorFocusedChange={setBibEditorFocused}
                             />
                         </div>
                     )}
@@ -353,40 +345,34 @@ function App() {
 
             let action: Action | null = stateMachine.current.feed(normalized_key);
 
-            if (action == Action.MoveDown) {
-                if (focusedPanelIdx == 0) {
-                    if (!lib) return;
-                    const visibleIds = lib.visibleNodeIds(lib.rootId, expandedNodeIds);
-                    if (visibleIds.length === 0 || !selectedNodeId) return;
-                    const currentIdx = visibleIds.indexOf(selectedNodeId);
-                    const nextIdx = (currentIdx + 1) % visibleIds.length;
-                    setSelectedNodeId(visibleIds[nextIdx]);
-                } else if (focusedPanelIdx == 1) {
-                    if (publicationListItems.length === 0) return;
-                    const currentIdx = publicationListItems.findIndex(p => p.id === selectedPublicationId);
-                    const startIdx = currentIdx < 0 ? 0 : currentIdx;
-                    const nextIdx = (startIdx + 1) % publicationListItems.length;
-                    setSelectedPublicationId(publicationListItems[nextIdx].id);
-                }
-            } else if (action == Action.MoveUp) {
-                if (focusedPanelIdx == 0) {
-                    if (!lib) return;
-                    const visibleIds = lib.visibleNodeIds(lib.rootId, expandedNodeIds);
-                    if (visibleIds.length === 0 || !selectedNodeId) return;
-                    const currentIdx = visibleIds.indexOf(selectedNodeId);
-                    const prevIdx = (currentIdx - 1 + visibleIds.length) % visibleIds.length;
-                    setSelectedNodeId(visibleIds[prevIdx]);
-                } else if (focusedPanelIdx == 1) {
-                    if (publicationListItems.length === 0) return;
-                    const currentIdx = publicationListItems.findIndex(p => p.id === selectedPublicationId);
-                    const startIdx = currentIdx < 0 ? 0 : currentIdx;
-                    const prevIdx = (startIdx - 1 + publicationListItems.length) % publicationListItems.length;
-                    setSelectedPublicationId(publicationListItems[prevIdx].id);
-                }
-            } else if (action == Action.MoveLeft) {
-                setFocusedPanelIdx((focusedPanelIdx + 3 - 1) % 3)
-            } else if (action == Action.MoveRight) {
-                setFocusedPanelIdx((focusedPanelIdx + 1) % 3)
+            if (action == Action.SelectNextCollection) {
+                if (selectedTabId !== 'Lib' || !lib) return;
+                const visibleIds = lib.visibleNodeIds(lib.rootId, expandedNodeIds);
+                if (visibleIds.length === 0 || !selectedNodeId) return;
+                const currentIdx = visibleIds.indexOf(selectedNodeId);
+                const nextIdx = (currentIdx + 1) % visibleIds.length;
+                setSelectedNodeId(visibleIds[nextIdx]);
+            } else if (action == Action.SelectPrevCollection) {
+                if (selectedTabId !== 'Lib' || !lib) return;
+                const visibleIds = lib.visibleNodeIds(lib.rootId, expandedNodeIds);
+                if (visibleIds.length === 0 || !selectedNodeId) return;
+                const currentIdx = visibleIds.indexOf(selectedNodeId);
+                const prevIdx = (currentIdx - 1 + visibleIds.length) % visibleIds.length;
+                setSelectedNodeId(visibleIds[prevIdx]);
+            } else if (action == Action.SelectNextPublication) {
+                if (selectedTabId !== 'Lib') return;
+                if (publicationListItems.length === 0) return;
+                const currentIdx = publicationListItems.findIndex(p => p.id === selectedPublicationId);
+                const startIdx = currentIdx < 0 ? 0 : currentIdx;
+                const nextIdx = (startIdx + 1) % publicationListItems.length;
+                setSelectedPublicationId(publicationListItems[nextIdx].id);
+            } else if (action == Action.SelectPrevPublication) {
+                if (selectedTabId !== 'Lib') return;
+                if (publicationListItems.length === 0) return;
+                const currentIdx = publicationListItems.findIndex(p => p.id === selectedPublicationId);
+                const startIdx = currentIdx < 0 ? 0 : currentIdx;
+                const prevIdx = (startIdx - 1 + publicationListItems.length) % publicationListItems.length;
+                setSelectedPublicationId(publicationListItems[prevIdx].id);
             } else if (action == Action.NextTab) {
                 const allTabIds = [...fixedTabs.map(t => t.id), ...variableTabs.map(t => t.id)];
                 const currentIdx = allTabIds.indexOf(selectedTabId);
@@ -397,35 +383,24 @@ function App() {
                 const currentIdx = allTabIds.indexOf(selectedTabId);
                 const prevIdx = (currentIdx - 1 + allTabIds.length) % allTabIds.length;
                 setSelectedTabId(allTabIds[prevIdx]);
-            } else if (action == Action.Submit) {
-                if (focusedPanelIdx == 0) {
-                    if (lib && selectedNodeId) {
-                        const dir = lib.directories[selectedNodeId];
-                        if (dir && dir.childDirectoryIds.length > 0) {
-                            setExpandedNodeIds((prev) => (
-                                prev.includes(selectedNodeId)
-                                    ? prev.filter((id) => id !== selectedNodeId)
-                                    : [...prev, selectedNodeId]
-                            ));
-                        }
-                    }
-                } else if (focusedPanelIdx == 1) {
-                    handlePublicationSubmit();
-                } else if (focusedPanelIdx == 2) {
-                    setBibTextAreaFocused(true);
-                }
+            } else if (action == Action.OpenSelectedPublication) {
+                if (selectedTabId !== 'Lib') return;
+                handlePublicationSubmit();
             } else if (action == Action.OpenCmdLine) {
                 stateMachine.current.abort();
                 setCmdLineVisible(true);
             } else if (action == Action.OpenFuzzyFind) {
+                if (selectedTabId !== 'Lib') return;
                 setFuzzyFindVisible(true);
-                setFocusedPanelIdx(1);
+            } else if (action == Action.FocusBibEditor) {
+                if (selectedTabId !== 'Lib') return;
+                setBibEditorFocused(true);
             }
         };
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [focusedPanelIdx, selectedTabId, fixedTabs, variableTabs, lib,
+    }, [selectedTabId, fixedTabs, variableTabs, lib,
         selectedNodeId, expandedNodeIds, selectedPublicationId,
         publicationListItems, pubMetadata]);
 

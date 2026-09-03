@@ -4,11 +4,23 @@ export function normalizeKeyEvent(event: KeyboardEvent): string | null {
     if (MODIFIER_KEYS.has(event.key)) {
         return null;
     }
-    
-    if (event.shiftKey && event.key.length === 1) {
-        return event.key.toUpperCase();
+
+    // Ignore alt/meta combinations so they can't trigger bare-key bindings
+    // (e.g. Alt+j must not move the tree).
+    if (event.altKey || event.metaKey) {
+        return null;
     }
-    
+
+    // Some WebKit builds report key='Unidentified' for Shift+Tab, so key off
+    // the physical code instead.
+    if (event.key === 'Tab' || event.code === 'Tab') {
+        return event.shiftKey ? 'Shift+Tab' : 'Tab';
+    }
+
+    if (event.ctrlKey && event.key.length === 1) {
+        return 'Ctrl+' + event.key;
+    }
+
     return event.key;
 }
 
