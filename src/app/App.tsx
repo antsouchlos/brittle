@@ -265,6 +265,7 @@ function App() {
                         >
                             <DetailView
                                 publisher={selectedMeta?.publisher ?? ''}
+                                title={selectedMeta?.title ?? ''}
                                 author={selectedMeta?.author ?? ''}
                                 date={selectedMeta?.year ? String(selectedMeta.year) : ''}
                                 collection={selectedPub ? lib!.nameOf(selectedPub.parentDirectoryId) : ''}

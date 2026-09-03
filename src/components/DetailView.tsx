@@ -4,6 +4,7 @@ import VimTextArea from './VimTextArea';
 
 interface DetailViewProps {
     publisher: string,
+    title: string,
     author: string,
     date: string,
     collection: string,
@@ -14,7 +15,7 @@ interface DetailViewProps {
 }
 
 function DetailView(
-    { publisher, author, date, collection, filename, bibSource, bibTextAreaFocused,
+    { publisher, title, author, date, collection, filename, bibSource, bibTextAreaFocused,
         setBibTextAreaFocused }: DetailViewProps
 ) {
     const [bibContent, setBibContent] = useState('');
@@ -30,6 +31,8 @@ function DetailView(
             </div>
 
             <dl className={styles.detailGrid}>
+                <dt>Title</dt>
+                <dd>{title}</dd>
                 <dt>Author</dt>
                 <dd>{author}</dd>
                 <dt>Published</dt>
