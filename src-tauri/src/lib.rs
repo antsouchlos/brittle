@@ -306,6 +306,7 @@ pub fn run() {
             scan_library,
             parse_publication,
             read_publication_source,
+            write_publication_source,
             load_ui_state,
             save_ui_state,
             list_commands,
@@ -432,6 +433,26 @@ fn read_publication_source(
 
     std::fs::read_to_string(&metadata_path)
         .map_err(|e| format!("Failed to read {}: {}", metadata_path.display(), e))
+}
+
+#[tauri::command]
+fn write_publication_source(
+    path_stem: String,
+    extension: String,
+    content: String,
+    state: State<AppState>,
+) -> Result<(), String> {
+    let config = state.config.read().unwrap();
+    let lib_path = PathBuf::from(config.opts.library_path.clone());
+
+    let metadata_path = lib_path
+        .parent()
+        .unwrap_or(&lib_path)
+        .join(&path_stem)
+        .with_extension(&extension);
+
+    std::fs::write(&metadata_path, content)
+        .map_err(|e| format!("Failed to write {}: {}", metadata_path.display(), e))
 }
 
 /// Stub: always returns `None` so the frontend initializes from defaults.
