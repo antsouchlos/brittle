@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 import styles from './DetailView.module.css';
@@ -6,23 +6,75 @@ import VimTextArea from './VimTextArea';
 import { getFilename, type Metadata, type PublicationEntry } from '../app/LibraryModel';
 import { logger } from '../app/logger';
 
-function usePublicationSource(publication: PublicationEntry | null) {
-    const [source, setSource] = useState('');
+const AUTOSAVE_DEBOUNCE_MS = 250;
 
+function usePublicationSource(
+    publication: PublicationEntry | null,
+    bibEditorFocused: boolean,
+) {
+    const [source, setSource] = useState('');
+    const lastSavedRef = useRef('');
+    const saveSeqRef = useRef(0);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const publicationRef = useRef(publication);
+    const sourceRef = useRef(source);
+    const prevPathStemRef = useRef<string | null>(null);
+    const prevPubRef = useRef<PublicationEntry | null>(null);
+
+    publicationRef.current = publication;
+    sourceRef.current = source;
+
+    const write = useCallback((pub: PublicationEntry, content: string) => {
+        saveSeqRef.current += 1;
+        lastSavedRef.current = content;
+        invoke('write_publication_source', {
+            pathStem: pub.pathStem,
+            extension: pub.referenceFileExtension,
+            content,
+        }).catch(e => logger.error(String(e)));
+    }, []);
+
+    const flushTo = useCallback((pub: PublicationEntry) => {
+        if (timerRef.current !== null) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+        const content = sourceRef.current;
+        if (content === lastSavedRef.current) return;
+        write(pub, content);
+    }, [write]);
+
+    // On a reload, a read that raced one of our own writes is discarded via
+    // the save sequence, so stale content never clobbers newer keystrokes,
+    // while genuine external changes are registered.
     useEffect(() => {
+        const nextPathStem = publication?.pathStem ?? null;
+        const isPublicationSwitch = prevPathStemRef.current !== nextPathStem;
+        prevPathStemRef.current = nextPathStem;
+
         if (!publication) {
             setSource('');
             return;
         }
 
         let cancelled = false;
+        const seqAtRead = saveSeqRef.current;
 
         invoke<string>('read_publication_source', {
             pathStem: publication.pathStem,
             extension: publication.referenceFileExtension,
         })
             .then(text => {
-                if (!cancelled) setSource(text);
+                if (cancelled) return;
+                if (isPublicationSwitch) {
+                    setSource(text);
+                    lastSavedRef.current = text;
+                    return;
+                }
+                if (saveSeqRef.current !== seqAtRead) return;
+                if (text === lastSavedRef.current) return;
+                setSource(text);
+                lastSavedRef.current = text;
             })
             .catch(e => logger.error(String(e)));
 
@@ -30,6 +82,39 @@ function usePublicationSource(publication: PublicationEntry | null) {
             cancelled = true;
         };
     }, [publication]);
+
+    // Flush unsaved edits before switching away from the current publication.
+    useEffect(() => {
+        const prev = prevPubRef.current;
+        if (prev && prev.pathStem !== publication?.pathStem) {
+            flushTo(prev);
+        }
+        prevPubRef.current = publication;
+    }, [publication, flushTo]);
+
+    // Debounced write on edit.
+    useEffect(() => {
+        if (!publication || source === lastSavedRef.current) return;
+
+        if (timerRef.current !== null) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => {
+            timerRef.current = null;
+            write(publication, source);
+        }, AUTOSAVE_DEBOUNCE_MS);
+
+        return () => {
+            if (timerRef.current !== null) {
+                clearTimeout(timerRef.current);
+                timerRef.current = null;
+            }
+        };
+    }, [source, publication, write]);
+
+    // Flush immediately when the editor loses focus.
+    useEffect(() => {
+        if (bibEditorFocused) return;
+        if (publication) flushTo(publication);
+    }, [bibEditorFocused, publication, flushTo]);
 
     return { source, setSource };
 }
@@ -44,7 +129,7 @@ interface DetailViewProps {
 function DetailView(
     { publication, metadata, bibEditorFocused, onBibEditorFocusedChange }: DetailViewProps
 ) {
-    const { source, setSource } = usePublicationSource(publication);
+    const { source, setSource } = usePublicationSource(publication, bibEditorFocused);
 
     const publisher = metadata?.publisher ?? '';
     const title = metadata?.title ?? '';
