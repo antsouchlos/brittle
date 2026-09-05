@@ -305,6 +305,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan_library,
             parse_publication,
+            read_publication_source,
             load_ui_state,
             save_ui_state,
             list_commands,
@@ -378,11 +379,7 @@ fn scan_library(state: State<AppState>) -> Result<library::Library, String> {
     library::scan_library(
         &PathBuf::from(config.opts.library_path.clone()),
         &scan_ignore,
-        &config
-            .ref_parsers
-            .iter()
-            .map(|parser| parser.file_extension.clone())
-            .collect::<Vec<String>>(),
+        &config.get_parser_formats(),
         &vec!["pdf".to_string(), "html".to_string()],
     )
     .map_err(|e| e.to_string())
@@ -398,24 +395,43 @@ pub struct PublicationMetadata {
 }
 
 #[tauri::command]
-fn parse_publication(id: String, state: State<AppState>) -> Result<PublicationMetadata, String> {
+fn parse_publication(
+    id: String,
+    extension: String,
+    state: State<AppState>,
+) -> Result<PublicationMetadata, String> {
     let config = state.config.read().unwrap();
     let lib_path = PathBuf::from(config.opts.library_path.clone());
-    let pub_path = lib_path.parent().unwrap_or(&lib_path).join(&id);
 
-    for format in config.get_parser_formats() {
-        let metadata_path = pub_path.with_extension(&format);
-        if metadata_path.exists() {
-            let source = std::fs::read_to_string(&metadata_path)
-                .map_err(|e| format!("Failed to read {}: {}", metadata_path.display(), e))?;
-            return config.call_ref_parser(&format, &source);
-        }
-    }
+    let metadata_path = lib_path
+        .parent()
+        .unwrap_or(&lib_path)
+        .join(&id)
+        .with_extension(&extension);
 
-    Err(format!(
-        "No supported metadata file found for {}",
-        pub_path.display()
-    ))
+    let source = std::fs::read_to_string(&metadata_path)
+        .map_err(|e| format!("Failed to read {}: {}", metadata_path.display(), e))?;
+
+    config.call_ref_parser(&extension, &source)
+}
+
+#[tauri::command]
+fn read_publication_source(
+    id: String,
+    extension: String,
+    state: State<AppState>,
+) -> Result<String, String> {
+    let config = state.config.read().unwrap();
+    let lib_path = PathBuf::from(config.opts.library_path.clone());
+
+    let metadata_path = lib_path
+        .parent()
+        .unwrap_or(&lib_path)
+        .join(&id)
+        .with_extension(&extension);
+
+    std::fs::read_to_string(&metadata_path)
+        .map_err(|e| format!("Failed to read {}: {}", metadata_path.display(), e))
 }
 
 /// Stub: always returns `None` so the frontend initializes from defaults.

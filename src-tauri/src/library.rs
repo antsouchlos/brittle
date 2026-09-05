@@ -69,6 +69,7 @@ pub struct PublicationEntry {
     pub extensionless_path: String,
     pub available_content_file_extensions: Vec<String>,
     pub parent_directory_path: String,
+    pub reference_file_extension: String,
 }
 
 //
@@ -322,6 +323,7 @@ fn build_publications(
                 extensionless_path: f.pub_path.clone(),
                 available_content_file_extensions: vec![],
                 parent_directory_path: dir_path.to_string(),
+                reference_file_extension: f.extension.clone(),
             },
         );
 
@@ -485,6 +487,7 @@ mod tests {
         let pub_ = &lib.publications[&pub_id];
         assert_eq!(pub_.extensionless_path, pub_id);
         assert_eq!(pub_.parent_directory_path, root_name);
+        assert_eq!(pub_.reference_file_extension, "bib".to_string());
         assert_eq!(
             pub_.available_content_file_extensions,
             vec!["pdf".to_string()]
@@ -588,6 +591,13 @@ mod tests {
             lib.publications[&format!("{}/sub/sub2/deep", root_name)].parent_directory_path,
             sub2_id
         );
+
+        for id in ["top", "paper", "sub/mid", "sub/paper", "sub/sub2/deep"] {
+            assert_eq!(
+                lib.publications[&format!("{}/{}", root_name, id)].reference_file_extension,
+                "bib".to_string()
+            );
+        }
     }
 
     #[test]
@@ -754,6 +764,10 @@ mod tests {
         assert!(lib.publications.contains_key(&format!("{}/ok", root_name)));
         assert!(!lib.publications.contains_key(&format!("{}/paper", root_name)));
 
+        assert_eq!(
+            lib.publications[&format!("{}/ok", root_name)].reference_file_extension,
+            "bib".to_string()
+        );
         assert_eq!(
             lib.publications[&format!("{}/ok", root_name)]
                 .available_content_file_extensions,

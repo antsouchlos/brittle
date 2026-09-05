@@ -11,6 +11,7 @@ export interface PublicationEntry {
     extensionlessPath: string;
     availableContentFileExtensions: string[],
     parentDirectoryPath: string;
+    referenceFileExtension: string;
 }
 
 export interface Library {
@@ -33,6 +34,11 @@ export interface TreeNodeData {
     renderIcon: () => ReactNode;
 }
 
+// Final path segment of a path-like id, used for display names
+export function getFilename(id: string): string {
+    return id.split('/').pop() ?? id;
+}
+
 // Wraps flat directories + publications maps, providing tree/query operations
 export class LibraryModel {
     readonly directories: Record<string, DirectoryEntry>;
@@ -45,10 +51,6 @@ export class LibraryModel {
 
     get rootId(): string {
         return Object.keys(this.directories).find(id => !id.includes('/')) ?? '';
-    }
-
-    nameOf(id: string): string {
-        return id.split('/').pop() ?? id;
     }
 
     collectPubIds(folderId: string): string[] {
@@ -75,7 +77,7 @@ export class LibraryModel {
 
         return {
             id,
-            name: this.nameOf(id),
+            name: getFilename(id),
             count: this.collectPubIds(id).length,
             children: dir.childDirectoryPaths.map(cid => this.buildTree(cid)),
             renderIcon: () =>

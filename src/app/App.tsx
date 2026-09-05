@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { LibraryModel, Library, Metadata } from './LibraryModel';
+import { LibraryModel, Library, Metadata, getFilename } from './LibraryModel';
 import { logger } from './logger';
 
 import styles from './App.module.css'
@@ -129,7 +129,10 @@ function App() {
 
         const ids = Object.keys(data.publications);
         const metas = await Promise.all(
-            ids.map(id => invoke<Metadata>('parse_publication', { id }))
+            ids.map(id => invoke<Metadata>('parse_publication', {
+                id,
+                extension: data.publications[id].referenceFileExtension,
+            }))
         );
         const metaMap: Record<string, Metadata> = {};
         ids.forEach((id, i) => { metaMap[id] = metas[i]; });
@@ -153,7 +156,10 @@ function App() {
 
         const ids = Object.keys(currentLib.publications);
         const metas = await Promise.all(
-            ids.map(id => invoke<Metadata>('parse_publication', { id }))
+            ids.map(id => invoke<Metadata>('parse_publication', {
+                id,
+                extension: currentLib.publications[id].referenceFileExtension,
+            }))
         );
         const metaMap: Record<string, Metadata> = {};
 
@@ -214,7 +220,7 @@ function App() {
                 author: pubMetadata[id].author,
                 publisher: pubMetadata[id].publisher,
                 date: String(pubMetadata[id].year),
-                filename: lib!.nameOf(id),
+                filename: getFilename(id),
                 contentFiles: lib!.publications[id].availableContentFileExtensions,
             }));
     }, [visiblePubIds, pubMetadata, lib]);
@@ -283,13 +289,8 @@ function App() {
                             className={styles.panelContainer}
                         >
                             <DetailView
-                                publisher={selectedMeta?.publisher ?? ''}
-                                title={selectedMeta?.title ?? ''}
-                                author={selectedMeta?.author ?? ''}
-                                date={selectedMeta?.year ? String(selectedMeta.year) : ''}
-                                collection={selectedPub ? lib!.nameOf(selectedPub.parentDirectoryPath) : ''}
-                                filename={selectedPub ? lib!.nameOf(selectedPub.extensionlessPath) : ''}
-                                bibSource={''}
+                                publication={selectedPub}
+                                metadata={selectedMeta}
                                 bibEditorFocused={bibEditorFocused}
                                 onBibEditorFocusedChange={setBibEditorFocused}
                             />

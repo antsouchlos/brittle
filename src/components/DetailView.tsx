@@ -1,28 +1,57 @@
 import { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+
 import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
+import { getFilename, type Metadata, type PublicationEntry } from '../app/LibraryModel';
+import { logger } from '../app/logger';
+
+function usePublicationSource(publication: PublicationEntry | null) {
+    const [source, setSource] = useState('');
+
+    useEffect(() => {
+        if (!publication) {
+            setSource('');
+            return;
+        }
+
+        let cancelled = false;
+
+        invoke<string>('read_publication_source', {
+            id: publication.extensionlessPath,
+            extension: publication.referenceFileExtension,
+        })
+            .then(text => {
+                if (!cancelled) setSource(text);
+            })
+            .catch(e => logger.error(String(e)));
+
+        return () => {
+            cancelled = true;
+        };
+    }, [publication]);
+
+    return { source, setSource };
+}
 
 interface DetailViewProps {
-    publisher: string,
-    title: string,
-    author: string,
-    date: string,
-    collection: string,
-    filename: string,
-    bibSource: string,
+    publication: PublicationEntry | null,
+    metadata: Metadata | null,
     bibEditorFocused: boolean,
     onBibEditorFocusedChange: (value: boolean) => void,
 }
 
 function DetailView(
-    { publisher, title, author, date, collection, filename, bibSource, bibEditorFocused,
-        onBibEditorFocusedChange }: DetailViewProps
+    { publication, metadata, bibEditorFocused, onBibEditorFocusedChange }: DetailViewProps
 ) {
-    const [bibContent, setBibContent] = useState('');
+    const { source, setSource } = usePublicationSource(publication);
 
-    useEffect(() => {
-        setBibContent(bibSource);
-    }, [bibSource]);
+    const publisher = metadata?.publisher ?? '';
+    const title = metadata?.title ?? '';
+    const author = metadata?.author ?? '';
+    const date = metadata?.year ? String(metadata.year) : '';
+    const collection = publication ? getFilename(publication.parentDirectoryPath) : '';
+    const filename = publication ? getFilename(publication.extensionlessPath) : '';
 
     return (
         <div className={styles.detailPane}>
@@ -44,8 +73,8 @@ function DetailView(
             </dl>
 
             <VimTextArea
-                value={bibContent}
-                onChange={setBibContent}
+                value={source}
+                onChange={setSource}
                 focused={bibEditorFocused}
                 onFocusedChange={onBibEditorFocusedChange}
             />
