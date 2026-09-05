@@ -1,19 +1,23 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Fzf, extendedMatch } from 'fzf';
+import { FaFilePdf } from 'react-icons/fa';
+import { Globe } from 'lucide-react';
 import styles from './PublicationList.module.css';
 
 interface Publication {
-    id: string;
+    pathStem: string;
     title: string;
     author: string;
     publisher: string;
     date: string;
+    filename: string;
+    contentFiles: string[];
 }
 
 interface PublicationListProps {
     publications: Array<Publication>
-    selectedPublicationId: string;
-    onSelectPublication: (key: string) => void;
+    selectedPublicationPathStem: string;
+    onSelectPublication: (pathStem: string) => void;
     fuzzyFindVisible: boolean;
     isActive: boolean;
     onCloseFuzzyFind: () => void;
@@ -52,6 +56,8 @@ function splitMatchPositionsByField(
     titleLen: number,
     authorLen: number,
     publisherLen: number,
+    dateLen: number,
+    filenameLen: number,
 ) {
     const titlePositions = new Set(
         Array.from(matchPositions).filter(p => p < titleLen),
@@ -66,13 +72,20 @@ function splitMatchPositionsByField(
             .filter(p => p >= titleLen + authorLen && p < titleLen + authorLen + publisherLen)
             .map(p => p - titleLen - authorLen),
     );
+    const dateStart = titleLen + authorLen + publisherLen;
+    const dateEnd = dateStart + dateLen;
     const datePositions = new Set(
         Array.from(matchPositions)
-            .filter(p => p >= titleLen + authorLen + publisherLen)
-            .map(p => p - titleLen - authorLen - publisherLen),
+            .filter(p => p >= dateStart && p < dateEnd)
+            .map(p => p - dateStart),
+    );
+    const filenamePositions = new Set(
+        Array.from(matchPositions)
+            .filter(p => p >= dateEnd && p < dateEnd + filenameLen)
+            .map(p => p - dateEnd),
     );
 
-    return { titlePositions, authorPositions, publisherPositions, datePositions };
+    return { titlePositions, authorPositions, publisherPositions, datePositions, filenamePositions };
 }
 
 function HighlightedText({ text, matchPositions }: { text: string; matchPositions: Set<number> }) {
@@ -80,6 +93,22 @@ function HighlightedText({ text, matchPositions }: { text: string; matchPosition
         part.matched
             ? <span key={i} className={styles.highlight}>{part.text}</span>
             : part.text,
+    );
+}
+
+function ContentIndicators({ contentFiles }: { contentFiles: string[] }) {
+    const hasPdf = contentFiles.includes('pdf');
+    const hasHtml = contentFiles.includes('html');
+    const formats = [
+        hasPdf ? 'PDF' : null,
+        hasHtml ? 'HTML' : null,
+    ].filter(Boolean).join(', ');
+
+    return (
+        <span className={styles.contentIndicators} aria-label={`Available as ${formats}`}>
+            {hasPdf && <FaFilePdf className={styles.pdfBadge} aria-hidden="true" />}
+            {hasHtml && <Globe aria-hidden="true" />}
+        </span>
     );
 }
 
@@ -113,7 +142,7 @@ function useFuzzyInputFocus(
 
 function useScrollToSelected(
     containerRef: RefObject<HTMLDivElement | null>,
-    selectedId: string,
+    selectedPathStem: string,
     displayedPublications: Publication[],
 ) {
     // The displayed list is a dependency on purpose: switching the selected
@@ -123,13 +152,13 @@ function useScrollToSelected(
         containerRef.current
             ?.querySelector<HTMLElement>('[data-selected="true"]')
             ?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-    }, [selectedId, displayedPublications]);
+    }, [selectedPathStem, displayedPublications]);
 }
 
 function useFuzzySearch(
     fuzzyFindVisible: boolean,
     publications: Publication[],
-    onSelectPublication: (id: string) => void,
+    onSelectPublication: (pathStem: string) => void,
     listRef: RefObject<HTMLDivElement | null>,
 ) {
     const [query, setQuery] = useState('');
@@ -140,7 +169,7 @@ function useFuzzySearch(
 
     const fzf = useMemo(
         () => new Fzf(publications, {
-            selector: (pub: Publication) => pub.title + pub.author + pub.publisher + pub.date,
+            selector: (pub: Publication) => pub.title + pub.author + pub.publisher + pub.date + pub.filename,
             match: extendedMatch,
         }),
         [publications],
@@ -153,10 +182,11 @@ function useFuzzySearch(
             authorPositions: new Set<number>(),
             publisherPositions: new Set<number>(),
             datePositions: new Set<number>(),
+            filenamePositions: new Set<number>(),
         }))
         : fzf.find(query).map(r => ({
             pub: r.item,
-            ...splitMatchPositionsByField(r.positions, r.item.title.length, r.item.author.length, r.item.publisher.length),
+            ...splitMatchPositionsByField(r.positions, r.item.title.length, r.item.author.length, r.item.publisher.length, r.item.date.length, r.item.filename.length),
         }));
 
     const effectiveIdx = fuzzyFindVisible && displayItems.length > 0
@@ -171,7 +201,7 @@ function useFuzzySearch(
             // state, so the ID we pick here is the one the user saw as selected.
             if (displayItems.length > 0) {
                 const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
-                onSelectPublication(displayItems[idx].pub.id);
+                onSelectPublication(displayItems[idx].pub.pathStem);
             }
             setSelectedIdx(-1);
             setQuery('');
@@ -180,7 +210,7 @@ function useFuzzySearch(
         }
         setSelectedIdx(0);
         if (publications.length > 0) {
-            onSelectPublication(publications[0].id);
+            onSelectPublication(publications[0].pathStem);
         }
         listRef.current?.scrollTo({ top: 0, behavior: 'instant' });
     }, [fuzzyFindVisible]);
@@ -188,13 +218,13 @@ function useFuzzySearch(
     useEffect(() => {
         if (!fuzzyFindVisible || displayItems.length === 0) return;
         const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
-        onSelectPublication(displayItems[idx].pub.id);
+        onSelectPublication(displayItems[idx].pub.pathStem);
     }, [query]);
 
     useEffect(() => {
         if (!fuzzyFindVisible || displayItems.length === 0) return;
         const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
-        onSelectPublication(displayItems[idx].pub.id);
+        onSelectPublication(displayItems[idx].pub.pathStem);
     }, [publications]);
 
     // After closing the fuzzy bar the full list is committed to the DOM
@@ -211,12 +241,12 @@ function useFuzzySearch(
         if (displayItems.length === 0) return;
         const nextIdx = Math.max(0, Math.min(displayItems.length - 1, selectedIdx + delta));
         setSelectedIdx(nextIdx);
-        onSelectPublication(displayItems[nextIdx].pub.id);
+        onSelectPublication(displayItems[nextIdx].pub.pathStem);
     };
 
-    const selectByClick = (idx: number, id: string) => {
+    const selectByClick = (idx: number, pathStem: string) => {
         setSelectedIdx(idx);
-        onSelectPublication(id);
+        onSelectPublication(pathStem);
     };
 
     return { query, setQuery, displayItems, effectiveIdx, navigate, selectByClick };
@@ -224,7 +254,7 @@ function useFuzzySearch(
 
 function PublicationList({
     publications,
-    selectedPublicationId,
+    selectedPublicationPathStem,
     onSelectPublication,
     fuzzyFindVisible,
     isActive,
@@ -233,7 +263,7 @@ function PublicationList({
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
 
-    useScrollToSelected(listRef, selectedPublicationId, publications);
+    useScrollToSelected(listRef, selectedPublicationPathStem, publications);
 
     const { query, setQuery, displayItems, effectiveIdx, navigate, selectByClick } =
         useFuzzySearch(
@@ -277,31 +307,37 @@ function PublicationList({
             )}
             <div className={styles.listContainer} ref={listRef}>
                 <div className={styles.list}>
-                    {displayItems.map(({ pub, titlePositions, authorPositions, publisherPositions: publisherPositions, datePositions }, idx) => (
+                    {displayItems.map(({ pub, titlePositions, authorPositions, publisherPositions: publisherPositions, datePositions, filenamePositions }, idx) => (
                         <div
-                            key={pub.id}
+                            key={pub.pathStem}
                             className={styles.card}
                             data-selected={
                                 fuzzyFindVisible
                                     ? (idx === effectiveIdx ? 'true' : 'false')
-                                    : (selectedPublicationId === pub.id ? 'true' : 'false')
+                                    : (selectedPublicationPathStem === pub.pathStem ? 'true' : 'false')
                             }
-                            onClick={() => selectByClick(idx, pub.id)}
+                            onClick={() => selectByClick(idx, pub.pathStem)}
                         >
                             <div className={styles.cardTopRow}>
                                 <span className={styles.publisher}>
                                     <HighlightedText text={pub.publisher} matchPositions={publisherPositions} />
                                 </span>
                                 <span className={styles.dateBadge}>
+                                    <ContentIndicators contentFiles={pub.contentFiles} />
                                     <HighlightedText text={pub.date} matchPositions={datePositions} />
                                 </span>
                             </div>
                             <span className={styles.cardTitle}>
                                 <HighlightedText text={pub.title} matchPositions={titlePositions} />
                             </span>
-                            <span className={styles.author}>
-                                <HighlightedText text={pub.author} matchPositions={authorPositions} />
-                            </span>
+                            <div className={styles.cardBottomRow}>
+                                <span className={styles.author}>
+                                    <HighlightedText text={pub.author} matchPositions={authorPositions} />
+                                </span>
+                                <span className={styles.filenameBadge}>
+                                    <HighlightedText text={pub.filename} matchPositions={filenamePositions} />
+                                </span>
+                            </div>
                         </div>
                     ))}
                 </div>

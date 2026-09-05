@@ -47,6 +47,13 @@
     line-height: 1.1;
 }
 
+.cardBottomRow {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    line-height: 1.1;
+}
+
 .publisher {
     color: var(--accent3);
     text-transform: uppercase;
@@ -54,7 +61,29 @@
 }
 
 .dateBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     color: var(--accent4);
+}
+
+.contentIndicators {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 0.5em;
+    transform: translateY(-0.3em);
+}
+
+.contentIndicators svg {
+    display: block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+}
+
+.pdfBadge {
+    color: #d1352e;
 }
 
 .cardTitle {
@@ -66,6 +95,12 @@
     color: var(--accent1);
     line-height: 1.1;
     font-size: 0.85rem;
+}
+
+.filenameBadge {
+    color: var(--fg3);
+    font-size: 0.85rem;
+    margin-left: 1.5em;
 }
 
 .fuzzyBar {

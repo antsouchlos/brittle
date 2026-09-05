@@ -3,14 +3,15 @@ import { Folder, Library } from 'lucide-react';
 
 export interface DirectoryEntry {
     path: string;
-    childDirectoryIds: string[];
-    publicationIds: string[];
+    childDirectoryPaths: string[];
+    publicationPaths: string[];
 }
 
 export interface PublicationEntry {
-    extensionlessPath: string;
-    parentDirectoryId: string;
-    bibSource: string;
+    pathStem: string;
+    availableContentFileExtensions: string[],
+    parentDirectoryPath: string;
+    referenceFileExtension: string;
 }
 
 export interface Library {
@@ -33,6 +34,11 @@ export interface TreeNodeData {
     renderIcon: () => ReactNode;
 }
 
+// Final path segment of a path-like id, used for display names
+export function getFilename(id: string): string {
+    return id.split('/').pop() ?? id;
+}
+
 // Wraps flat directories + publications maps, providing tree/query operations
 export class LibraryModel {
     readonly directories: Record<string, DirectoryEntry>;
@@ -47,23 +53,19 @@ export class LibraryModel {
         return Object.keys(this.directories).find(id => !id.includes('/')) ?? '';
     }
 
-    nameOf(id: string): string {
-        return id.split('/').pop() ?? id;
-    }
-
-    collectPubIds(folderId: string): string[] {
+    collectPublicationPathStems(folderId: string): string[] {
         const dir = this.directories[folderId];
         if (!dir) return [];
         return [
-            ...dir.publicationIds,
-            ...dir.childDirectoryIds.flatMap(cid => this.collectPubIds(cid)),
+            ...dir.publicationPaths,
+            ...dir.childDirectoryPaths.flatMap(cid => this.collectPublicationPathStems(cid)),
         ];
     }
 
     visibleNodeIds(folderId: string, expanded: string[]): string[] {
         const result = [folderId];
         if (expanded.includes(folderId) && this.directories[folderId]) {
-            for (const cid of this.directories[folderId].childDirectoryIds) {
+            for (const cid of this.directories[folderId].childDirectoryPaths) {
                 result.push(...this.visibleNodeIds(cid, expanded));
             }
         }
@@ -72,11 +74,12 @@ export class LibraryModel {
 
     buildTree(id: string): TreeNodeData {
         const dir = this.directories[id];
+
         return {
             id,
-            name: this.nameOf(id),
-            count: this.collectPubIds(id).length,
-            children: dir.childDirectoryIds.map(cid => this.buildTree(cid)),
+            name: getFilename(id),
+            count: this.collectPublicationPathStems(id).length,
+            children: dir.childDirectoryPaths.map(cid => this.buildTree(cid)),
             renderIcon: () =>
                 id.includes('/')
                     ? <Folder size={15} aria-hidden="true" />

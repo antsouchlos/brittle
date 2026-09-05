@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::path::Path;
@@ -7,18 +7,28 @@ use std::path::PathBuf;
 use ignore::gitignore::Gitignore;
 use serde::{Deserialize, Serialize};
 
+//
+//
+// Errors
+//
+//
+
 #[derive(Debug)]
 pub enum LoadError {
-    LibraryNotFound,
-    NotADirectory,
+    LibraryNotFound(String),
+    NotADirectory(String),
+    UnableToStripPathPrefix(String),
     Io(std::io::Error),
 }
 
 impl fmt::Display for LoadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LoadError::LibraryNotFound => write!(f, "Library not found"),
-            LoadError::NotADirectory => write!(f, "Path is not a directory"),
+            LoadError::LibraryNotFound(s) => write!(f, "Library not found: {}", s),
+            LoadError::NotADirectory(s) => write!(f, "Path is not a directory: {}", s),
+            LoadError::UnableToStripPathPrefix(s) => {
+                write!(f, "Unable to strip prefix from path: {}", s)
+            }
             LoadError::Io(e) => write!(f, "I/O error: {}", e),
         }
     }
@@ -32,21 +42,11 @@ impl From<std::io::Error> for LoadError {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DirectoryEntry {
-    pub path: String,
-    pub child_directory_ids: Vec<String>,
-    pub publication_ids: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PublicationEntry {
-    pub extensionless_path: String,
-    pub parent_directory_id: String,
-    pub bib_source: String,
-}
+//
+//
+// Library data strcutures
+//
+//
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,48 +55,44 @@ pub struct Library {
     pub publications: HashMap<String, PublicationEntry>,
 }
 
-struct DirEntry {
-    name: String,
-    path: PathBuf,
-    file_type: fs::FileType,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryEntry {
+    pub path: String,
+    pub child_directory_paths: Vec<String>,
+    pub publication_paths: Vec<String>,
 }
 
-fn list_and_filter_dir_contents(
-    dir: &Path,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicationEntry {
+    pub path_stem: String,
+    pub available_content_file_extensions: Vec<String>,
+    pub parent_directory_path: String,
+    pub reference_file_extension: String,
+}
+
+//
+//
+// Functions
+//
+//
+
+pub fn scan_library(
     library_root: &Path,
     ignore_filter: &Gitignore,
-) -> Result<Vec<DirEntry>, LoadError> {
-    let mut entries = Vec::new();
-
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let file_type = entry.file_type()?;
-        let entry_path = entry.path();
-        let relative = entry_path.strip_prefix(library_root).unwrap_or(&entry_path);
-
-        if ignore_filter
-            .matched(relative, file_type.is_dir())
-            .is_ignore()
-        {
-            continue;
-        }
-
-        entries.push(DirEntry {
-            name: entry.file_name().to_string_lossy().to_string(),
-            path: entry.path(),
-            file_type,
-        });
-    }
-    entries.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(entries)
-}
-
-pub fn load_library(library_root: &Path, ignore_filter: &Gitignore) -> Result<Library, LoadError> {
+    valid_bib_extensions: &[String],
+    valid_content_extensions: &[String],
+) -> Result<Library, LoadError> {
     if !library_root.exists() {
-        return Err(LoadError::LibraryNotFound);
+        return Err(LoadError::LibraryNotFound(
+            library_root.to_string_lossy().to_string(),
+        ));
     }
     if !library_root.is_dir() {
-        return Err(LoadError::NotADirectory);
+        return Err(LoadError::NotADirectory(
+            library_root.to_string_lossy().to_string(),
+        ));
     }
 
     let root_name = library_root
@@ -119,8 +115,8 @@ pub fn load_library(library_root: &Path, ignore_filter: &Gitignore) -> Result<Li
         root_id.clone(),
         DirectoryEntry {
             path: root_id.clone(),
-            child_directory_ids: Vec::new(),
-            publication_ids: Vec::new(),
+            child_directory_paths: Vec::new(),
+            publication_paths: Vec::new(),
         },
     );
 
@@ -130,6 +126,8 @@ pub fn load_library(library_root: &Path, ignore_filter: &Gitignore) -> Result<Li
         &mut directories,
         &mut publications,
         &ignore_filter,
+        valid_bib_extensions,
+        valid_content_extensions,
     )?;
 
     Ok(Library {
@@ -138,107 +136,250 @@ pub fn load_library(library_root: &Path, ignore_filter: &Gitignore) -> Result<Li
     })
 }
 
+fn get_stem_and_extension(path: &PathBuf) -> Option<(String, String)> {
+    let stem = path.file_stem();
+    if stem.is_none() {
+        log::warn!(
+            "Unable to determine file stem: {}",
+            path.to_string_lossy().to_string()
+        );
+        return None;
+    }
+    let stem = stem.expect("The previous statement ensures `stem` is not none");
+
+    let extension = path.extension();
+    if extension.is_none() {
+        log::warn!(
+            "Unable to determine file extension: {}",
+            path.to_string_lossy().to_string()
+        );
+        return None;
+    }
+    let extension = extension.expect("The previous statement ensures `extension` is not none");
+
+    return Some((
+        stem.to_string_lossy().to_string(),
+        extension.to_string_lossy().to_string(),
+    ));
+}
+
+struct FoundFileObject {
+    name: String,
+    path: PathBuf,
+    file_type: fs::FileType,
+}
+
+struct ClassifiedFile {
+    stem: String,
+    extension: String,
+    pub_path: String,
+}
+
 /// This is called recursively for every directory in the library
+// TODO: Properly deal with symlinks
 fn populate_library_from_directory(
-    dir_id: &str,
+    dir_path: &str,
     library_root: &Path,
     directories: &mut HashMap<String, DirectoryEntry>,
     publications: &mut HashMap<String, PublicationEntry>,
     ignore_filter: &Gitignore,
+    valid_bib_extensions: &[String],
+    valid_content_extensions: &[String],
 ) -> Result<(), LoadError> {
-    let dir_path = library_root.parent().unwrap_or(Path::new("")).join(dir_id);
+    let dir_path_with_lib = library_root
+        .parent()
+        .unwrap_or(Path::new(""))
+        .join(dir_path);
 
-    let mut pdf_stems: HashMap<String, ()> = HashMap::new();
-    let mut bib_stems: HashMap<String, ()> = HashMap::new();
-    let mut subdir_names: Vec<String> = Vec::new();
+    let entries = list_and_filter_dir_contents(&dir_path_with_lib, library_root, ignore_filter)?;
 
-    for entry in list_and_filter_dir_contents(&dir_path, library_root, ignore_filter)? {
-        let name = entry.name;
-        let path = entry.path;
-        let file_type = entry.file_type;
+    let mut child_directory_paths: Vec<String> = vec![];
+    let mut publication_paths: Vec<String> = vec![];
 
-        if file_type.is_dir() {
-            subdir_names.push(name);
-        } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            let stem = path
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            match ext {
-                "pdf" => {
-                    pdf_stems.insert(stem, ());
-                }
-                "bib" => {
-                    bib_stems.insert(stem, ());
-                }
-                _ => {}
-            }
+    // First pass: recurse into subdirectories
+
+    for entry in &entries {
+        if !entry.file_type.is_dir() {
+            continue;
         }
-    }
 
-    subdir_names.sort();
+        let subdir_path = Path::new(dir_path)
+            .join(&entry.name)
+            .to_string_lossy()
+            .to_string();
+        child_directory_paths.push(subdir_path.clone());
 
-    let mut child_directory_ids = Vec::new();
-    for name in &subdir_names {
-        let subdir_id = Path::new(dir_id).join(name).to_string_lossy().to_string();
-        child_directory_ids.push(subdir_id.clone());
         populate_library_from_directory(
-            &subdir_id,
+            &subdir_path,
             library_root,
             directories,
             publications,
             ignore_filter,
+            valid_bib_extensions,
+            valid_content_extensions,
         )?;
     }
 
-    let mut publication_ids = Vec::new();
-    let mut stems: Vec<&String> = pdf_stems.keys().collect();
-    stems.sort();
-    for stem in stems {
-        if !bib_stems.contains_key(stem) {
-            let path_str = Path::new(dir_id).join(stem).to_string_lossy().to_string();
-            log::warn!("Publication missing bib file: {}.pdf", path_str);
+    // Second pass: classify the files
+
+    let mut bib_files: Vec<ClassifiedFile> = Vec::new();
+    let mut content_files: Vec<ClassifiedFile> = Vec::new();
+
+    for entry in &entries {
+        if entry.file_type.is_dir() {
             continue;
         }
-        bib_stems.remove(stem);
+        if entry.file_type.is_symlink() {
+            log::warn!(
+                "Symlinks are not supported at this time. Skipping: {:?}",
+                entry.path
+            );
+            continue;
+        }
 
-        let pub_id = Path::new(dir_id)
-            .join(stem.as_str())
-            .to_string_lossy()
-            .to_string();
+        if let Some((stem, extension)) = get_stem_and_extension(&entry.path) {
+            let pub_path = Path::new(dir_path)
+                .join(stem.as_str())
+                .to_string_lossy()
+                .to_string();
 
-        let bib_path = dir_path.join(format!("{}.bib", stem));
-        let bib_source = fs::read_to_string(&bib_path).unwrap_or_default();
-
-        publications.insert(
-            pub_id.clone(),
-            PublicationEntry {
-                extensionless_path: pub_id.clone(),
-                parent_directory_id: dir_id.to_string(),
-                bib_source,
-            },
-        );
-
-        publication_ids.push(pub_id);
+            if valid_bib_extensions.contains(&extension) {
+                bib_files.push(ClassifiedFile {
+                    stem,
+                    extension,
+                    pub_path,
+                });
+            } else if valid_content_extensions.contains(&extension) {
+                content_files.push(ClassifiedFile {
+                    stem,
+                    extension,
+                    pub_path,
+                });
+            }
+        }
     }
 
-    for stem in bib_stems.keys() {
-        let path_str = Path::new(dir_id).join(stem).to_string_lossy().to_string();
-        log::warn!("Orphan bib file: {}.bib", path_str);
-    }
+    // Populate library
+
+    build_publications(
+        &bib_files,
+        &content_files,
+        dir_path,
+        publications,
+        &mut publication_paths,
+    );
 
     directories.insert(
-        dir_id.to_string(),
+        dir_path.to_string(),
         DirectoryEntry {
-            path: dir_id.to_string(),
-            child_directory_ids,
-            publication_ids,
+            path: dir_path.to_string(),
+            child_directory_paths,
+            publication_paths,
         },
     );
 
     Ok(())
 }
+
+fn find_duplicate_bib_stems<'a>(bib_files: &'a [ClassifiedFile], dir_path: &str) -> HashSet<&'a str> {
+    let mut bib_stem_counts: HashMap<&str, usize> = HashMap::new();
+    for f in bib_files {
+        *bib_stem_counts.entry(f.stem.as_str()).or_insert(0) += 1;
+    }
+
+    let conflicted: HashSet<&str> = bib_stem_counts
+        .iter()
+        .filter(|(_, count)| **count > 1)
+        .map(|(stem, _)| *stem)
+        .collect();
+    for stem in &conflicted {
+        log::warn!(
+            "Multiple bib files share stem '{}' in '{}'; ignoring all files with this stem",
+            stem,
+            dir_path
+        );
+    }
+
+    conflicted
+}
+
+fn build_publications(
+    bib_files: &[ClassifiedFile],
+    content_files: &[ClassifiedFile],
+    dir_path: &str,
+    publications: &mut HashMap<String, PublicationEntry>,
+    publication_paths: &mut Vec<String>,
+) {
+    let conflicted_stems = find_duplicate_bib_stems(bib_files, dir_path);
+
+    for f in bib_files {
+        if conflicted_stems.contains(f.stem.as_str()) {
+            continue;
+        }
+
+        publications.insert(
+            f.pub_path.clone(),
+            PublicationEntry {
+                path_stem: f.pub_path.clone(),
+                available_content_file_extensions: vec![],
+                parent_directory_path: dir_path.to_string(),
+                reference_file_extension: f.extension.clone(),
+            },
+        );
+
+        publication_paths.push(f.pub_path.clone());
+    }
+
+    for f in content_files {
+        if conflicted_stems.contains(f.stem.as_str()) {
+            continue;
+        }
+
+        if let Some(p) = &mut publications.get_mut(&f.pub_path) {
+            p.available_content_file_extensions
+                .push(f.extension.clone());
+        }
+    }
+}
+
+fn list_and_filter_dir_contents(
+    dir: &Path,
+    library_root: &Path,
+    ignore_filter: &Gitignore,
+) -> Result<Vec<FoundFileObject>, LoadError> {
+    let mut entries = Vec::new();
+
+    for entry in fs::read_dir(dir)? {
+        let file = entry?;
+        let file_type = file.file_type()?;
+        let file_path = file.path();
+
+        let rel_file_path = file_path
+            .strip_prefix(library_root)
+            .map_err(|e| LoadError::UnableToStripPathPrefix(e.to_string()))?;
+
+        if ignore_filter
+            .matched(rel_file_path, file_type.is_dir())
+            .is_ignore()
+        {
+            continue;
+        }
+
+        entries.push(FoundFileObject {
+            name: file.file_name().to_string_lossy().to_string(),
+            path: file.path(),
+            file_type,
+        });
+    }
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(entries)
+}
+
+//
+//
+// Unit tests
+//
+//
 
 #[cfg(test)]
 mod tests {
@@ -277,163 +418,324 @@ mod tests {
         builder.build().unwrap()
     }
 
+    fn sorted(mut items: Vec<String>) -> Vec<String> {
+        items.sort();
+        items
+    }
+
     #[test]
-    fn empty_directory() {
+    fn empty_library_returns_root_directory_only() {
         let (_dir, root_path, root_name) = create_literature_env(&[]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
-        let root_id = root_name.clone();
+        let lib = scan_library(
+            &root_path,
+            &empty_gitignore(),
+            &vec!["bib".to_string()],
+            &vec!["pdf".to_string()],
+        )
+        .unwrap();
 
         assert_eq!(lib.directories.len(), 1);
-        assert!(lib.directories.contains_key(&root_id));
-        assert_eq!(lib.directories[&root_id].publication_ids.len(), 0);
-        assert_eq!(lib.directories[&root_id].child_directory_ids.len(), 0);
         assert!(lib.publications.is_empty());
+
+        let root = &lib.directories[&root_name];
+        assert_eq!(root.path, root_name);
+        assert!(root.child_directory_paths.is_empty());
+        assert!(root.publication_paths.is_empty());
     }
 
     #[test]
-    fn single_publication_root() {
-        let (_dir, root_path, root_name) = create_literature_env(&["paper.pdf", "paper.bib"]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
-        let root_id = root_name.clone();
-        let pub_id = format!("{}/paper", root_name);
+    fn nonexistent_or_file_root_returns_load_error() {
+        let dir = TempDir::new().unwrap();
+        let missing_path = dir.path().join("does_not_exist");
+        let file_path = dir.path().join("plain_file");
+        fs::write(&file_path, b"").unwrap();
 
+        let missing_err = scan_library(
+            &missing_path,
+            &empty_gitignore(),
+            &vec!["bib".to_string()],
+            &vec!["pdf".to_string()],
+        )
+        .unwrap_err();
+        let file_err = scan_library(
+            &file_path,
+            &empty_gitignore(),
+            &vec!["bib".to_string()],
+            &vec!["pdf".to_string()],
+        )
+        .unwrap_err();
+
+        assert!(matches!(missing_err, LoadError::LibraryNotFound(_)));
+        assert!(matches!(file_err, LoadError::NotADirectory(_)));
+    }
+
+    #[test]
+    fn single_root_publication_with_bib_and_content() {
+        let (_dir, root_path, root_name) = create_literature_env(&["paper.bib", "paper.pdf"]);
+        let lib = scan_library(
+            &root_path,
+            &empty_gitignore(),
+            &vec!["bib".to_string()],
+            &vec!["pdf".to_string()],
+        )
+        .unwrap();
+
+        let path_stem = format!("{}/paper", root_name);
         assert_eq!(lib.publications.len(), 1);
+        assert_eq!(lib.directories.len(), 1);
 
-        let pub_ = &lib.publications[&pub_id];
-
-        assert_eq!(pub_.extensionless_path, pub_id);
-        assert_eq!(pub_.parent_directory_id, root_id);
-        assert_eq!(lib.directories[&root_id].publication_ids, vec![pub_id]);
-    }
-
-    #[test]
-    fn single_publication_subdir() {
-        let (_dir, root_path, root_name) =
-            create_literature_env(&["sub/paper.pdf", "sub/paper.bib"]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
-        let root_id = root_name.clone();
-        let subdir_id = format!("{}/sub", root_name);
-        let pub_id = format!("{}/sub/paper", root_name);
-
-        assert_eq!(lib.directories.len(), 2);
-        assert!(lib.directories.contains_key(&root_id));
-        assert!(lib.directories.contains_key(&subdir_id));
-        assert_eq!(lib.publications.len(), 1);
-
-        let pub_ = &lib.publications[&pub_id];
-
-        assert_eq!(pub_.extensionless_path, pub_id);
-        assert_eq!(pub_.parent_directory_id, subdir_id);
+        let pub_ = &lib.publications[&path_stem];
+        assert_eq!(pub_.path_stem, path_stem);
+        assert_eq!(pub_.parent_directory_path, root_name);
+        assert_eq!(pub_.reference_file_extension, "bib".to_string());
         assert_eq!(
-            lib.directories[&root_id].child_directory_ids,
-            vec![subdir_id.clone()]
+            pub_.available_content_file_extensions,
+            vec!["pdf".to_string()]
         );
-        assert_eq!(lib.directories[&subdir_id].publication_ids, vec![pub_id]);
+
+        assert_eq!(
+            lib.directories[&root_name].publication_paths,
+            vec![path_stem]
+        );
     }
 
     #[test]
-    fn nested_structure() {
+    fn nested_directories_recurse_publications_and_scope_content_by_directory() {
         let (_dir, root_path, root_name) = create_literature_env(&[
-            "a.pdf",
-            "a.bib",
-            "x/b.pdf",
-            "x/b.bib",
-            "x/y/c.pdf",
-            "x/y/c.bib",
-        ]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
-        let root_id = root_name.clone();
-
-        assert_eq!(lib.directories.len(), 3);
-        assert_eq!(lib.publications.len(), 3);
-
-        assert!(lib.publications.contains_key(&format!("{}/a", root_name)));
-        assert!(lib.publications.contains_key(&format!("{}/x/b", root_name)));
-        assert!(lib
-            .publications
-            .contains_key(&format!("{}/x/y/c", root_name)));
-
-        assert_eq!(
-            &lib.directories[&root_id].child_directory_ids,
-            &[format!("{}/x", root_name)]
-        );
-        assert_eq!(
-            &lib.directories[&format!("{}/x", root_name)].child_directory_ids,
-            &[format!("{}/x/y", root_name)]
-        );
-        assert_eq!(
-            lib.directories[&format!("{}/x/y", root_name)]
-                .child_directory_ids
-                .len(),
-            0
-        );
-
-        assert_eq!(
-            lib.directories[&root_id].publication_ids,
-            vec![format!("{}/a", root_name)]
-        );
-        assert_eq!(
-            lib.directories[&format!("{}/x", root_name)].publication_ids,
-            vec![format!("{}/x/b", root_name)]
-        );
-        assert_eq!(
-            lib.directories[&format!("{}/x/y", root_name)].publication_ids,
-            vec![format!("{}/x/y/c", root_name)]
-        );
-    }
-
-    #[test]
-    fn multiple_publications_in_directory() {
-        let (_dir, root_path, root_name) =
-            create_literature_env(&["a.pdf", "a.bib", "b.pdf", "b.bib", "c.pdf", "c.bib"]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
-        let root_id = root_name.clone();
-
-        assert_eq!(lib.publications.len(), 3);
-        assert!(lib.publications.contains_key(&format!("{}/a", root_name)));
-        assert!(lib.publications.contains_key(&format!("{}/b", root_name)));
-        assert!(lib.publications.contains_key(&format!("{}/c", root_name)));
-        assert_eq!(lib.directories[&root_id].publication_ids.len(), 3);
-    }
-
-    #[test]
-    fn non_bib_pdf_files_ignored() {
-        let (_dir, root_path, root_name) = create_literature_env(&[
-            "paper.pdf",
+            "top.bib",
             "paper.bib",
-            "notes.txt",
-            "cover.jpg",
-            "README.md",
+            "sub/mid.bib",
+            "sub/paper.bib",
+            "sub/paper.pdf",
+            "sub/sub2/deep.bib",
+            "sub/sub2/deep.pdf",
         ]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
+        fs::create_dir_all(root_path.join("sub/empty")).unwrap();
+
+        let lib = scan_library(
+            &root_path,
+            &empty_gitignore(),
+            &vec!["bib".to_string()],
+            &vec!["pdf".to_string()],
+        )
+        .unwrap();
+
+        let root_id = root_name.clone();
+        let sub_id = format!("{}/sub", root_name);
+        let empty_id = format!("{}/sub/empty", root_name);
+        let sub2_id = format!("{}/sub/sub2", root_name);
+
+        assert_eq!(lib.directories.len(), 4);
+        assert!(lib.directories.contains_key(&root_id));
+        assert!(lib.directories.contains_key(&sub_id));
+        assert!(lib.directories.contains_key(&empty_id));
+        assert!(lib.directories.contains_key(&sub2_id));
+
+        assert_eq!(
+            sorted(lib.directories[&root_id].child_directory_paths.clone()),
+            vec![sub_id.clone()]
+        );
+        assert_eq!(
+            sorted(lib.directories[&root_id].publication_paths.clone()),
+            vec![
+                format!("{}/paper", root_name),
+                format!("{}/top", root_name)
+            ]
+        );
+
+        assert_eq!(
+            sorted(lib.directories[&sub_id].child_directory_paths.clone()),
+            vec![empty_id.clone(), sub2_id.clone()]
+        );
+        assert_eq!(
+            sorted(lib.directories[&sub_id].publication_paths.clone()),
+            vec![
+                format!("{}/sub/mid", root_name),
+                format!("{}/sub/paper", root_name)
+            ]
+        );
+
+        assert!(lib.directories[&empty_id].child_directory_paths.is_empty());
+        assert!(lib.directories[&empty_id].publication_paths.is_empty());
+        assert_eq!(
+            lib.directories[&sub2_id].publication_paths,
+            vec![format!("{}/sub/sub2/deep", root_name)]
+        );
+
+        assert!(lib.publications[&format!("{}/top", root_name)]
+            .available_content_file_extensions
+            .is_empty());
+        assert!(lib.publications[&format!("{}/paper", root_name)]
+            .available_content_file_extensions
+            .is_empty());
+        assert!(lib.publications[&format!("{}/sub/mid", root_name)]
+            .available_content_file_extensions
+            .is_empty());
+        assert_eq!(
+            lib.publications[&format!("{}/sub/paper", root_name)]
+                .available_content_file_extensions,
+            vec!["pdf".to_string()]
+        );
+        assert_eq!(
+            lib.publications[&format!("{}/sub/sub2/deep", root_name)]
+                .available_content_file_extensions,
+            vec!["pdf".to_string()]
+        );
+
+        assert_eq!(
+            lib.publications[&format!("{}/paper", root_name)].parent_directory_path,
+            root_id
+        );
+        assert_eq!(
+            lib.publications[&format!("{}/sub/paper", root_name)].parent_directory_path,
+            sub_id
+        );
+        assert_eq!(
+            lib.publications[&format!("{}/sub/sub2/deep", root_name)].parent_directory_path,
+            sub2_id
+        );
+
+        for id in ["top", "paper", "sub/mid", "sub/paper", "sub/sub2/deep"] {
+            assert_eq!(
+                lib.publications[&format!("{}/{}", root_name, id)].reference_file_extension,
+                "bib".to_string()
+            );
+        }
+    }
+
+    #[test]
+    fn content_flags_attach_regardless_of_file_order_and_multiple_extensions() {
+        let (_dir, root_path, root_name) = create_literature_env(&[
+            "orphan.aaa",
+            "paper.aaa",
+            "paper.bib",
+            "paper.html",
+            "paper.txt",
+        ]);
+        let lib = scan_library(
+            &root_path,
+            &empty_gitignore(),
+            &vec!["bib".to_string()],
+            &vec!["aaa".to_string(), "html".to_string()],
+        )
+        .unwrap();
 
         assert_eq!(lib.publications.len(), 1);
-        assert!(lib
+        assert!(lib.publications.contains_key(&format!("{}/paper", root_name)));
+        assert!(!lib.publications.contains_key(&format!("{}/orphan", root_name)));
+
+        assert_eq!(
+            sorted(
+                lib.publications[&format!("{}/paper", root_name)]
+                    .available_content_file_extensions
+                    .clone()
+            ),
+            vec!["aaa".to_string(), "html".to_string()]
+        );
+        assert_eq!(
+            lib.directories[&root_name].publication_paths,
+            vec![format!("{}/paper", root_name)]
+        );
+    }
+
+    #[test]
+    fn unparseable_hidden_entries_are_skipped() {
+        let (_dir, root_path, root_name) = create_literature_env(&[
+            "real.bib",
+            "real.aaa",
+            "README",
+            "notes",
+            "image.jpg",
+            ".hidden",
+        ]);
+        let lib = scan_library(
+            &root_path,
+            &empty_gitignore(),
+            &vec!["bib".to_string()],
+            &vec!["aaa".to_string()],
+        )
+        .unwrap();
+
+        assert_eq!(lib.publications.len(), 1);
+        assert!(lib.publications.contains_key(&format!("{}/real", root_name)));
+        assert_eq!(
+            lib.publications[&format!("{}/real", root_name)]
+                .available_content_file_extensions,
+            vec!["aaa".to_string()]
+        );
+
+        assert_eq!(lib.directories.len(), 1);
+        assert_eq!(
+            lib.directories[&root_name].publication_paths,
+            vec![format!("{}/real", root_name)]
+        );
+    }
+
+    #[test]
+    fn ignore_filter_suppresses_files_and_directory_subtrees() {
+        let (_dir, root_path, root_name) = create_literature_env(&[
+            "kept.bib",
+            "kept.aaa",
+            "ignored_bib.bib",
+            "partial.bib",
+            "partial.aaa",
+            "gone.bib",
+            "gone.aaa",
+            "ignored_dir/nested.bib",
+            "ignored_dir/nested.aaa",
+            "ignored_dir/deeper/deep.bib",
+        ]);
+        let lib = scan_library(
+            &root_path,
+            &gitignore_from(
+                &["ignored_bib.bib", "partial.aaa", "gone.bib", "ignored_dir/"],
+                &root_path,
+            ),
+            &vec!["bib".to_string()],
+            &vec!["aaa".to_string()],
+        )
+        .unwrap();
+
+        assert_eq!(lib.publications.len(), 2);
+        assert!(lib.publications.contains_key(&format!("{}/kept", root_name)));
+        assert!(lib.publications.contains_key(&format!("{}/partial", root_name)));
+        assert!(!lib.publications.contains_key(&format!("{}/ignored_bib", root_name)));
+        assert!(!lib.publications.contains_key(&format!("{}/gone", root_name)));
+        assert!(!lib
             .publications
-            .contains_key(&format!("{}/paper", root_name)));
-    }
+            .contains_key(&format!("{}/ignored_dir/nested", root_name)));
 
-    #[test]
-    fn orphan_pdf_skipped() {
-        let (_dir, root_path, _root_name) = create_literature_env(&["paper.pdf"]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
+        assert_eq!(
+            lib.publications[&format!("{}/kept", root_name)]
+                .available_content_file_extensions,
+            vec!["aaa".to_string()]
+        );
+        assert!(lib.publications[&format!("{}/partial", root_name)]
+            .available_content_file_extensions
+            .is_empty());
 
-        assert!(lib.publications.is_empty());
-    }
-
-    #[test]
-    fn orphan_bib_skipped() {
-        let (_dir, root_path, _root_name) = create_literature_env(&["paper.bib"]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
-
-        assert!(lib.publications.is_empty());
+        assert_eq!(lib.directories.len(), 1);
+        assert!(lib.directories.contains_key(&root_name));
+        assert_eq!(
+            sorted(lib.directories[&root_name].publication_paths.clone()),
+            vec![
+                format!("{}/kept", root_name),
+                format!("{}/partial", root_name)
+            ]
+        );
     }
 
     #[test]
     fn unicode_filenames() {
         let (_dir, root_path, root_name) =
             create_literature_env(&["über-paper.pdf", "über-paper.bib", "论文.pdf", "论文.bib"]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
+        let lib = scan_library(
+            &root_path,
+            &empty_gitignore(),
+            &vec!["bib".to_string()],
+            &vec!["pdf".to_string()],
+        )
+        .unwrap();
 
         assert_eq!(lib.publications.len(), 2);
         assert!(lib
@@ -445,133 +747,38 @@ mod tests {
     }
 
     #[test]
-    fn library_not_found() {
-        let err = load_library(Path::new("/nonexistent/path"), &empty_gitignore()).unwrap_err();
-
-        assert!(matches!(err, LoadError::LibraryNotFound));
-    }
-
-    #[test]
-    fn path_is_file_not_directory() {
-        let dir = TempDir::new().unwrap();
-        let file_path = dir.path().join("some_file.txt");
-        fs::write(&file_path, b"").unwrap();
-        let err = load_library(&file_path, &empty_gitignore()).unwrap_err();
-
-        assert!(matches!(err, LoadError::NotADirectory));
-    }
-
-    #[test]
-    fn root_id_uses_directory_name() {
-        let (_dir, root_path, root_name) = create_literature_env(&[]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
-        let root_id = root_name.clone();
-        let root = &lib.directories[&root_id];
-
-        assert_eq!(root.path, root_id);
-    }
-
-    #[test]
-    fn publication_parent_id() {
+    fn conflicting_bib_stems_are_ignored_completely() {
         let (_dir, root_path, root_name) = create_literature_env(&[
-            "root.pdf",
-            "root.bib",
-            "sub/a.pdf",
-            "sub/a.bib",
-            "sub/sub2/b.pdf",
-            "sub/sub2/b.bib",
+            "paper.bib",
+            "paper.enl",
+            "paper.aaa",
+            "ok.bib",
+            "ok.aaa",
         ]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
-        let root_id = root_name.clone();
-
-        assert_eq!(
-            lib.publications[&format!("{}/root", root_name)].parent_directory_id,
-            root_id
-        );
-        assert_eq!(
-            lib.publications[&format!("{}/sub/a", root_name)].parent_directory_id,
-            format!("{}/sub", root_name)
-        );
-        assert_eq!(
-            lib.publications[&format!("{}/sub/sub2/b", root_name)].parent_directory_id,
-            format!("{}/sub/sub2", root_name)
-        );
-    }
-
-    #[test]
-    fn mixed_orphans_and_valid() {
-        let (_dir, root_path, root_name) = create_literature_env(&[
-            "a.pdf",
-            "a.bib",
-            "b.pdf",
-            "c.bib",
-            "sub/d.pdf",
-            "sub/d.bib",
-            "sub/e.pdf",
-        ]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
-
-        assert_eq!(lib.publications.len(), 2);
-        assert!(lib.publications.contains_key(&format!("{}/a", root_name)));
-        assert!(lib
-            .publications
-            .contains_key(&format!("{}/sub/d", root_name)));
-        assert!(!lib.publications.contains_key(&format!("{}/b", root_name)));
-        assert!(!lib.publications.contains_key(&format!("{}/c", root_name)));
-        assert!(!lib
-            .publications
-            .contains_key(&format!("{}/sub/e", root_name)));
-    }
-
-    #[test]
-    fn ignore_file_glob() {
-        let (_dir, root_path, root_name) =
-            create_literature_env(&["paper.pdf", "paper.bib", "notes.pdf", "notes.bib"]);
-        let lib = load_library(&root_path, &gitignore_from(&["notes.*"], &root_path)).unwrap();
-
-        assert_eq!(lib.publications.len(), 1);
-        assert!(lib
-            .publications
-            .contains_key(&format!("{}/paper", root_name)));
-    }
-
-    #[test]
-    fn ignore_subdirectory() {
-        let (_dir, root_path, root_name) =
-            create_literature_env(&["paper.pdf", "paper.bib", "ignore/a.pdf", "ignore/a.bib"]);
-        let lib = load_library(&root_path, &gitignore_from(&["ignore"], &root_path)).unwrap();
-
-        assert_eq!(lib.publications.len(), 1);
-        assert_eq!(lib.directories.len(), 1);
-        assert!(lib
-            .publications
-            .contains_key(&format!("{}/paper", root_name)));
-    }
-
-    #[test]
-    fn negation_pattern() {
-        let (_dir, root_path, root_name) =
-            create_literature_env(&["paper.pdf", "paper.bib", "keep.pdf", "keep.bib"]);
-        let lib = load_library(
+        let lib = scan_library(
             &root_path,
-            &gitignore_from(&["*", "!keep.pdf", "!keep.bib"], &root_path),
+            &empty_gitignore(),
+            &vec!["bib".to_string(), "enl".to_string()],
+            &vec!["aaa".to_string()],
         )
         .unwrap();
 
         assert_eq!(lib.publications.len(), 1);
-        assert!(lib
-            .publications
-            .contains_key(&format!("{}/keep", root_name)));
-    }
+        assert!(lib.publications.contains_key(&format!("{}/ok", root_name)));
+        assert!(!lib.publications.contains_key(&format!("{}/paper", root_name)));
 
-    #[test]
-    fn ignore_no_effect_with_empty_patterns() {
-        let (_dir, root_path, root_name) = create_literature_env(&["paper.pdf", "paper.bib"]);
-        let lib = load_library(&root_path, &empty_gitignore()).unwrap();
-
-        assert_eq!(lib.publications.len(), 1);
-        assert!(lib
-            .publications
-            .contains_key(&format!("{}/paper", root_name)));
+        assert_eq!(
+            lib.publications[&format!("{}/ok", root_name)].reference_file_extension,
+            "bib".to_string()
+        );
+        assert_eq!(
+            lib.publications[&format!("{}/ok", root_name)]
+                .available_content_file_extensions,
+            vec!["aaa".to_string()]
+        );
+        assert_eq!(
+            lib.directories[&root_name].publication_paths,
+            vec![format!("{}/ok", root_name)]
+        );
     }
 }

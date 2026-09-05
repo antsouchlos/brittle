@@ -44,7 +44,9 @@ fn find_webview_descendant(container: &gtk::Container) -> Option<gtk::Widget> {
 #[derive(Debug)]
 enum Error {
     WebViewError,
+    #[allow(unused)] // TODO: Properly deal with this warning
     Lua(mlua::Error),
+    #[allow(unused)] // TODO: Properly deal with this warning
     Io(std::io::Error),
 }
 
@@ -160,6 +162,7 @@ fn build_scan_ignore(opts: &Opts) -> Result<Gitignore, LoadError> {
             log::warn!("Malformed ignore pattern {:?}: {}", pattern, e);
         }
     }
+
     builder
         .build()
         .map_err(|e| LoadError::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e)))
@@ -249,10 +252,14 @@ pub fn run() {
                 let config = config::load_config(app)?;
 
                 if !config.opts.library_path.exists() {
-                    return Err(Box::new(LoadError::LibraryNotFound));
+                    return Err(Box::new(LoadError::LibraryNotFound(
+                        config.opts.library_path.to_string_lossy().to_string(),
+                    )));
                 }
                 if !config.opts.library_path.is_dir() {
-                    return Err(Box::new(LoadError::NotADirectory));
+                    return Err(Box::new(LoadError::NotADirectory(
+                        config.opts.library_path.to_string_lossy().to_string(),
+                    )));
                 }
 
                 let scan_ignore = build_scan_ignore(&config.opts)?;
@@ -296,8 +303,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
-            load_library,
+            scan_library,
             parse_publication,
+            read_publication_source,
+            write_publication_source,
+            get_config,
             load_ui_state,
             save_ui_state,
             list_commands,
@@ -364,13 +374,15 @@ struct SerializedUiState {
 // ---------- Commands ----------
 
 #[tauri::command]
-fn load_library(state: State<AppState>) -> Result<library::Library, String> {
+fn scan_library(state: State<AppState>) -> Result<library::Library, String> {
     let config = state.config.read().unwrap();
     let scan_ignore = state.scan_ignore.read().unwrap();
 
-    library::load_library(
+    library::scan_library(
         &PathBuf::from(config.opts.library_path.clone()),
         &scan_ignore,
+        &config.get_parser_formats(),
+        &vec!["pdf".to_string(), "html".to_string()],
     )
     .map_err(|e| e.to_string())
 }
@@ -385,24 +397,63 @@ pub struct PublicationMetadata {
 }
 
 #[tauri::command]
-fn parse_publication(id: String, state: State<AppState>) -> Result<PublicationMetadata, String> {
+fn parse_publication(
+    path_stem: String,
+    extension: String,
+    state: State<AppState>,
+) -> Result<PublicationMetadata, String> {
     let config = state.config.read().unwrap();
     let lib_path = PathBuf::from(config.opts.library_path.clone());
-    let pub_path = lib_path.parent().unwrap_or(&lib_path).join(&id);
 
-    for format in config.get_parser_formats() {
-        let metadata_path = pub_path.with_extension(&format);
-        if metadata_path.exists() {
-            let source = std::fs::read_to_string(&metadata_path)
-                .map_err(|e| format!("Failed to read {}: {}", metadata_path.display(), e))?;
-            return config.call_ref_parser(&format, &source);
-        }
-    }
+    let metadata_path = lib_path
+        .parent()
+        .unwrap_or(&lib_path)
+        .join(&path_stem)
+        .with_extension(&extension);
 
-    Err(format!(
-        "No supported metadata file found for {}",
-        pub_path.display()
-    ))
+    let source = std::fs::read_to_string(&metadata_path)
+        .map_err(|e| format!("Failed to read {}: {}", metadata_path.display(), e))?;
+
+    config.call_ref_parser(&extension, &source)
+}
+
+#[tauri::command]
+fn read_publication_source(
+    path_stem: String,
+    extension: String,
+    state: State<AppState>,
+) -> Result<String, String> {
+    let config = state.config.read().unwrap();
+    let lib_path = PathBuf::from(config.opts.library_path.clone());
+
+    let metadata_path = lib_path
+        .parent()
+        .unwrap_or(&lib_path)
+        .join(&path_stem)
+        .with_extension(&extension);
+
+    std::fs::read_to_string(&metadata_path)
+        .map_err(|e| format!("Failed to read {}: {}", metadata_path.display(), e))
+}
+
+#[tauri::command]
+fn write_publication_source(
+    path_stem: String,
+    extension: String,
+    content: String,
+    state: State<AppState>,
+) -> Result<(), String> {
+    let config = state.config.read().unwrap();
+    let lib_path = PathBuf::from(config.opts.library_path.clone());
+
+    let metadata_path = lib_path
+        .parent()
+        .unwrap_or(&lib_path)
+        .join(&path_stem)
+        .with_extension(&extension);
+
+    std::fs::write(&metadata_path, content)
+        .map_err(|e| format!("Failed to write {}: {}", metadata_path.display(), e))
 }
 
 /// Stub: always returns `None` so the frontend initializes from defaults.
@@ -416,6 +467,11 @@ fn load_ui_state(_state: State<AppState>) -> Option<SerializedUiState> {
 /// to `app_config_dir()/ui-state.json`.
 #[tauri::command]
 fn save_ui_state(_state: State<AppState>, _ui_state: SerializedUiState) {}
+
+#[tauri::command]
+fn get_config(state: State<AppState>) -> Config {
+    state.config.read().unwrap().clone()
+}
 
 #[tauri::command]
 fn list_commands(state: State<AppState>) -> Vec<String> {
@@ -461,14 +517,14 @@ fn save_command_history(state: State<AppState>, history: Vec<String>) -> Result<
 }
 
 #[tauri::command]
-fn open_publication(pub_id: String, state: State<AppState>) -> Result<(), String> {
+fn open_publication(path_stem: String, state: State<AppState>) -> Result<(), String> {
     let config = state.config.read().unwrap();
     let library_path = PathBuf::from(config.opts.library_path.clone());
 
     let parent = library_path
         .parent()
         .ok_or_else(|| "Library path has no parent directory".to_string())?;
-    let pdf_path = parent.join(&pub_id).with_extension("pdf");
+    let pdf_path = parent.join(&path_stem).with_extension("pdf");
 
     if !pdf_path.exists() {
         return Err(format!("PDF not found: {}", pdf_path.display()));
