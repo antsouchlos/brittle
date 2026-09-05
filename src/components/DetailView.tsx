@@ -18,7 +18,7 @@ function usePublicationSource(publication: PublicationEntry | null) {
         let cancelled = false;
 
         invoke<string>('read_publication_source', {
-            id: publication.extensionlessPath,
+            pathStem: publication.pathStem,
             extension: publication.referenceFileExtension,
         })
             .then(text => {
@@ -51,7 +51,7 @@ function DetailView(
     const author = metadata?.author ?? '';
     const date = metadata?.year ? String(metadata.year) : '';
     const collection = publication ? getFilename(publication.parentDirectoryPath) : '';
-    const filename = publication ? getFilename(publication.extensionlessPath) : '';
+    const filename = publication ? getFilename(publication.pathStem) : '';
 
     return (
         <div className={styles.detailPane}>

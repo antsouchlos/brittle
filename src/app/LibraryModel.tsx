@@ -8,7 +8,7 @@ export interface DirectoryEntry {
 }
 
 export interface PublicationEntry {
-    extensionlessPath: string;
+    pathStem: string;
     availableContentFileExtensions: string[],
     parentDirectoryPath: string;
     referenceFileExtension: string;
@@ -53,12 +53,12 @@ export class LibraryModel {
         return Object.keys(this.directories).find(id => !id.includes('/')) ?? '';
     }
 
-    collectPubIds(folderId: string): string[] {
+    collectPublicationPathStems(folderId: string): string[] {
         const dir = this.directories[folderId];
         if (!dir) return [];
         return [
             ...dir.publicationPaths,
-            ...dir.childDirectoryPaths.flatMap(cid => this.collectPubIds(cid)),
+            ...dir.childDirectoryPaths.flatMap(cid => this.collectPublicationPathStems(cid)),
         ];
     }
 
@@ -78,7 +78,7 @@ export class LibraryModel {
         return {
             id,
             name: getFilename(id),
-            count: this.collectPubIds(id).length,
+            count: this.collectPublicationPathStems(id).length,
             children: dir.childDirectoryPaths.map(cid => this.buildTree(cid)),
             renderIcon: () =>
                 id.includes('/')

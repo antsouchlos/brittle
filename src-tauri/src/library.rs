@@ -66,7 +66,7 @@ pub struct DirectoryEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicationEntry {
-    pub extensionless_path: String,
+    pub path_stem: String,
     pub available_content_file_extensions: Vec<String>,
     pub parent_directory_path: String,
     pub reference_file_extension: String,
@@ -320,7 +320,7 @@ fn build_publications(
         publications.insert(
             f.pub_path.clone(),
             PublicationEntry {
-                extensionless_path: f.pub_path.clone(),
+                path_stem: f.pub_path.clone(),
                 available_content_file_extensions: vec![],
                 parent_directory_path: dir_path.to_string(),
                 reference_file_extension: f.extension.clone(),
@@ -480,12 +480,12 @@ mod tests {
         )
         .unwrap();
 
-        let pub_id = format!("{}/paper", root_name);
+        let path_stem = format!("{}/paper", root_name);
         assert_eq!(lib.publications.len(), 1);
         assert_eq!(lib.directories.len(), 1);
 
-        let pub_ = &lib.publications[&pub_id];
-        assert_eq!(pub_.extensionless_path, pub_id);
+        let pub_ = &lib.publications[&path_stem];
+        assert_eq!(pub_.path_stem, path_stem);
         assert_eq!(pub_.parent_directory_path, root_name);
         assert_eq!(pub_.reference_file_extension, "bib".to_string());
         assert_eq!(
@@ -493,7 +493,10 @@ mod tests {
             vec!["pdf".to_string()]
         );
 
-        assert_eq!(lib.directories[&root_name].publication_paths, vec![pub_id]);
+        assert_eq!(
+            lib.directories[&root_name].publication_paths,
+            vec![path_stem]
+        );
     }
 
     #[test]

@@ -5,7 +5,7 @@ import { Globe } from 'lucide-react';
 import styles from './PublicationList.module.css';
 
 interface Publication {
-    id: string;
+    pathStem: string;
     title: string;
     author: string;
     publisher: string;
@@ -16,8 +16,8 @@ interface Publication {
 
 interface PublicationListProps {
     publications: Array<Publication>
-    selectedPublicationId: string;
-    onSelectPublication: (key: string) => void;
+    selectedPublicationPathStem: string;
+    onSelectPublication: (pathStem: string) => void;
     fuzzyFindVisible: boolean;
     isActive: boolean;
     onCloseFuzzyFind: () => void;
@@ -142,7 +142,7 @@ function useFuzzyInputFocus(
 
 function useScrollToSelected(
     containerRef: RefObject<HTMLDivElement | null>,
-    selectedId: string,
+    selectedPathStem: string,
     displayedPublications: Publication[],
 ) {
     // The displayed list is a dependency on purpose: switching the selected
@@ -152,13 +152,13 @@ function useScrollToSelected(
         containerRef.current
             ?.querySelector<HTMLElement>('[data-selected="true"]')
             ?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-    }, [selectedId, displayedPublications]);
+    }, [selectedPathStem, displayedPublications]);
 }
 
 function useFuzzySearch(
     fuzzyFindVisible: boolean,
     publications: Publication[],
-    onSelectPublication: (id: string) => void,
+    onSelectPublication: (pathStem: string) => void,
     listRef: RefObject<HTMLDivElement | null>,
 ) {
     const [query, setQuery] = useState('');
@@ -201,7 +201,7 @@ function useFuzzySearch(
             // state, so the ID we pick here is the one the user saw as selected.
             if (displayItems.length > 0) {
                 const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
-                onSelectPublication(displayItems[idx].pub.id);
+                onSelectPublication(displayItems[idx].pub.pathStem);
             }
             setSelectedIdx(-1);
             setQuery('');
@@ -210,7 +210,7 @@ function useFuzzySearch(
         }
         setSelectedIdx(0);
         if (publications.length > 0) {
-            onSelectPublication(publications[0].id);
+            onSelectPublication(publications[0].pathStem);
         }
         listRef.current?.scrollTo({ top: 0, behavior: 'instant' });
     }, [fuzzyFindVisible]);
@@ -218,13 +218,13 @@ function useFuzzySearch(
     useEffect(() => {
         if (!fuzzyFindVisible || displayItems.length === 0) return;
         const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
-        onSelectPublication(displayItems[idx].pub.id);
+        onSelectPublication(displayItems[idx].pub.pathStem);
     }, [query]);
 
     useEffect(() => {
         if (!fuzzyFindVisible || displayItems.length === 0) return;
         const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
-        onSelectPublication(displayItems[idx].pub.id);
+        onSelectPublication(displayItems[idx].pub.pathStem);
     }, [publications]);
 
     // After closing the fuzzy bar the full list is committed to the DOM
@@ -241,12 +241,12 @@ function useFuzzySearch(
         if (displayItems.length === 0) return;
         const nextIdx = Math.max(0, Math.min(displayItems.length - 1, selectedIdx + delta));
         setSelectedIdx(nextIdx);
-        onSelectPublication(displayItems[nextIdx].pub.id);
+        onSelectPublication(displayItems[nextIdx].pub.pathStem);
     };
 
-    const selectByClick = (idx: number, id: string) => {
+    const selectByClick = (idx: number, pathStem: string) => {
         setSelectedIdx(idx);
-        onSelectPublication(id);
+        onSelectPublication(pathStem);
     };
 
     return { query, setQuery, displayItems, effectiveIdx, navigate, selectByClick };
@@ -254,7 +254,7 @@ function useFuzzySearch(
 
 function PublicationList({
     publications,
-    selectedPublicationId,
+    selectedPublicationPathStem,
     onSelectPublication,
     fuzzyFindVisible,
     isActive,
@@ -263,7 +263,7 @@ function PublicationList({
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
 
-    useScrollToSelected(listRef, selectedPublicationId, publications);
+    useScrollToSelected(listRef, selectedPublicationPathStem, publications);
 
     const { query, setQuery, displayItems, effectiveIdx, navigate, selectByClick } =
         useFuzzySearch(
@@ -309,14 +309,14 @@ function PublicationList({
                 <div className={styles.list}>
                     {displayItems.map(({ pub, titlePositions, authorPositions, publisherPositions: publisherPositions, datePositions, filenamePositions }, idx) => (
                         <div
-                            key={pub.id}
+                            key={pub.pathStem}
                             className={styles.card}
                             data-selected={
                                 fuzzyFindVisible
                                     ? (idx === effectiveIdx ? 'true' : 'false')
-                                    : (selectedPublicationId === pub.id ? 'true' : 'false')
+                                    : (selectedPublicationPathStem === pub.pathStem ? 'true' : 'false')
                             }
-                            onClick={() => selectByClick(idx, pub.id)}
+                            onClick={() => selectByClick(idx, pub.pathStem)}
                         >
                             <div className={styles.cardTopRow}>
                                 <span className={styles.publisher}>
