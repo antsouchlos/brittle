@@ -36,7 +36,7 @@ pub mod config {
     }
 
     #[lua_newtype(to = "string")]
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, serde::Serialize)]
     pub struct LuaPath(pub PathBuf);
 
     impl std::ops::Deref for LuaPath {
@@ -109,7 +109,8 @@ pub mod config {
     /// Directories are always watched recursively. Each entry filters its own
     /// events through its `ignore` patterns, independently of other entries.
     #[luaclass]
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct Watch {
         /// Path to watch (a file or a directory).
         pub path: LuaPath,
@@ -123,7 +124,8 @@ pub mod config {
 
     /// User-configurable options.
     #[luaclass]
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct Opts {
         /// Absolute path to the literature library root.
         #[lua(default = r#"expand_tilde("~/Documents/literature/").into()"#)]
@@ -142,22 +144,29 @@ pub mod config {
         /// File-system watch entries mapping paths to reload actions.
         #[lua(default = "vec![]")]
         pub watch: Vec<Watch>,
+        /// Debounce interval (ms) before writing the metadata editor content to disk.
+        #[lua(default = "250u64")]
+        pub autosave_debounce_ms: u64,
     }
 
     /// Top-level application configuration.
     #[luaclass]
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct Config {
         /// User-configurable options.
         pub opts: Opts,
         /// Per-format reference parsers.
         #[lua(default = "vec![]")]
+        #[serde(skip)]
         pub ref_parsers: Vec<RefParser>,
         /// User-defined commands.
         #[lua(default = "vec![]")]
+        #[serde(skip)]
         pub commands: Vec<Command>,
 
         #[lua(skip)]
+        #[serde(skip)]
         pub lua: Option<mlua::Lua>,
     }
 

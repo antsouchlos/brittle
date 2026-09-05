@@ -6,11 +6,10 @@ import VimTextArea from './VimTextArea';
 import { getFilename, type Metadata, type PublicationEntry } from '../app/LibraryModel';
 import { logger } from '../app/logger';
 
-const AUTOSAVE_DEBOUNCE_MS = 250;
-
 function usePublicationSource(
     publication: PublicationEntry | null,
     bibEditorFocused: boolean,
+    autosaveDebounceMs: number,
 ) {
     const [source, setSource] = useState('');
     const lastSavedRef = useRef('');
@@ -100,7 +99,7 @@ function usePublicationSource(
         timerRef.current = setTimeout(() => {
             timerRef.current = null;
             write(publication, source);
-        }, AUTOSAVE_DEBOUNCE_MS);
+        }, autosaveDebounceMs);
 
         return () => {
             if (timerRef.current !== null) {
@@ -108,7 +107,7 @@ function usePublicationSource(
                 timerRef.current = null;
             }
         };
-    }, [source, publication, write]);
+    }, [source, publication, write, autosaveDebounceMs]);
 
     // Flush immediately when the editor loses focus.
     useEffect(() => {
@@ -124,12 +123,13 @@ interface DetailViewProps {
     metadata: Metadata | null,
     bibEditorFocused: boolean,
     onBibEditorFocusedChange: (value: boolean) => void,
+    autosaveDebounceMs: number,
 }
 
 function DetailView(
-    { publication, metadata, bibEditorFocused, onBibEditorFocusedChange }: DetailViewProps
+    { publication, metadata, bibEditorFocused, onBibEditorFocusedChange, autosaveDebounceMs }: DetailViewProps
 ) {
-    const { source, setSource } = usePublicationSource(publication, bibEditorFocused);
+    const { source, setSource } = usePublicationSource(publication, bibEditorFocused, autosaveDebounceMs);
 
     const publisher = metadata?.publisher ?? '';
     const title = metadata?.title ?? '';

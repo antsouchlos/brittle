@@ -16,7 +16,7 @@
 
 --- User-configurable options.
 --- @class Opts
---- Debounce interval (ms) before writing the bib editor content to disk.
+--- Debounce interval (ms) before writing the metadata editor content to disk.
 --- @field autosave_debounce_ms? integer
 --- Directory for persistent application data.
 --- @field data_path? string

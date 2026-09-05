@@ -307,6 +307,7 @@ pub fn run() {
             parse_publication,
             read_publication_source,
             write_publication_source,
+            get_config,
             load_ui_state,
             save_ui_state,
             list_commands,
@@ -466,6 +467,11 @@ fn load_ui_state(_state: State<AppState>) -> Option<SerializedUiState> {
 /// to `app_config_dir()/ui-state.json`.
 #[tauri::command]
 fn save_ui_state(_state: State<AppState>, _ui_state: SerializedUiState) {}
+
+#[tauri::command]
+fn get_config(state: State<AppState>) -> Config {
+    state.config.read().unwrap().clone()
+}
 
 #[tauri::command]
 fn list_commands(state: State<AppState>) -> Vec<String> {

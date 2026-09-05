@@ -76,6 +76,7 @@ function App() {
 
     const [lib, setLib] = useState<LibraryModel | null>(null);
     const [pubMetadata, setPubMetadata] = useState<Record<string, Metadata>>({});
+    const [autosaveDebounceMs, setAutosaveDebounceMs] = useState(250);
     const [cmdLineVisible, setCmdLineVisible] = useState(false);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
     const [commandList, setCommandList] = useState<string[]>([]);
@@ -109,6 +110,12 @@ function App() {
             .then(history => setCommandHistory(history))
             .catch(e => logger.error(`Failed to load command history: ${e}`))
             .finally(() => { historyLoadedRef.current = true; });
+    }, []);
+
+    const loadConfig = useCallback(() => {
+        invoke<{ opts: { autosaveDebounceMs: number } }>('get_config')
+            .then(config => setAutosaveDebounceMs(config.opts.autosaveDebounceMs))
+            .catch(e => logger.error(`Failed to load config: ${e}`));
     }, []);
 
     const loadLibraryData = useCallback(async () => {
@@ -171,6 +178,7 @@ function App() {
         loadLibraryData().catch(e => logger.error(String(e)));
         loadCommandList();
         loadCommandHistory();
+        loadConfig();
 
         const libraryChanged = listen('library-changed', () => {
             loadLibraryData().catch(e => logger.error(String(e)));
@@ -179,6 +187,7 @@ function App() {
             loadLibraryData().catch(e => logger.error(String(e)));
             loadCommandList();
             loadCommandHistory();
+            loadConfig();
         });
         const metadataChanged = listen('publication-metadata-changed', () => {
             refreshPubMetadata().catch(e => logger.error(String(e)));
@@ -193,7 +202,7 @@ function App() {
             metadataChanged.then(unlisten => unlisten());
             configError.then(unlisten => unlisten());
         };
-    }, [loadLibraryData, loadCommandList, loadCommandHistory, refreshPubMetadata]);
+    }, [loadLibraryData, loadCommandList, loadCommandHistory, loadConfig, refreshPubMetadata]);
 
     const treeRoot = useMemo(() => {
         if (!lib) return null;
@@ -293,6 +302,7 @@ function App() {
                                 metadata={selectedMeta}
                                 bibEditorFocused={bibEditorFocused}
                                 onBibEditorFocusedChange={setBibEditorFocused}
+                                autosaveDebounceMs={autosaveDebounceMs}
                             />
                         </div>
                     )}
