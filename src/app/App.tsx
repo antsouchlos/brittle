@@ -49,7 +49,7 @@ const keymap: Array<[string, Action]> = [
     ["gt", Action.NextTab],
     ["gT", Action.PrevTab],
     ["Enter", Action.OpenSelectedPublication],
-    ["b", Action.FocusBibEditor],
+    ["Ctrl+e", Action.FocusBibEditor],
     [":", Action.OpenCmdLine],
     [" ff", Action.OpenFuzzyFind],
     ["Escape", Action.CloseFuzzyFind],
