@@ -79,6 +79,7 @@ function App() {
     const [autosaveDebounceMs, setAutosaveDebounceMs] = useState(250);
     const [cmdLineVisible, setCmdLineVisible] = useState(false);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
+    const [publicationNavRequest, setPublicationNavRequest] = useState<{ delta: 1 | -1 } | null>(null);
     const [commandList, setCommandList] = useState<string[]>([]);
     const [commandHistory, setCommandHistory] = useState<string[]>([]);
     const historyLoadedRef = useRef(false);
@@ -286,6 +287,7 @@ function App() {
                                         }}
                                         fuzzyFindVisible={fuzzyFindVisible}
                                         isActive={selectedTabId === 'Lib'}
+                                        publicationNavRequest={publicationNavRequest}
                                         onCloseFuzzyFind={() => setFuzzyFindVisible(false)}
                                         onSubmit={handlePublicationSubmit}
                                     />
@@ -375,18 +377,10 @@ function App() {
                 setSelectedNodeId(visibleIds[prevIdx]);
             } else if (action == Action.SelectNextPublication) {
                 if (selectedTabId !== 'Lib') return;
-                if (publicationListItems.length === 0) return;
-                const currentIdx = publicationListItems.findIndex(p => p.pathStem === selectedPublicationPathStem);
-                const startIdx = currentIdx < 0 ? 0 : currentIdx;
-                const nextIdx = (startIdx + 1) % publicationListItems.length;
-                setSelectedPublicationPathStem(publicationListItems[nextIdx].pathStem);
+                setPublicationNavRequest({ delta: 1 });
             } else if (action == Action.SelectPrevPublication) {
                 if (selectedTabId !== 'Lib') return;
-                if (publicationListItems.length === 0) return;
-                const currentIdx = publicationListItems.findIndex(p => p.pathStem === selectedPublicationPathStem);
-                const startIdx = currentIdx < 0 ? 0 : currentIdx;
-                const prevIdx = (startIdx - 1 + publicationListItems.length) % publicationListItems.length;
-                setSelectedPublicationPathStem(publicationListItems[prevIdx].pathStem);
+                setPublicationNavRequest({ delta: -1 });
             } else if (action == Action.NextTab) {
                 const allTabIds = [...fixedTabs.map(t => t.id), ...variableTabs.map(t => t.id)];
                 const currentIdx = allTabIds.indexOf(selectedTabId);

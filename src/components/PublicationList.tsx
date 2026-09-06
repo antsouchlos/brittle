@@ -20,6 +20,7 @@ interface PublicationListProps {
     onSelectPublication: (pathStem: string) => void;
     fuzzyFindVisible: boolean;
     isActive: boolean;
+    publicationNavRequest: { delta: 1 | -1 } | null;
     onCloseFuzzyFind: () => void;
     onSubmit?: () => void;
 }
@@ -155,6 +156,31 @@ function useScrollToSelected(
     }, [selectedPathStem, displayedPublications]);
 }
 
+function usePublicationNavigation(
+    fuzzyFindVisible: boolean,
+    navigateFuzzyList: (delta: number) => void,
+    publications: Publication[],
+    selectedPublicationPathStem: string,
+    onSelectPublication: (pathStem: string) => void,
+    publicationNavRequest: { delta: 1 | -1 } | null,
+) {
+    useEffect(() => {
+        if (publicationNavRequest === null) return;
+        const delta = publicationNavRequest.delta;
+
+        if (fuzzyFindVisible) {
+            navigateFuzzyList(delta);
+            return;
+        } else {
+            if (publications.length === 0) return;
+            const currentIdx = publications.findIndex(p => p.pathStem === selectedPublicationPathStem);
+            const startIdx = currentIdx < 0 ? 0 : currentIdx;
+            const nextIdx = (startIdx + delta + publications.length) % publications.length;
+            onSelectPublication(publications[nextIdx].pathStem);
+        }
+    }, [publicationNavRequest]);
+}
+
 function useFuzzySearch(
     fuzzyFindVisible: boolean,
     publications: Publication[],
@@ -258,6 +284,7 @@ function PublicationList({
     onSelectPublication,
     fuzzyFindVisible,
     isActive,
+    publicationNavRequest,
     onCloseFuzzyFind,
     onSubmit,
 }: PublicationListProps) {
@@ -274,6 +301,15 @@ function PublicationList({
         );
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
         useFuzzyInputFocus(fuzzyFindVisible, isActive);
+
+    usePublicationNavigation(
+        fuzzyFindVisible,
+        navigate,
+        publications,
+        selectedPublicationPathStem,
+        onSelectPublication,
+        publicationNavRequest,
+    );
 
     return (
         <div className={styles.publicationList}
