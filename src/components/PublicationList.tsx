@@ -139,6 +139,39 @@ function useFuzzyInputFocus(
         }
     }, [isActive, fuzzyFindVisible]);
 
+    // The fuzzy bar is the default key owner while it is open: whenever DOM
+    // focus lands outside it and outside another editable surface (the bib
+    // editor, the command line), pull focus back into the input. This covers
+    // releases the other hook cannot see, like the bib editor blurring after
+    // 'Escape' or a pointer click on a collection or list card.
+    useEffect(() => {
+        if (!fuzzyFindVisible || !isActive) return;
+
+        const refocusIfUnclaimed = (event: FocusEvent) => {
+            const input = inputRef.current;
+            if (!input || !input.isConnected || input.offsetParent === null) return;
+
+            const nextTarget = event.relatedTarget as HTMLElement | null;
+            const focusOnOtherTextArea = nextTarget instanceof HTMLElement
+                && nextTarget !== input
+                && (nextTarget instanceof HTMLInputElement
+                    || nextTarget instanceof HTMLTextAreaElement
+                    || nextTarget.isContentEditable);
+            if (focusOnOtherTextArea) return;
+
+            // Defer a frame so the refocus never fights the click or a tab
+            // switch that blurred the input in the first place.
+            requestAnimationFrame(() => {
+                if (input.isConnected && document.activeElement !== input) {
+                    input.focus();
+                }
+            });
+        };
+
+        document.addEventListener('focusout', refocusIfUnclaimed);
+        return () => document.removeEventListener('focusout', refocusIfUnclaimed);
+    }, [fuzzyFindVisible, isActive]);
+
     const onContainerMouseDown = (e: React.MouseEvent) => {
         if (fuzzyFindVisible && inputRef.current) {
             e.preventDefault();
