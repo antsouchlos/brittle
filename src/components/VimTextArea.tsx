@@ -131,6 +131,8 @@ export default function VimTextArea({ value, onChange, focused, onFocusedChange 
         EditorView.domEventHandlers({
             // TODO: Only use in vim mode
             keydown(event, view) {
+                event.stopPropagation();
+
                 // Fix alt key bindings for vim mode
                 if (event.altKey && event.key !== 'Alt' && event.key !== 'Control' && event.key !== 'Shift') {
                     const cm = getCM(view);

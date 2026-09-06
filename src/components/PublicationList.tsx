@@ -21,8 +21,6 @@ interface PublicationListProps {
     fuzzyFindVisible: boolean;
     isActive: boolean;
     publicationNavRequest: { delta: 1 | -1 } | null;
-    onCloseFuzzyFind: () => void;
-    onSubmit?: () => void;
 }
 
 interface HighlightPart {
@@ -111,6 +109,16 @@ function ContentIndicators({ contentFiles }: { contentFiles: string[] }) {
             {hasHtml && <Globe aria-hidden="true" />}
         </span>
     );
+}
+
+function isTextProducingKey(event: KeyboardEvent): boolean {
+    if (event.isComposing) return true;
+    const key = event.key;
+    if (key.length === 1 && !event.metaKey && !(event.ctrlKey && !event.altKey)) return true;
+    if (key === 'Backspace' || key === 'Delete' || key === 'Home' || key === 'End') return true;
+    if (key.startsWith('Arrow')) return true;
+    const mod = event.ctrlKey || event.metaKey;
+    return mod && (key === 'a' || key === 'c' || key === 'v' || key === 'x');
 }
 
 function useFuzzyInputFocus(
@@ -285,8 +293,6 @@ function PublicationList({
     fuzzyFindVisible,
     isActive,
     publicationNavRequest,
-    onCloseFuzzyFind,
-    onSubmit,
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
 
@@ -325,16 +331,7 @@ function PublicationList({
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="publisher · title · author · year"
                         onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                onSubmit?.();
-                            } else if (e.key === 'Escape') {
-                                onCloseFuzzyFind();
-                            } else if ((e.key === 'n' && e.ctrlKey) || (e.key === 'p' && e.ctrlKey)) {
-                                navigate(e.key === 'n' ? 1 : -1);
-                            } else if (e.key === 'Tab') {
-                                e.preventDefault();
-                                navigate(e.shiftKey ? -1 : 1);
-                            }
+                            if (isTextProducingKey(e.nativeEvent)) e.stopPropagation();
                         }}
                         spellCheck={false}
                         autoComplete="off"

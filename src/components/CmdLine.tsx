@@ -284,6 +284,8 @@ export default function CmdLine({ visible, onExecute, onCancel, suggestions, com
     }, [visible]);
 
     const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        event.stopPropagation();
+
         const combo = normalizeKeyCombo(event);
         if (combo === null) return;
 

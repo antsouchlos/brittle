@@ -35,6 +35,7 @@ enum Action {
     OpenSelectedPublication,
     OpenCmdLine,
     OpenFuzzyFind,
+    CloseFuzzyFind,
     FocusBibEditor,
 }
 
@@ -51,6 +52,7 @@ const keymap: Array<[string, Action]> = [
     ["b", Action.FocusBibEditor],
     [":", Action.OpenCmdLine],
     [" ff", Action.OpenFuzzyFind],
+    ["Escape", Action.CloseFuzzyFind],
 ];
 
 // Selects the first visible publication whenever the current selection is no
@@ -288,8 +290,6 @@ function App() {
                                         fuzzyFindVisible={fuzzyFindVisible}
                                         isActive={selectedTabId === 'Lib'}
                                         publicationNavRequest={publicationNavRequest}
-                                        onCloseFuzzyFind={() => setFuzzyFindVisible(false)}
-                                        onSubmit={handlePublicationSubmit}
                                     />
                                 </div>
                             ),
@@ -338,15 +338,6 @@ function App() {
     // TODO: Extract this into separate hook
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            const target = event.target as HTMLElement;
-            if (
-                target.tagName === 'INPUT' ||
-                target.tagName === 'TEXTAREA' ||
-                target.isContentEditable
-            ) {
-                return;
-            }
-
             if (event.ctrlKey && event.key === 'c') {
                 return;
             }
@@ -360,6 +351,9 @@ function App() {
             }
 
             let action: Action | null = stateMachine.current.feed(normalized_key);
+            if (action == null) {
+                return;
+            }
 
             if (action == Action.SelectNextCollection) {
                 if (selectedTabId !== 'Lib' || !lib) return;
@@ -399,7 +393,11 @@ function App() {
                 setCmdLineVisible(true);
             } else if (action == Action.OpenFuzzyFind) {
                 if (selectedTabId !== 'Lib') return;
+                stateMachine.current.abort();
                 setFuzzyFindVisible(true);
+            } else if (action == Action.CloseFuzzyFind) {
+                if (selectedTabId !== 'Lib' || !fuzzyFindVisible) return;
+                setFuzzyFindVisible(false);
             } else if (action == Action.FocusBibEditor) {
                 if (selectedTabId !== 'Lib') return;
                 setBibEditorFocused(true);
@@ -409,8 +407,7 @@ function App() {
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [selectedTabId, fixedTabs, variableTabs, lib,
-        selectedNodeId, expandedNodeIds, selectedPublicationPathStem,
-        publicationListItems, pubMetadata]);
+        selectedNodeId, expandedNodeIds, fuzzyFindVisible, handlePublicationSubmit]);
 
     const handleCmd = (cmdLine: string) => {
         const spaceIdx = cmdLine.indexOf(' ');
