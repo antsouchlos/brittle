@@ -35,6 +35,7 @@ enum Action {
     OpenSelectedPublication,
     OpenCmdLine,
     OpenFuzzyFind,
+    CloseFuzzyFind,
     FocusBibEditor,
 }
 
@@ -48,9 +49,10 @@ const keymap: Array<[string, Action]> = [
     ["gt", Action.NextTab],
     ["gT", Action.PrevTab],
     ["Enter", Action.OpenSelectedPublication],
-    ["b", Action.FocusBibEditor],
+    ["Ctrl+e", Action.FocusBibEditor],
     [":", Action.OpenCmdLine],
     [" ff", Action.OpenFuzzyFind],
+    ["Escape", Action.CloseFuzzyFind],
 ];
 
 // Selects the first visible publication whenever the current selection is no
@@ -79,6 +81,7 @@ function App() {
     const [autosaveDebounceMs, setAutosaveDebounceMs] = useState(250);
     const [cmdLineVisible, setCmdLineVisible] = useState(false);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
+    const [publicationNavRequest, setPublicationNavRequest] = useState<{ delta: 1 | -1 } | null>(null);
     const [commandList, setCommandList] = useState<string[]>([]);
     const [commandHistory, setCommandHistory] = useState<string[]>([]);
     const historyLoadedRef = useRef(false);
@@ -286,8 +289,7 @@ function App() {
                                         }}
                                         fuzzyFindVisible={fuzzyFindVisible}
                                         isActive={selectedTabId === 'Lib'}
-                                        onCloseFuzzyFind={() => setFuzzyFindVisible(false)}
-                                        onSubmit={handlePublicationSubmit}
+                                        publicationNavRequest={publicationNavRequest}
                                     />
                                 </div>
                             ),
@@ -336,15 +338,6 @@ function App() {
     // TODO: Extract this into separate hook
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            const target = event.target as HTMLElement;
-            if (
-                target.tagName === 'INPUT' ||
-                target.tagName === 'TEXTAREA' ||
-                target.isContentEditable
-            ) {
-                return;
-            }
-
             if (event.ctrlKey && event.key === 'c') {
                 return;
             }
@@ -358,6 +351,9 @@ function App() {
             }
 
             let action: Action | null = stateMachine.current.feed(normalized_key);
+            if (action == null) {
+                return;
+            }
 
             if (action == Action.SelectNextCollection) {
                 if (selectedTabId !== 'Lib' || !lib) return;
@@ -375,18 +371,10 @@ function App() {
                 setSelectedNodeId(visibleIds[prevIdx]);
             } else if (action == Action.SelectNextPublication) {
                 if (selectedTabId !== 'Lib') return;
-                if (publicationListItems.length === 0) return;
-                const currentIdx = publicationListItems.findIndex(p => p.pathStem === selectedPublicationPathStem);
-                const startIdx = currentIdx < 0 ? 0 : currentIdx;
-                const nextIdx = (startIdx + 1) % publicationListItems.length;
-                setSelectedPublicationPathStem(publicationListItems[nextIdx].pathStem);
+                setPublicationNavRequest({ delta: 1 });
             } else if (action == Action.SelectPrevPublication) {
                 if (selectedTabId !== 'Lib') return;
-                if (publicationListItems.length === 0) return;
-                const currentIdx = publicationListItems.findIndex(p => p.pathStem === selectedPublicationPathStem);
-                const startIdx = currentIdx < 0 ? 0 : currentIdx;
-                const prevIdx = (startIdx - 1 + publicationListItems.length) % publicationListItems.length;
-                setSelectedPublicationPathStem(publicationListItems[prevIdx].pathStem);
+                setPublicationNavRequest({ delta: -1 });
             } else if (action == Action.NextTab) {
                 const allTabIds = [...fixedTabs.map(t => t.id), ...variableTabs.map(t => t.id)];
                 const currentIdx = allTabIds.indexOf(selectedTabId);
@@ -405,7 +393,11 @@ function App() {
                 setCmdLineVisible(true);
             } else if (action == Action.OpenFuzzyFind) {
                 if (selectedTabId !== 'Lib') return;
+                stateMachine.current.abort();
                 setFuzzyFindVisible(true);
+            } else if (action == Action.CloseFuzzyFind) {
+                if (selectedTabId !== 'Lib' || !fuzzyFindVisible) return;
+                setFuzzyFindVisible(false);
             } else if (action == Action.FocusBibEditor) {
                 if (selectedTabId !== 'Lib') return;
                 setBibEditorFocused(true);
@@ -415,8 +407,7 @@ function App() {
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [selectedTabId, fixedTabs, variableTabs, lib,
-        selectedNodeId, expandedNodeIds, selectedPublicationPathStem,
-        publicationListItems, pubMetadata]);
+        selectedNodeId, expandedNodeIds, fuzzyFindVisible, handlePublicationSubmit]);
 
     const handleCmd = (cmdLine: string) => {
         const spaceIdx = cmdLine.indexOf(' ');

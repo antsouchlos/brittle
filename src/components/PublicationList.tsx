@@ -20,8 +20,7 @@ interface PublicationListProps {
     onSelectPublication: (pathStem: string) => void;
     fuzzyFindVisible: boolean;
     isActive: boolean;
-    onCloseFuzzyFind: () => void;
-    onSubmit?: () => void;
+    publicationNavRequest: { delta: 1 | -1 } | null;
 }
 
 interface HighlightPart {
@@ -112,6 +111,16 @@ function ContentIndicators({ contentFiles }: { contentFiles: string[] }) {
     );
 }
 
+function isTextProducingKey(event: KeyboardEvent): boolean {
+    if (event.isComposing) return true;
+    const key = event.key;
+    if (key.length === 1 && !event.metaKey && !(event.ctrlKey && !event.altKey)) return true;
+    if (key === 'Backspace' || key === 'Delete' || key === 'Home' || key === 'End') return true;
+    if (key.startsWith('Arrow')) return true;
+    const mod = event.ctrlKey || event.metaKey;
+    return mod && (key === 'a' || key === 'c' || key === 'v' || key === 'x');
+}
+
 function useFuzzyInputFocus(
     fuzzyFindVisible: boolean,
     isActive: boolean,
@@ -129,6 +138,39 @@ function useFuzzyInputFocus(
             inputRef.current.blur();
         }
     }, [isActive, fuzzyFindVisible]);
+
+    // The fuzzy bar is the default key owner while it is open: whenever DOM
+    // focus lands outside it and outside another editable surface (the bib
+    // editor, the command line), pull focus back into the input. This covers
+    // releases the other hook cannot see, like the bib editor blurring after
+    // 'Escape' or a pointer click on a collection or list card.
+    useEffect(() => {
+        if (!fuzzyFindVisible || !isActive) return;
+
+        const refocusIfUnclaimed = (event: FocusEvent) => {
+            const input = inputRef.current;
+            if (!input || !input.isConnected || input.offsetParent === null) return;
+
+            const nextTarget = event.relatedTarget as HTMLElement | null;
+            const focusOnOtherTextArea = nextTarget instanceof HTMLElement
+                && nextTarget !== input
+                && (nextTarget instanceof HTMLInputElement
+                    || nextTarget instanceof HTMLTextAreaElement
+                    || nextTarget.isContentEditable);
+            if (focusOnOtherTextArea) return;
+
+            // Defer a frame so the refocus never fights the click or a tab
+            // switch that blurred the input in the first place.
+            requestAnimationFrame(() => {
+                if (input.isConnected && document.activeElement !== input) {
+                    input.focus();
+                }
+            });
+        };
+
+        document.addEventListener('focusout', refocusIfUnclaimed);
+        return () => document.removeEventListener('focusout', refocusIfUnclaimed);
+    }, [fuzzyFindVisible, isActive]);
 
     const onContainerMouseDown = (e: React.MouseEvent) => {
         if (fuzzyFindVisible && inputRef.current) {
@@ -153,6 +195,31 @@ function useScrollToSelected(
             ?.querySelector<HTMLElement>('[data-selected="true"]')
             ?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
     }, [selectedPathStem, displayedPublications]);
+}
+
+function usePublicationNavigation(
+    fuzzyFindVisible: boolean,
+    navigateFuzzyList: (delta: number) => void,
+    publications: Publication[],
+    selectedPublicationPathStem: string,
+    onSelectPublication: (pathStem: string) => void,
+    publicationNavRequest: { delta: 1 | -1 } | null,
+) {
+    useEffect(() => {
+        if (publicationNavRequest === null) return;
+        const delta = publicationNavRequest.delta;
+
+        if (fuzzyFindVisible) {
+            navigateFuzzyList(delta);
+            return;
+        } else {
+            if (publications.length === 0) return;
+            const currentIdx = publications.findIndex(p => p.pathStem === selectedPublicationPathStem);
+            const startIdx = currentIdx < 0 ? 0 : currentIdx;
+            const nextIdx = (startIdx + delta + publications.length) % publications.length;
+            onSelectPublication(publications[nextIdx].pathStem);
+        }
+    }, [publicationNavRequest]);
 }
 
 function useFuzzySearch(
@@ -258,8 +325,7 @@ function PublicationList({
     onSelectPublication,
     fuzzyFindVisible,
     isActive,
-    onCloseFuzzyFind,
-    onSubmit,
+    publicationNavRequest,
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
 
@@ -275,6 +341,15 @@ function PublicationList({
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
         useFuzzyInputFocus(fuzzyFindVisible, isActive);
 
+    usePublicationNavigation(
+        fuzzyFindVisible,
+        navigate,
+        publications,
+        selectedPublicationPathStem,
+        onSelectPublication,
+        publicationNavRequest,
+    );
+
     return (
         <div className={styles.publicationList}
             onMouseDown={onContainerMouseDown}
@@ -289,16 +364,7 @@ function PublicationList({
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="publisher · title · author · year"
                         onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                onSubmit?.();
-                            } else if (e.key === 'Escape') {
-                                onCloseFuzzyFind();
-                            } else if ((e.key === 'n' && e.ctrlKey) || (e.key === 'p' && e.ctrlKey)) {
-                                navigate(e.key === 'n' ? 1 : -1);
-                            } else if (e.key === 'Tab') {
-                                e.preventDefault();
-                                navigate(e.shiftKey ? -1 : 1);
-                            }
+                            if (isTextProducingKey(e.nativeEvent)) e.stopPropagation();
                         }}
                         spellCheck={false}
                         autoComplete="off"

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type KeyboardEvent } from 'react';
 
 import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { drawSelection, KeyBinding, keymap } from '@codemirror/view';
@@ -117,6 +117,18 @@ export default function VimTextArea({ value, onChange, focused, onFocusedChange 
     const editorRef = useRef<ReactCodeMirrorRef>(null);
     const focusSyncExtensions = useCodeMirrorFocusSync(editorRef, focused, onFocusedChange);
 
+    // CodeMirror's own keymap handles keys like Tab (its bundled indentWithTab
+    // binding) but never stops their propagation, so they bubble past our
+    // domEventHandlers and reach the app keymap. Swallow the rest here, in the
+    // bubble phase after CodeMirror has already handled the key.
+    const handleEditorHostKeyDown = (event: KeyboardEvent) => {
+        event.stopPropagation();
+
+        if (event.key === 'Tab') {
+            event.preventDefault();
+        }
+    };
+
     const extensions = [
         history(),
         drawSelection({ cursorBlinkRate: 0 }),
@@ -137,7 +149,6 @@ export default function VimTextArea({ value, onChange, focused, onFocusedChange 
 
                     if (cm && (cm as any).state?.vim?.insertMode) {
                         event.preventDefault();
-                        event.stopPropagation();
 
                         Vim.handleKey(cm as any, '<Esc>', 'input');
                         Vim.handleKey(cm as any, event.key, 'input');
@@ -166,13 +177,15 @@ export default function VimTextArea({ value, onChange, focused, onFocusedChange 
 
 
     return (
-        <CodeMirror
-            ref={editorRef}
-            value={value}
-            onChange={onChange}
-            basicSetup={false}
-            className={styles.editor}
-            extensions={extensions}
-        />
+        <div className={styles.editorHost} onKeyDown={handleEditorHostKeyDown}>
+            <CodeMirror
+                ref={editorRef}
+                value={value}
+                onChange={onChange}
+                basicSetup={false}
+                className={styles.editor}
+                extensions={extensions}
+            />
+        </div>
     );
 }
