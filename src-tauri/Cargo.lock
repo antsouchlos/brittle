@@ -399,6 +399,7 @@ dependencies = [
  "mlua",
  "notify",
  "open",
+ "parking_lot",
  "serde",
  "serde_json",
  "tauri",

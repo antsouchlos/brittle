@@ -17,6 +17,7 @@ use crate::watcher::{spawn_watcher, WatchRegistry, WatcherCommand};
 
 mod config;
 mod library;
+mod store;
 mod watcher;
 
 pub fn get_emmy_lua() -> &'static str {
