@@ -3,13 +3,12 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use crate::config::Watch;
+use crate::orchestrator::{Action, Orchestrator};
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use log::{error, info, warn};
 use notify::event::{ModifyKind, RenameMode};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use tauri::Emitter;
-
-use crate::config::Watch;
 
 /// How long an event burst must stay quiet before it is dispatched as a single
 /// change. Covers editor save transactions (temp-file write + atomic rename)
@@ -23,7 +22,7 @@ const CONTROL_POLL: Duration = Duration::from_millis(100);
 pub struct WatchEntry {
     pub path: PathBuf,
     /// Actions that are triggered upon noticing a modification
-    pub actions: Vec<String>, 
+    pub actions: Vec<String>,
     pub gitignore: Option<Gitignore>,
 }
 
@@ -125,24 +124,25 @@ pub trait ActionRunner {
     fn run(&self, action: &str);
 }
 
-/// Tauri-backed runner: emits change events or triggers a config reload
-pub struct TauriActionRunner {
-    app_handle: tauri::AppHandle,
+/// Orchestrator-backed runner: turns a watch action into a queued action so the
+/// reload is serialized against everything else that modifies state
+pub struct OrchestratorActionRunner {
+    orchestrator: Orchestrator,
 }
 
-impl ActionRunner for TauriActionRunner {
+impl ActionRunner for OrchestratorActionRunner {
     fn run(&self, action: &str) {
-        match action {
-            "library" => {
-                crate::reload_library(&self.app_handle);
-                emit(&self.app_handle, "library-changed");
+        let action = match action {
+            "library" | "publication_metadata" => Action::ReloadLibrary,
+            "config" => Action::ReloadConfig,
+            other => {
+                warn!("Unknown watch action '{}'", other);
+                return;
             }
-            "publication_metadata" => {
-                crate::reload_library(&self.app_handle);
-                emit(&self.app_handle, "publication-metadata-changed");
-            }
-            "config" => crate::reload_config(&self.app_handle),
-            other => warn!("Unknown watch action '{}'", other),
+        };
+
+        if let Err(e) = self.orchestrator.enqueue(action) {
+            error!("Failed to enqueue watch action: {}", e);
         }
     }
 }
@@ -154,10 +154,10 @@ pub enum WatcherCommand {
 }
 
 /// Spawns the file-system watcher thread. `cmd_rx` is the control channel
-/// (the sender is stored in `AppState` so config reloads can re-sync watches);
-/// `initial` is the registry built from the startup config
+/// (the sender is held by the orchestrator so config reloads can re-sync
+/// watches); `initial` is the registry built from the startup config
 pub fn spawn_watcher(
-    app_handle: tauri::AppHandle,
+    orchestrator: Orchestrator,
     cmd_rx: mpsc::Receiver<WatcherCommand>,
     initial: WatchRegistry,
 ) {
@@ -178,7 +178,7 @@ pub fn spawn_watcher(
         diff_registries_and_reregister_watcher(&mut watcher, &active, &initial);
         active = initial;
 
-        let runner = TauriActionRunner { app_handle };
+        let runner = OrchestratorActionRunner { orchestrator };
         let mut settle = SettleBuffer::new(SETTLE_WINDOW);
 
         loop {
@@ -296,12 +296,6 @@ fn get_event_actions(registry: &WatchRegistry, event: &notify::Event) -> Vec<Str
     }
 
     actions
-}
-
-fn emit(app_handle: &tauri::AppHandle, name: &str) {
-    if let Err(e) = app_handle.emit(name, ()) {
-        error!("Failed to emit {} event: {}", name, e);
-    }
 }
 
 #[cfg(test)]

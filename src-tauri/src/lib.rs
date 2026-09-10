@@ -4,20 +4,22 @@ use std::fmt::Display;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::mpsc;
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use log::error;
 use serde::{Deserialize, Serialize};
-use tauri::{Emitter, Manager, State};
+use tauri::{Manager, State};
 
 use crate::config::{Config, Opts};
 use crate::library::LoadError;
+use crate::orchestrator::{Action, Orchestrator};
 use crate::store::{LibraryState, LibraryStore, PublicationId};
 use crate::watcher::{spawn_watcher, WatchRegistry, WatcherCommand};
 
 mod config;
 mod library;
+mod orchestrator;
 mod store;
 mod watcher;
 
@@ -144,21 +146,19 @@ fn setup_linux_pinch(window: &tauri::WebviewWindow) -> Result<(), Error> {
     Ok(())
 }
 
-/// Tauri-managed application state, the single source of truth for the live
-/// config and the derived scan filter / watch registry. Commands read through
-/// the read locks; a config reload swaps values under the write locks.
+/// Tauri-managed application state. Read-only commands read `config` and
+/// `store` directly; everything that can modify state goes through the
+/// orchestrator, which is the only writer.
 struct AppState {
-    config: RwLock<Config>,
-    scan_ignore: RwLock<Gitignore>,
-    watch: RwLock<WatchRegistry>,
-    watcher_tx: Mutex<mpsc::Sender<WatcherCommand>>,
+    config: Arc<RwLock<Config>>,
     store: LibraryStore,
+    orchestrator: Orchestrator,
 }
 
 /// Compiles the library scan ignore filter from `opts.library_ignore_patterns`.
 /// This is separate from per-watch-entry ignores: it decides which files the
 /// tree/list display, while entry ignores only filter watch events.
-fn build_scan_ignore(opts: &Opts) -> Result<Gitignore, LoadError> {
+pub(crate) fn build_scan_ignore(opts: &Opts) -> Result<Gitignore, LoadError> {
     let mut builder = GitignoreBuilder::new(PathBuf::from(opts.library_path.clone()));
     for pattern in &opts.library_ignore_patterns {
         if let Err(e) = builder.add_line(None, pattern.as_str()) {
@@ -169,87 +169,6 @@ fn build_scan_ignore(opts: &Opts) -> Result<Gitignore, LoadError> {
     builder
         .build()
         .map_err(|e| LoadError::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e)))
-}
-
-pub fn reload_library(app_handle: &tauri::AppHandle) {
-    let state = app_handle.state::<AppState>();
-    let config = state.config.read().unwrap();
-    let scan_ignore = state.scan_ignore.read().unwrap();
-
-    let library = library::read_library(
-        &config.opts.library_path,
-        &scan_ignore,
-        &config.get_parser_formats(),
-        &vec!["pdf".to_string(), "html".to_string()],
-        &|extension, source| config.call_ref_parser(extension, source),
-    );
-
-    match library {
-        Ok(library) => state.store.set_state(library),
-        Err(e) => error!("Failed to read library: {}", e),
-    }
-}
-
-/// Re-evaluates the config, swaps it into `AppState`, and re-syncs the watcher.
-///
-/// On any failure the previous config and watch registry stay active so the
-/// next (fixed) save is still caught; the error is surfaced to the frontend.
-fn reload_config(app_handle: &tauri::AppHandle) {
-    let config_path = app_handle
-        .path()
-        .app_config_dir()
-        .map(|dir| dir.join("init.lua"));
-
-    let config_path = match config_path {
-        Ok(config_path) => config_path,
-        Err(e) => {
-            let msg = format!("Failed to resolve config path on reload: {}", e);
-            error!("{}", msg);
-            let _ = app_handle.emit("config-reload-error", msg);
-            return;
-        }
-    };
-
-    let new_config = match config::load_config_from(&config_path) {
-        Ok(config) => config,
-        Err(e) => {
-            let msg = format!("Failed to reload config: {}", e);
-            error!("{}", msg);
-            let _ = app_handle.emit("config-reload-error", msg);
-            return;
-        }
-    };
-
-    let new_scan_ignore = match build_scan_ignore(&new_config.opts) {
-        Ok(ignore) => ignore,
-        Err(e) => {
-            let msg = format!("Failed to rebuild ignore filter on reload: {}", e);
-            error!("{}", msg);
-            let _ = app_handle.emit("config-reload-error", msg);
-            return;
-        }
-    };
-
-    let new_registry = WatchRegistry::from_config(&new_config.opts.watch);
-
-    let state = app_handle.state::<AppState>();
-    {
-        let mut config = state.config.write().unwrap();
-        *config = new_config;
-        let mut scan_ignore = state.scan_ignore.write().unwrap();
-        *scan_ignore = new_scan_ignore;
-        let mut watch = state.watch.write().unwrap();
-        *watch = new_registry.clone();
-    }
-
-    let tx = state.watcher_tx.lock().unwrap();
-    if let Err(e) = tx.send(WatcherCommand::Sync(new_registry)) {
-        error!("Failed to re-sync watcher after config reload: {}", e);
-    }
-
-    reload_library(app_handle);
-
-    let _ = app_handle.emit("config-changed", ());
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -298,16 +217,26 @@ pub fn run() {
                     .to_string_lossy()
                     .to_string();
 
+                let config = Arc::new(RwLock::new(config));
+                let store = LibraryStore::new(root_collection_name, library_path);
+                let orchestrator = Orchestrator::new(
+                    app.app_handle().clone(),
+                    config.clone(),
+                    scan_ignore,
+                    watch_tx,
+                    store.clone(),
+                );
+
                 app.manage(AppState {
-                    config: RwLock::new(config),
-                    scan_ignore: RwLock::new(scan_ignore),
-                    watch: RwLock::new(watch_registry.clone()),
-                    watcher_tx: Mutex::new(watch_tx),
-                    store: LibraryStore::new(root_collection_name, library_path),
+                    config,
+                    store,
+                    orchestrator: orchestrator.clone(),
                 });
 
-                reload_library(app.handle());
-                spawn_watcher(app.handle().clone(), watch_rx, watch_registry);
+                if let Err(e) = orchestrator.enqueue(Action::ReloadLibrary) {
+                    error!("Failed to schedule the initial library scan: {}", e);
+                }
+                spawn_watcher(orchestrator, watch_rx, watch_registry);
             }
             #[cfg(target_os = "linux")]
             {
@@ -415,13 +344,13 @@ fn write_publication_source(
     content: String,
     state: State<AppState>,
 ) -> Result<(), String> {
-    let publication = state
-        .store
-        .get_publication(publication_id)
-        .map_err(|e| e.to_string())?;
-
-    std::fs::write(&publication.path, content)
-        .map_err(|e| format!("Failed to write {}: {}", publication.path.display(), e))
+    state
+        .orchestrator
+        .request(|respond| Action::WritePublicationSource {
+            publication_id,
+            content,
+            respond,
+        })?
 }
 
 /// Stub: always returns `None` so the frontend initializes from defaults.
@@ -448,7 +377,13 @@ fn list_commands(state: State<AppState>) -> Vec<String> {
 
 #[tauri::command]
 fn execute_command(cmd: String, args: String, state: State<AppState>) -> Result<String, String> {
-    state.config.read().unwrap().execute_command(&cmd, &args)
+    state
+        .orchestrator
+        .request(|respond| Action::ExecuteCommand {
+            command: cmd,
+            args,
+            respond,
+        })?
 }
 
 #[tauri::command]

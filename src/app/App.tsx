@@ -158,9 +158,6 @@ function App() {
             loadCommandHistory();
             loadConfig();
         });
-        const metadataChanged = listen('publication-metadata-changed', () => {
-            loadLibraryData().catch(e => logger.error(String(e)));
-        });
         const configError = listen('config-reload-error', (event) => {
             logger.error(String(event.payload));
         });
@@ -168,7 +165,6 @@ function App() {
         return () => {
             libraryChanged.then(unlisten => unlisten());
             configChanged.then(unlisten => unlisten());
-            metadataChanged.then(unlisten => unlisten());
             configError.then(unlisten => unlisten());
         };
     }, [loadLibraryData, loadCommandList, loadCommandHistory, loadConfig]);
