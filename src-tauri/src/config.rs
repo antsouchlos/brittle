@@ -30,7 +30,7 @@ pub mod config {
     #[luaclass]
     struct PublicationMetadata {
         pub title: String,
-        pub author: String,
+        pub authors: String,
         pub year: i32,
         pub publisher: String,
     }
@@ -184,11 +184,11 @@ pub mod config {
     // Convenience function
     //
 
-    impl From<PublicationMetadata> for crate::PublicationMetadata {
+    impl From<PublicationMetadata> for crate::store::ParsedMetadata {
         fn from(other: PublicationMetadata) -> Self {
-            crate::PublicationMetadata {
+            crate::store::ParsedMetadata {
                 title: other.title,
-                author: other.author,
+                authors: other.authors,
                 year: other.year,
                 publisher: other.publisher,
             }
@@ -207,7 +207,7 @@ pub mod config {
             &self,
             extension: &String,
             src: &String,
-        ) -> Result<crate::PublicationMetadata, String> {
+        ) -> Result<crate::store::ParsedMetadata, String> {
             let _ = self.lua.as_ref().ok_or("Lua state unavailable")?;
 
             let parser = self
