@@ -2,6 +2,7 @@ use ignore::gitignore::Gitignore;
 use log::{debug, error, warn};
 use tauri::{AppHandle, Emitter, Manager};
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, RwLock};
 
@@ -85,6 +86,7 @@ impl Orchestrator {
                 scan_ignore,
                 watcher_tx,
                 store,
+                last_written_sources: HashMap::new(),
             };
             while let Ok(action) = rx.recv() {
                 worker.handle_action(action);
@@ -124,6 +126,7 @@ struct Worker {
     scan_ignore: Gitignore,
     watcher_tx: mpsc::Sender<WatcherCommand>,
     store: LibraryStore,
+    last_written_sources: HashMap<PathBuf, String>,
 }
 
 impl Worker {
@@ -302,6 +305,10 @@ impl Worker {
             return Ok(());
         }
 
+        if file_matches_last_written_source(&self.last_written_sources, path) {
+            return Ok(());
+        }
+
         let dir = path
             .parent()
             .ok_or_else(|| format!("'{}' has no parent directory", path.display()))?;
@@ -449,17 +456,58 @@ impl Worker {
     }
 
     fn write_publication_source(
-        &self,
+        &mut self,
         publication_id: PublicationId,
         content: String,
     ) -> Result<(), String> {
         let publication = self
             .store
-            .get_publication(publication_id)
+            .get_publication(publication_id.clone())
             .map_err(|e| e.to_string())?;
 
-        std::fs::write(&publication.path, content)
-            .map_err(|e| format!("Failed to write {}: {}", publication.path.display(), e))
+        let metadata = match self
+            .config
+            .read()
+            .unwrap()
+            .call_ref_parser(&publication.metadata_file_extension, &content)
+        {
+            Ok(metadata) => Some(metadata),
+            Err(e) => {
+                warn!("Failed to parse {}: {}", publication.path.display(), e);
+                None
+            }
+        };
+
+        let updated = Publication {
+            metadata_source: content.clone(),
+            metadata,
+            ..publication
+        };
+        let path = updated.path.clone();
+        let parent_collection_id = path
+            .parent()
+            .map(CollectionId::from_path)
+            .ok_or_else(|| format!("'{}' has no parent directory", path.display()))?;
+
+        self.store
+            .update_publication(publication_id.clone(), updated.clone())
+            .map_err(|e| e.to_string())?;
+
+        debug!("Updated publication '{}' from an edit", path.display());
+        self.emit(
+            "publication-upserted",
+            PublicationUpserted {
+                publication_id,
+                parent_collection_id,
+                publication: updated,
+            },
+        );
+
+        self.last_written_sources
+            .insert(path.clone(), content.clone());
+
+        std::fs::write(&path, content)
+            .map_err(|e| format!("Failed to write {}: {}", path.display(), e))
     }
 
     fn report_config_error(&self, message: String) {
@@ -471,5 +519,76 @@ impl Worker {
         if let Err(e) = self.app_handle.emit(name, payload) {
             error!("Failed to emit {} event: {}", name, e);
         }
+    }
+}
+
+fn file_matches_last_written_source(
+    last_written_sources: &HashMap<PathBuf, String>,
+    path: &Path,
+) -> bool {
+    let Some(written_source) = last_written_sources.get(path) else {
+        return false;
+    };
+
+    match std::fs::read_to_string(path) {
+        Ok(source) => &source == written_source,
+        Err(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::fs;
+
+    #[test]
+    fn a_file_still_holding_what_was_written_to_it_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("paper.bib");
+        fs::write(&path, "@article{a}").unwrap();
+
+        let last_written_sources = HashMap::from([(path.clone(), "@article{a}".to_string())]);
+
+        assert!(file_matches_last_written_source(
+            &last_written_sources,
+            &path
+        ));
+    }
+
+    #[test]
+    fn a_file_changed_after_the_write_does_not_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("paper.bib");
+        fs::write(&path, "@article{edited_elsewhere}").unwrap();
+
+        let last_written_sources = HashMap::from([(path.clone(), "@article{a}".to_string())]);
+
+        assert!(!file_matches_last_written_source(
+            &last_written_sources,
+            &path
+        ));
+    }
+
+    #[test]
+    fn a_path_never_written_by_us_does_not_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("paper.bib");
+        fs::write(&path, "@article{a}").unwrap();
+
+        assert!(!file_matches_last_written_source(&HashMap::new(), &path));
+    }
+
+    #[test]
+    fn a_written_path_that_is_gone_does_not_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("paper.bib");
+
+        let last_written_sources = HashMap::from([(path.clone(), "@article{a}".to_string())]);
+
+        assert!(!file_matches_last_written_source(
+            &last_written_sources,
+            &path
+        ));
     }
 }
