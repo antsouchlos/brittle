@@ -40,7 +40,7 @@ return {
                 result.title = src:match("title%s*=%s*{(.-)}")
                 result.publisher = src:match("journal%s*=%s*{(.-)}")
                 result.year = tonumber(src:match("year%s*=%s*{(.-)}"))
-                result.author = src:match("author%s*=%s*{(.-)}")
+                result.authors = src:match("author%s*=%s*{(.-)}")
 
                 return result
             end,

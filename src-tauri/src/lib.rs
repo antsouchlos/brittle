@@ -13,10 +13,12 @@ use tauri::{Emitter, Manager, State};
 
 use crate::config::{Config, Opts};
 use crate::library::LoadError;
+use crate::store::{LibraryState, LibraryStore, PublicationId};
 use crate::watcher::{spawn_watcher, WatchRegistry, WatcherCommand};
 
 mod config;
 mod library;
+mod store;
 mod watcher;
 
 pub fn get_emmy_lua() -> &'static str {
@@ -150,6 +152,7 @@ struct AppState {
     scan_ignore: RwLock<Gitignore>,
     watch: RwLock<WatchRegistry>,
     watcher_tx: Mutex<mpsc::Sender<WatcherCommand>>,
+    store: LibraryStore,
 }
 
 /// Compiles the library scan ignore filter from `opts.library_ignore_patterns`.
@@ -166,6 +169,25 @@ fn build_scan_ignore(opts: &Opts) -> Result<Gitignore, LoadError> {
     builder
         .build()
         .map_err(|e| LoadError::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, e)))
+}
+
+pub fn reload_library(app_handle: &tauri::AppHandle) {
+    let state = app_handle.state::<AppState>();
+    let config = state.config.read().unwrap();
+    let scan_ignore = state.scan_ignore.read().unwrap();
+
+    let library = library::read_library(
+        &config.opts.library_path,
+        &scan_ignore,
+        &config.get_parser_formats(),
+        &vec!["pdf".to_string(), "html".to_string()],
+        &|extension, source| config.call_ref_parser(extension, source),
+    );
+
+    match library {
+        Ok(library) => state.store.set_state(library),
+        Err(e) => error!("Failed to read library: {}", e),
+    }
 }
 
 /// Re-evaluates the config, swaps it into `AppState`, and re-syncs the watcher.
@@ -225,6 +247,8 @@ fn reload_config(app_handle: &tauri::AppHandle) {
         error!("Failed to re-sync watcher after config reload: {}", e);
     }
 
+    reload_library(app_handle);
+
     let _ = app_handle.emit("config-changed", ());
 }
 
@@ -267,13 +291,22 @@ pub fn run() {
 
                 let (watch_tx, watch_rx) = mpsc::channel::<WatcherCommand>();
 
+                let library_path = config.opts.library_path.to_path_buf();
+                let root_collection_name = library_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+
                 app.manage(AppState {
                     config: RwLock::new(config),
                     scan_ignore: RwLock::new(scan_ignore),
                     watch: RwLock::new(watch_registry.clone()),
                     watcher_tx: Mutex::new(watch_tx),
+                    store: LibraryStore::new(root_collection_name, library_path),
                 });
 
+                reload_library(app.handle());
                 spawn_watcher(app.handle().clone(), watch_rx, watch_registry);
             }
             #[cfg(target_os = "linux")]
@@ -303,9 +336,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
-            scan_library,
-            parse_publication,
-            read_publication_source,
+            get_library_state,
             write_publication_source,
             get_config,
             load_ui_state,
@@ -374,86 +405,23 @@ struct SerializedUiState {
 // ---------- Commands ----------
 
 #[tauri::command]
-fn scan_library(state: State<AppState>) -> Result<library::Library, String> {
-    let config = state.config.read().unwrap();
-    let scan_ignore = state.scan_ignore.read().unwrap();
-
-    library::scan_library(
-        &PathBuf::from(config.opts.library_path.clone()),
-        &scan_ignore,
-        &config.get_parser_formats(),
-        &vec!["pdf".to_string(), "html".to_string()],
-    )
-    .map_err(|e| e.to_string())
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PublicationMetadata {
-    pub title: String,
-    pub author: String,
-    pub year: i32,
-    pub publisher: String,
-}
-
-#[tauri::command]
-fn parse_publication(
-    path_stem: String,
-    extension: String,
-    state: State<AppState>,
-) -> Result<PublicationMetadata, String> {
-    let config = state.config.read().unwrap();
-    let lib_path = PathBuf::from(config.opts.library_path.clone());
-
-    let metadata_path = lib_path
-        .parent()
-        .unwrap_or(&lib_path)
-        .join(&path_stem)
-        .with_extension(&extension);
-
-    let source = std::fs::read_to_string(&metadata_path)
-        .map_err(|e| format!("Failed to read {}: {}", metadata_path.display(), e))?;
-
-    config.call_ref_parser(&extension, &source)
-}
-
-#[tauri::command]
-fn read_publication_source(
-    path_stem: String,
-    extension: String,
-    state: State<AppState>,
-) -> Result<String, String> {
-    let config = state.config.read().unwrap();
-    let lib_path = PathBuf::from(config.opts.library_path.clone());
-
-    let metadata_path = lib_path
-        .parent()
-        .unwrap_or(&lib_path)
-        .join(&path_stem)
-        .with_extension(&extension);
-
-    std::fs::read_to_string(&metadata_path)
-        .map_err(|e| format!("Failed to read {}: {}", metadata_path.display(), e))
+fn get_library_state(state: State<AppState>) -> LibraryState {
+    state.store.get_state()
 }
 
 #[tauri::command]
 fn write_publication_source(
-    path_stem: String,
-    extension: String,
+    publication_id: PublicationId,
     content: String,
     state: State<AppState>,
 ) -> Result<(), String> {
-    let config = state.config.read().unwrap();
-    let lib_path = PathBuf::from(config.opts.library_path.clone());
+    let publication = state
+        .store
+        .get_publication(publication_id)
+        .map_err(|e| e.to_string())?;
 
-    let metadata_path = lib_path
-        .parent()
-        .unwrap_or(&lib_path)
-        .join(&path_stem)
-        .with_extension(&extension);
-
-    std::fs::write(&metadata_path, content)
-        .map_err(|e| format!("Failed to write {}: {}", metadata_path.display(), e))
+    std::fs::write(&publication.path, content)
+        .map_err(|e| format!("Failed to write {}: {}", publication.path.display(), e))
 }
 
 /// Stub: always returns `None` so the frontend initializes from defaults.
@@ -517,14 +485,14 @@ fn save_command_history(state: State<AppState>, history: Vec<String>) -> Result<
 }
 
 #[tauri::command]
-fn open_publication(path_stem: String, state: State<AppState>) -> Result<(), String> {
+fn open_publication(publication_id: PublicationId, state: State<AppState>) -> Result<(), String> {
     let config = state.config.read().unwrap();
-    let library_path = PathBuf::from(config.opts.library_path.clone());
 
-    let parent = library_path
-        .parent()
-        .ok_or_else(|| "Library path has no parent directory".to_string())?;
-    let pdf_path = parent.join(&path_stem).with_extension("pdf");
+    let publication = state
+        .store
+        .get_publication(publication_id)
+        .map_err(|e| e.to_string())?;
+    let pdf_path = publication.path.with_extension("pdf");
 
     if !pdf_path.exists() {
         return Err(format!("PDF not found: {}", pdf_path.display()));

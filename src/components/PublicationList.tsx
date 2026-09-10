@@ -4,8 +4,8 @@ import { FaFilePdf } from 'react-icons/fa';
 import { Globe } from 'lucide-react';
 import styles from './PublicationList.module.css';
 
-interface Publication {
-    pathStem: string;
+interface PublicationListItem {
+    id: string;
     title: string;
     author: string;
     publisher: string;
@@ -15,9 +15,9 @@ interface Publication {
 }
 
 interface PublicationListProps {
-    publications: Array<Publication>
-    selectedPublicationPathStem: string;
-    onSelectPublication: (pathStem: string) => void;
+    publications: Array<PublicationListItem>
+    selectedPublicationId: string;
+    onSelectPublication: (publicationId: string) => void;
     fuzzyFindVisible: boolean;
     isActive: boolean;
     publicationNavRequest: { delta: 1 | -1 } | null;
@@ -184,8 +184,8 @@ function useFuzzyInputFocus(
 
 function useScrollToSelected(
     containerRef: RefObject<HTMLDivElement | null>,
-    selectedPathStem: string,
-    displayedPublications: Publication[],
+    selectedPublicationId: string,
+    displayedPublications: PublicationListItem[],
 ) {
     // The displayed list is a dependency on purpose: switching the selected
     // collection can change the list while leaving the selection id untouched,
@@ -194,15 +194,15 @@ function useScrollToSelected(
         containerRef.current
             ?.querySelector<HTMLElement>('[data-selected="true"]')
             ?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-    }, [selectedPathStem, displayedPublications]);
+    }, [selectedPublicationId, displayedPublications]);
 }
 
 function usePublicationNavigation(
     fuzzyFindVisible: boolean,
     navigateFuzzyList: (delta: number) => void,
-    publications: Publication[],
-    selectedPublicationPathStem: string,
-    onSelectPublication: (pathStem: string) => void,
+    publications: PublicationListItem[],
+    selectedPublicationId: string,
+    onSelectPublication: (publicationId: string) => void,
     publicationNavRequest: { delta: 1 | -1 } | null,
 ) {
     useEffect(() => {
@@ -214,18 +214,18 @@ function usePublicationNavigation(
             return;
         } else {
             if (publications.length === 0) return;
-            const currentIdx = publications.findIndex(p => p.pathStem === selectedPublicationPathStem);
+            const currentIdx = publications.findIndex(p => p.id === selectedPublicationId);
             const startIdx = currentIdx < 0 ? 0 : currentIdx;
             const nextIdx = (startIdx + delta + publications.length) % publications.length;
-            onSelectPublication(publications[nextIdx].pathStem);
+            onSelectPublication(publications[nextIdx].id);
         }
     }, [publicationNavRequest]);
 }
 
 function useFuzzySearch(
     fuzzyFindVisible: boolean,
-    publications: Publication[],
-    onSelectPublication: (pathStem: string) => void,
+    publications: PublicationListItem[],
+    onSelectPublication: (publicationId: string) => void,
     listRef: RefObject<HTMLDivElement | null>,
 ) {
     const [query, setQuery] = useState('');
@@ -236,7 +236,7 @@ function useFuzzySearch(
 
     const fzf = useMemo(
         () => new Fzf(publications, {
-            selector: (pub: Publication) => pub.title + pub.author + pub.publisher + pub.date + pub.filename,
+            selector: (pub: PublicationListItem) => pub.title + pub.author + pub.publisher + pub.date + pub.filename,
             match: extendedMatch,
         }),
         [publications],
@@ -268,7 +268,7 @@ function useFuzzySearch(
             // state, so the ID we pick here is the one the user saw as selected.
             if (displayItems.length > 0) {
                 const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
-                onSelectPublication(displayItems[idx].pub.pathStem);
+                onSelectPublication(displayItems[idx].pub.id);
             }
             setSelectedIdx(-1);
             setQuery('');
@@ -277,7 +277,7 @@ function useFuzzySearch(
         }
         setSelectedIdx(0);
         if (publications.length > 0) {
-            onSelectPublication(publications[0].pathStem);
+            onSelectPublication(publications[0].id);
         }
         listRef.current?.scrollTo({ top: 0, behavior: 'instant' });
     }, [fuzzyFindVisible]);
@@ -285,13 +285,13 @@ function useFuzzySearch(
     useEffect(() => {
         if (!fuzzyFindVisible || displayItems.length === 0) return;
         const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
-        onSelectPublication(displayItems[idx].pub.pathStem);
+        onSelectPublication(displayItems[idx].pub.id);
     }, [query]);
 
     useEffect(() => {
         if (!fuzzyFindVisible || displayItems.length === 0) return;
         const idx = Math.max(0, Math.min(selectedIdx, displayItems.length - 1));
-        onSelectPublication(displayItems[idx].pub.pathStem);
+        onSelectPublication(displayItems[idx].pub.id);
     }, [publications]);
 
     // After closing the fuzzy bar the full list is committed to the DOM
@@ -308,12 +308,12 @@ function useFuzzySearch(
         if (displayItems.length === 0) return;
         const nextIdx = Math.max(0, Math.min(displayItems.length - 1, selectedIdx + delta));
         setSelectedIdx(nextIdx);
-        onSelectPublication(displayItems[nextIdx].pub.pathStem);
+        onSelectPublication(displayItems[nextIdx].pub.id);
     };
 
-    const selectByClick = (idx: number, pathStem: string) => {
+    const selectByClick = (idx: number, publicationId: string) => {
         setSelectedIdx(idx);
-        onSelectPublication(pathStem);
+        onSelectPublication(publicationId);
     };
 
     return { query, setQuery, displayItems, effectiveIdx, navigate, selectByClick };
@@ -321,7 +321,7 @@ function useFuzzySearch(
 
 function PublicationList({
     publications,
-    selectedPublicationPathStem,
+    selectedPublicationId,
     onSelectPublication,
     fuzzyFindVisible,
     isActive,
@@ -329,7 +329,7 @@ function PublicationList({
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
 
-    useScrollToSelected(listRef, selectedPublicationPathStem, publications);
+    useScrollToSelected(listRef, selectedPublicationId, publications);
 
     const { query, setQuery, displayItems, effectiveIdx, navigate, selectByClick } =
         useFuzzySearch(
@@ -345,7 +345,7 @@ function PublicationList({
         fuzzyFindVisible,
         navigate,
         publications,
-        selectedPublicationPathStem,
+        selectedPublicationId,
         onSelectPublication,
         publicationNavRequest,
     );
@@ -375,14 +375,14 @@ function PublicationList({
                 <div className={styles.list}>
                     {displayItems.map(({ pub, titlePositions, authorPositions, publisherPositions: publisherPositions, datePositions, filenamePositions }, idx) => (
                         <div
-                            key={pub.pathStem}
+                            key={pub.id}
                             className={styles.card}
                             data-selected={
                                 fuzzyFindVisible
                                     ? (idx === effectiveIdx ? 'true' : 'false')
-                                    : (selectedPublicationPathStem === pub.pathStem ? 'true' : 'false')
+                                    : (selectedPublicationId === pub.id ? 'true' : 'false')
                             }
-                            onClick={() => selectByClick(idx, pub.pathStem)}
+                            onClick={() => selectByClick(idx, pub.id)}
                         >
                             <div className={styles.cardTopRow}>
                                 <span className={styles.publisher}>

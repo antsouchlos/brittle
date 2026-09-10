@@ -3,37 +3,33 @@ import { invoke } from '@tauri-apps/api/core';
 
 import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
-import { getFilename, type Metadata, type PublicationEntry } from '../app/LibraryModel';
+import { type Publication, type PublicationId } from '../app/LibraryModel';
 import { logger } from '../app/logger';
 
 interface SourceEntry {
     source: string;
     diskText: string | null;
-    pub: PublicationEntry;
     version: number;
     queue: Promise<void>;
 }
 
-// Keeps the disk as source of truth for the active publication's bib source
-// and autosaves edits.
+// Keeps the store as source of truth for the active publication's metadata
+// source and autosaves edits.
 function usePublicationSource(
-    publication: PublicationEntry | null,
+    publicationId: PublicationId | null,
+    publication: Publication | null,
     bibEditorFocused: boolean,
     autosaveDebounceMs: number,
 ) {
-    const entriesRef = useRef(new Map<string, SourceEntry>());
-    const publicationRef = useRef(publication);
+    const entriesRef = useRef(new Map<PublicationId, SourceEntry>());
     const [, setRenderVersion] = useState(0);
     const forceRender = useCallback(() => setRenderVersion(v => v + 1), []);
 
-    const activeStem = publication?.pathStem ?? null;
-    const activeStemRef = useRef(activeStem);
-    const prevStemRef = useRef<string | null>(null);
-    const prevPublicationRef = useRef<PublicationEntry | null>(null);
+    const activeIdRef = useRef(publicationId);
+    const prevIdRef = useRef<PublicationId | null>(null);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    publicationRef.current = publication;
-    activeStemRef.current = activeStem;
+    activeIdRef.current = publicationId;
 
     const clearDebounceTimer = useCallback(() => {
         if (timerRef.current !== null) {
@@ -42,128 +38,96 @@ function usePublicationSource(
         }
     }, []);
 
-    const ensureSourceEntry = useCallback((stem: string, pub: PublicationEntry): SourceEntry => {
-        let sourceEntry = entriesRef.current.get(stem);
+    const ensureSourceEntry = useCallback((id: PublicationId): SourceEntry => {
+        let sourceEntry = entriesRef.current.get(id);
         if (!sourceEntry) {
-            sourceEntry = { source: '', diskText: null, pub, version: 0, queue: Promise.resolve() };
-            entriesRef.current.set(stem, sourceEntry);
-        } else {
-            sourceEntry.pub = pub;
+            sourceEntry = { source: '', diskText: null, version: 0, queue: Promise.resolve() };
+            entriesRef.current.set(id, sourceEntry);
         }
         return sourceEntry;
     }, []);
 
-    // Serializes disk operations per buffer, so a read never runs while one of
-    // our own writes is mid-flight and mistakes the pre-write file for an
-    // external change.
+    // Serializes writes per buffer, so two autosaves of the same publication
+    // never race each other.
     const enqueue = useCallback((sourceEntry: SourceEntry, op: () => Promise<void>) => {
         sourceEntry.queue = sourceEntry.queue
             .then(op)
             .catch(e => logger.error(String(e)));
     }, []);
 
-    const persist = useCallback((stem: string) => {
-        const sourceEntry = entriesRef.current.get(stem);
+    const persist = useCallback((id: PublicationId) => {
+        const sourceEntry = entriesRef.current.get(id);
         if (!sourceEntry || sourceEntry.diskText === null) return;
         enqueue(sourceEntry, async () => {
-            const current = entriesRef.current.get(stem);
+            const current = entriesRef.current.get(id);
             if (!current) return;
             const content = current.source;
             if (content === current.diskText) return;
-            await invoke('write_publication_source', {
-                pathStem: current.pub.pathStem,
-                extension: current.pub.referenceFileExtension,
-                content,
-            });
+            await invoke('write_publication_source', { publicationId: id, content });
             current.diskText = content;
         });
     }, [enqueue]);
 
-    // Reads disk and, when the file changed externally (read differs from the
-    // last confirmed disk text), replaces the buffer over any unsaved typing.
-    const sync = useCallback((stem: string) => {
-        const pub = publicationRef.current;
-        if (!pub || pub.pathStem !== stem) return;
-        const sourceEntry = ensureSourceEntry(stem, pub);
-        enqueue(sourceEntry, async () => {
-            const current = entriesRef.current.get(stem);
-            if (!current) return;
-            const text = await invoke<string>('read_publication_source', {
-                pathStem: current.pub.pathStem,
-                extension: current.pub.referenceFileExtension,
-            });
-            if (activeStemRef.current !== stem) return;
-            if (text === current.diskText) return;
-            current.diskText = text;
-            if (text === current.source) return;
-            clearDebounceTimer();
-            current.source = text;
-            current.version += 1;
-            forceRender();
-        });
-    }, [clearDebounceTimer, enqueue, ensureSourceEntry, forceRender]);
+    // Adopts the store's metadata source whenever it differs from the last text
+    // we confirmed, replacing the buffer over any unsaved typing.
+    const adoptStoreSource = useCallback((id: PublicationId, metadataSource: string) => {
+        const sourceEntry = ensureSourceEntry(id);
+        if (metadataSource === sourceEntry.diskText) return;
+        sourceEntry.diskText = metadataSource;
+        if (metadataSource === sourceEntry.source) return;
+        clearDebounceTimer();
+        sourceEntry.source = metadataSource;
+        sourceEntry.version += 1;
+        forceRender();
+    }, [clearDebounceTimer, ensureSourceEntry, forceRender]);
 
     const handleSourceChange = useCallback((value: string) => {
-        const stem = activeStemRef.current;
-        const pub = publicationRef.current;
-        if (!stem || !pub) return;
-        const sourceEntry = ensureSourceEntry(stem, pub);
+        const id = activeIdRef.current;
+        if (!id) return;
+        const sourceEntry = ensureSourceEntry(id);
         if (sourceEntry.source === value) return;
         sourceEntry.source = value;
 
         clearDebounceTimer();
         timerRef.current = setTimeout(() => {
             timerRef.current = null;
-            persist(stem);
+            persist(id);
         }, autosaveDebounceMs);
 
         forceRender();
     }, [autosaveDebounceMs, clearDebounceTimer, ensureSourceEntry, forceRender, persist]);
 
-    const flush = useCallback((stem: string) => {
-        if (!entriesRef.current.has(stem)) return;
+    const flush = useCallback((id: PublicationId) => {
+        if (!entriesRef.current.has(id)) return;
         clearDebounceTimer();
-        persist(stem);
+        persist(id);
     }, [clearDebounceTimer, persist]);
 
     // Flush the publication we are leaving. Only the active publication can be
     // dirty, so writes stay uncontended between publications.
     useEffect(() => {
-        const prevStem = prevStemRef.current;
-        prevStemRef.current = activeStem;
-        if (prevStem !== null && prevStem !== activeStem) {
-            flush(prevStem);
+        const prevId = prevIdRef.current;
+        prevIdRef.current = publicationId;
+        if (prevId !== null && prevId !== publicationId) {
+            flush(prevId);
         }
-    }, [activeStem, flush]);
+    }, [publicationId, flush]);
 
-    // Re-read the disk on every activation: returning to a publication always
-    // reflects its current file content.
+    // A reload replaces the publication record with a fresh metadata source, so
+    // both activation and external changes are handled here.
     useEffect(() => {
-        if (!activeStem) return;
-        sync(activeStem);
-    }, [activeStem, sync]);
-
-    // A rescan (library-changed) replaces the publication record for the open
-    // publication while its path stem is unchanged. That is the signal that
-    // its file may have changed on disk, so re-read it. Genuine switches have
-    // a different stem and are handled by the activation effect.
-    useEffect(() => {
-        const prev = prevPublicationRef.current;
-        prevPublicationRef.current = publication;
-        if (!publication) return;
-        if (!prev || prev.pathStem !== publication.pathStem) return;
-        if (prev === publication) return;
-        sync(publication.pathStem);
-    }, [publication, sync]);
+        if (!publicationId || !publication) return;
+        adoptStoreSource(publicationId, publication.metadataSource);
+    }, [publicationId, publication, adoptStoreSource]);
 
     // Flush immediately when the editor loses focus.
     useEffect(() => {
         if (bibEditorFocused) return;
-        const stem = activeStemRef.current;
-        if (stem) flush(stem);
+        const id = activeIdRef.current;
+        if (id) flush(id);
     }, [bibEditorFocused, flush]);
 
-    const sourceEntry = activeStem ? entriesRef.current.get(activeStem) ?? null : null;
+    const sourceEntry = publicationId ? entriesRef.current.get(publicationId) ?? null : null;
 
     return {
         value: sourceEntry ? sourceEntry.source : '',
@@ -173,28 +137,31 @@ function usePublicationSource(
 }
 
 interface DetailViewProps {
-    publication: PublicationEntry | null,
-    metadata: Metadata | null,
+    publicationId: PublicationId | null,
+    publication: Publication | null,
+    collectionName: string,
     bibEditorFocused: boolean,
     onBibEditorFocusedChange: (value: boolean) => void,
     autosaveDebounceMs: number,
 }
 
 function DetailView(
-    { publication, metadata, bibEditorFocused, onBibEditorFocusedChange, autosaveDebounceMs }: DetailViewProps
+    { publicationId, publication, collectionName, bibEditorFocused, onBibEditorFocusedChange, autosaveDebounceMs }: DetailViewProps
 ) {
     const { value, version, onChange } = usePublicationSource(
+        publicationId,
         publication,
         bibEditorFocused,
         autosaveDebounceMs,
     );
 
+    const metadata = publication?.metadata ?? null;
     const publisher = metadata?.publisher ?? '';
     const title = metadata?.title ?? '';
-    const author = metadata?.author ?? '';
+    const author = metadata?.authors ?? '';
     const date = metadata?.year ? String(metadata.year) : '';
-    const collection = publication ? getFilename(publication.parentDirectoryPath) : '';
-    const filename = publication ? getFilename(publication.pathStem) : '';
+    const collection = collectionName;
+    const filename = publication?.name ?? '';
 
     return (
         <div className={styles.detailPane}>
@@ -215,9 +182,9 @@ function DetailView(
                 <dd>{filename}</dd>
             </dl>
 
-            {publication && (
+            {publicationId && publication && (
                 <VimTextArea
-                    key={`${publication.pathStem}:${version}`}
+                    key={`${publicationId}:${version}`}
                     value={value}
                     onChange={onChange}
                     focused={bibEditorFocused}
