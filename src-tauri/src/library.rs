@@ -281,7 +281,10 @@ fn populate_library_from_directory(
     Ok(())
 }
 
-fn find_duplicate_bib_stems<'a>(bib_files: &'a [ClassifiedFile], dir_path: &str) -> HashSet<&'a str> {
+fn find_duplicate_bib_stems<'a>(
+    bib_files: &'a [ClassifiedFile],
+    dir_path: &str,
+) -> HashSet<&'a str> {
     let mut bib_stem_counts: HashMap<&str, usize> = HashMap::new();
     for f in bib_files {
         *bib_stem_counts.entry(f.stem.as_str()).or_insert(0) += 1;
@@ -537,10 +540,7 @@ mod tests {
         );
         assert_eq!(
             sorted(lib.directories[&root_id].publication_paths.clone()),
-            vec![
-                format!("{}/paper", root_name),
-                format!("{}/top", root_name)
-            ]
+            vec![format!("{}/paper", root_name), format!("{}/top", root_name)]
         );
 
         assert_eq!(
@@ -572,8 +572,7 @@ mod tests {
             .available_content_file_extensions
             .is_empty());
         assert_eq!(
-            lib.publications[&format!("{}/sub/paper", root_name)]
-                .available_content_file_extensions,
+            lib.publications[&format!("{}/sub/paper", root_name)].available_content_file_extensions,
             vec!["pdf".to_string()]
         );
         assert_eq!(
@@ -621,8 +620,12 @@ mod tests {
         .unwrap();
 
         assert_eq!(lib.publications.len(), 1);
-        assert!(lib.publications.contains_key(&format!("{}/paper", root_name)));
-        assert!(!lib.publications.contains_key(&format!("{}/orphan", root_name)));
+        assert!(lib
+            .publications
+            .contains_key(&format!("{}/paper", root_name)));
+        assert!(!lib
+            .publications
+            .contains_key(&format!("{}/orphan", root_name)));
 
         assert_eq!(
             sorted(
@@ -657,10 +660,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(lib.publications.len(), 1);
-        assert!(lib.publications.contains_key(&format!("{}/real", root_name)));
+        assert!(lib
+            .publications
+            .contains_key(&format!("{}/real", root_name)));
         assert_eq!(
-            lib.publications[&format!("{}/real", root_name)]
-                .available_content_file_extensions,
+            lib.publications[&format!("{}/real", root_name)].available_content_file_extensions,
             vec!["aaa".to_string()]
         );
 
@@ -697,17 +701,24 @@ mod tests {
         .unwrap();
 
         assert_eq!(lib.publications.len(), 2);
-        assert!(lib.publications.contains_key(&format!("{}/kept", root_name)));
-        assert!(lib.publications.contains_key(&format!("{}/partial", root_name)));
-        assert!(!lib.publications.contains_key(&format!("{}/ignored_bib", root_name)));
-        assert!(!lib.publications.contains_key(&format!("{}/gone", root_name)));
+        assert!(lib
+            .publications
+            .contains_key(&format!("{}/kept", root_name)));
+        assert!(lib
+            .publications
+            .contains_key(&format!("{}/partial", root_name)));
+        assert!(!lib
+            .publications
+            .contains_key(&format!("{}/ignored_bib", root_name)));
+        assert!(!lib
+            .publications
+            .contains_key(&format!("{}/gone", root_name)));
         assert!(!lib
             .publications
             .contains_key(&format!("{}/ignored_dir/nested", root_name)));
 
         assert_eq!(
-            lib.publications[&format!("{}/kept", root_name)]
-                .available_content_file_extensions,
+            lib.publications[&format!("{}/kept", root_name)].available_content_file_extensions,
             vec!["aaa".to_string()]
         );
         assert!(lib.publications[&format!("{}/partial", root_name)]
@@ -748,13 +759,8 @@ mod tests {
 
     #[test]
     fn conflicting_bib_stems_are_ignored_completely() {
-        let (_dir, root_path, root_name) = create_literature_env(&[
-            "paper.bib",
-            "paper.enl",
-            "paper.aaa",
-            "ok.bib",
-            "ok.aaa",
-        ]);
+        let (_dir, root_path, root_name) =
+            create_literature_env(&["paper.bib", "paper.enl", "paper.aaa", "ok.bib", "ok.aaa"]);
         let lib = scan_library(
             &root_path,
             &empty_gitignore(),
@@ -765,15 +771,16 @@ mod tests {
 
         assert_eq!(lib.publications.len(), 1);
         assert!(lib.publications.contains_key(&format!("{}/ok", root_name)));
-        assert!(!lib.publications.contains_key(&format!("{}/paper", root_name)));
+        assert!(!lib
+            .publications
+            .contains_key(&format!("{}/paper", root_name)));
 
         assert_eq!(
             lib.publications[&format!("{}/ok", root_name)].reference_file_extension,
             "bib".to_string()
         );
         assert_eq!(
-            lib.publications[&format!("{}/ok", root_name)]
-                .available_content_file_extensions,
+            lib.publications[&format!("{}/ok", root_name)].available_content_file_extensions,
             vec!["aaa".to_string()]
         );
         assert_eq!(
