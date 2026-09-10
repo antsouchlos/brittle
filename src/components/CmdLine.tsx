@@ -1,7 +1,10 @@
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
+import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './CmdLine.module.css';
 import { logger } from '../app/logger';
+import { Action, useActionHandler } from '../app/actions';
+import { useConfigChanged } from '../app/config';
 
 // Converts a React keyboard event into a canonical combo string
 // used for lookup in the key mapping tables.
@@ -244,15 +247,74 @@ function useCmdFocus(onCancel: () => void) {
     return { inputRef, focusInput, handleBlur, guardBlur, resetBlurGuard };
 }
 
-export interface CmdLineProps {
-    visible: boolean;
-    onExecute: (cmd: string) => void;
-    onCancel: () => void;
-    suggestions: string[];
-    commandHistory: string[];
+// Loads the available commands and the persisted history, and writes the
+// history back as it grows.
+function useCommandData() {
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [commandHistory, setCommandHistory] = useState<string[]>([]);
+    const historyLoadedRef = useRef(false);
+
+    const loadCommandList = useCallback(() => {
+        invoke<string[]>('list_commands')
+            .then(setSuggestions)
+            .catch(e => logger.error(`Failed to list commands: ${e}`));
+    }, []);
+
+    const loadCommandHistory = useCallback(() => {
+        invoke<string[]>('load_command_history')
+            .then(setCommandHistory)
+            .catch(e => logger.error(`Failed to load command history: ${e}`))
+            .finally(() => { historyLoadedRef.current = true; });
+    }, []);
+
+    useEffect(() => {
+        loadCommandList();
+        loadCommandHistory();
+    }, [loadCommandList, loadCommandHistory]);
+
+    // A config reload can add or remove Lua commands.
+    useConfigChanged(() => {
+        loadCommandList();
+        loadCommandHistory();
+    });
+
+    useEffect(() => {
+        if (!historyLoadedRef.current) return;
+        invoke('save_command_history', { history: commandHistory })
+            .catch(e => logger.error(`Failed to save command history: ${e}`));
+    }, [commandHistory]);
+
+    const rememberCommand = useCallback((cmdLine: string) => {
+        setCommandHistory(prevHistory => {
+            if (prevHistory.length > 0 && prevHistory[prevHistory.length - 1] === cmdLine) return prevHistory;
+            return [...prevHistory, cmdLine];
+        });
+    }, []);
+
+    return { suggestions, commandHistory, rememberCommand };
 }
 
-export default function CmdLine({ visible, onExecute, onCancel, suggestions, commandHistory }: CmdLineProps) {
+export default function CmdLine() {
+    const [visible, setVisible] = useState(false);
+    const { suggestions, commandHistory, rememberCommand } = useCommandData();
+
+    useActionHandler(Action.OpenCmdLine, () => setVisible(true));
+
+    const onExecute = useCallback((cmdLine: string) => {
+        const spaceIdx = cmdLine.indexOf(' ');
+        const cmd = spaceIdx === -1 ? cmdLine : cmdLine.slice(0, spaceIdx);
+        const args = spaceIdx === -1 ? '' : cmdLine.slice(spaceIdx + 1);
+
+        invoke<string>('execute_command', { cmd, args })
+            .then(message => { if (message) logger.info(message); })
+            .catch(e => logger.error(String(e)));
+
+        setVisible(false);
+        rememberCommand(cmdLine);
+    }, [rememberCommand]);
+
+    const onCancel = useCallback(() => setVisible(false), []);
+
     const bindings = useMemo(
         () => createDefaultBindings(onExecute, onCancel),
         [onExecute, onCancel],

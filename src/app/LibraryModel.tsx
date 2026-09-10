@@ -92,17 +92,6 @@ export class LibraryModel {
         ];
     }
 
-    visibleNodeIds(collectionId: CollectionId, expanded: CollectionId[]): CollectionId[] {
-        const result = [collectionId];
-        const collection = this.getCollection(collectionId);
-        if (expanded.includes(collectionId) && collection) {
-            for (const childId of collection.childCollectionIds) {
-                result.push(...this.visibleNodeIds(childId, expanded));
-            }
-        }
-        return result;
-    }
-
     buildTree(collectionId: CollectionId): TreeNodeData {
         const collection = this.getCollection(collectionId);
         const isRoot = collectionId === this.rootCollectionId;

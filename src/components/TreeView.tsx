@@ -1,6 +1,9 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import styles from './TreeView.module.css';
+import { Action, useActionHandler } from '../app/actions';
+import { useRestoredState } from '../app/uiState';
+import { useTabActive } from './TabView';
 
 interface TreeNodeData {
     id: string,
@@ -92,23 +95,71 @@ function TreeNode(
 interface TreeViewProps {
     root: TreeNodeData;
     selectedNodeId: string;
-    expandedNodeIds: Array<string>;
-    onToggleExpanded: (id: string) => void;
     onSelectNode: (id: string) => void;
+    // Key the expanded nodes are restored from and saved under.
+    persistKey: string;
+}
+
+function collectVisibleNodeIds(node: TreeNodeData, isExpanded: (id: string) => boolean): string[] {
+    if (!isExpanded(node.id)) return [node.id];
+    return [node.id, ...node.children.flatMap(child => collectVisibleNodeIds(child, isExpanded))];
+}
+
+function collectAllNodeIds(node: TreeNodeData): string[] {
+    return [node.id, ...node.children.flatMap(collectAllNodeIds)];
+}
+
+function useDropRemovedIds(
+    root: TreeNodeData,
+    setExpandedNodeIds: (value: string[] | ((prev: string[]) => string[])) => void,
+) {
+    useEffect(() => {
+        const presentIds = new Set(collectAllNodeIds(root));
+        setExpandedNodeIds(prev => {
+            const pruned = prev.filter(id => presentIds.has(id));
+            if (pruned.length === prev.length) return prev;
+            return pruned.length > 0 ? pruned : [root.id];
+        });
+    }, [root, setExpandedNodeIds]);
 }
 
 export default function TreeView(
-    { root, selectedNodeId, expandedNodeIds, onToggleExpanded, onSelectNode }: TreeViewProps
+    { root, selectedNodeId, onSelectNode, persistKey }: TreeViewProps
 ) {
+    const [expandedNodeIds, setExpandedNodeIds] = useRestoredState<string[]>(persistKey, [root.id]);
+    const tabActive = useTabActive();
+
     const isExpanded = (id: string) => expandedNodeIds.includes(id);
     const isSelected = (id: string) => selectedNodeId === id;
+
+    const toggleExpanded = (id: string) => {
+        setExpandedNodeIds(prev => (
+            prev.includes(id)
+                ? prev.filter(expandedId => expandedId !== id)
+                : [...prev, id]
+        ));
+    };
+
+
+    const cycleSelection = (delta: 1 | -1) => {
+        const visibleIds = collectVisibleNodeIds(root, isExpanded);
+        const currentIdx = visibleIds.indexOf(selectedNodeId);
+        if (visibleIds.length === 0) return;
+        const nextIdx = (currentIdx + delta + visibleIds.length) % visibleIds.length;
+        onSelectNode(visibleIds[nextIdx]);
+    };
+
+    useActionHandler(Action.SelectNextCollection, () => cycleSelection(1), tabActive);
+    useActionHandler(Action.SelectPrevCollection, () => cycleSelection(-1), tabActive);
+
+    useDropRemovedIds(root, setExpandedNodeIds);
 
     return (
         <TreeNode
             data={root}
             isExpanded={isExpanded}
             isSelected={isSelected}
-            toggleExpanded={onToggleExpanded}
+            toggleExpanded={toggleExpanded}
             setSelected={onSelectNode}
         />
     );
