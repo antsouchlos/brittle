@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use std::{collections::HashMap, fmt::Display, sync::Arc};
+use std::{collections::HashMap, fmt::Display, path::PathBuf, sync::Arc};
 use uuid::Uuid;
 
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize, Hash, Eq, PartialEq)]
@@ -35,6 +35,8 @@ pub struct ParsedMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct Publication {
     pub name: String,
+    #[serde(skip)]
+    pub path: PathBuf,
     pub metadata_file_extension: String,
     pub metadata_source: String,
     pub metadata: Option<ParsedMetadata>,
@@ -45,6 +47,8 @@ pub struct Publication {
 #[serde(rename_all = "camelCase")]
 pub struct Collection {
     pub name: String,
+    #[serde(skip)]
+    pub path: PathBuf,
     pub child_publication_ids: Vec<PublicationId>,
     pub child_collection_ids: Vec<CollectionId>,
 }
@@ -53,6 +57,8 @@ pub struct Collection {
 #[serde(rename_all = "camelCase")]
 pub struct LibraryState {
     pub root_collection_name: String,
+    #[serde(skip)]
+    pub root_collection_path: PathBuf,
     pub root_collection_id: CollectionId,
     pub root_child_publication_ids: Vec<PublicationId>,
     pub root_child_collection_ids: Vec<CollectionId>,
@@ -84,9 +90,10 @@ impl Display for Error {
 // Thread safe wrapper around the Library state that ensures publications and
 // collections are always in sync
 impl LibraryStore {
-    pub fn new(root_collection_name: String) -> Self {
+    pub fn new(root_collection_name: String, root_collection_path: PathBuf) -> Self {
         let state = LibraryState {
             root_collection_name,
+            root_collection_path,
             root_collection_id: CollectionId::new(),
             root_child_publication_ids: Vec::new(),
             root_child_collection_ids: Vec::new(),
@@ -217,6 +224,7 @@ impl LibraryStore {
         if collection_id == state.root_collection_id {
             return Ok(Collection {
                 name: state.root_collection_name.clone(),
+                path: state.root_collection_path.clone(),
                 child_publication_ids: state.root_child_publication_ids.clone(),
                 child_collection_ids: state.root_child_collection_ids.clone(),
             });
@@ -255,6 +263,7 @@ impl LibraryStore {
             collection_id.clone(),
             Collection {
                 name: collection.name,
+                path: collection.path,
                 child_publication_ids: Vec::new(),
                 child_collection_ids: Vec::new(),
             },
@@ -275,6 +284,7 @@ impl LibraryStore {
 
         if collection_id == state.root_collection_id {
             state.root_collection_name = collection.name;
+            state.root_collection_path = collection.path;
             return Ok(());
         }
 
@@ -283,6 +293,7 @@ impl LibraryStore {
             .get_mut(&collection_id)
             .ok_or(Error::CollectionDoesntExist)?;
         existing.name = collection.name;
+        existing.path = collection.path;
 
         Ok(())
     }
@@ -336,6 +347,7 @@ mod tests {
     fn new_publication(name: &str) -> Publication {
         Publication {
             name: name.to_string(),
+            path: PathBuf::from("/library").join(format!("{}.opf", name)),
             metadata_file_extension: "opf".to_string(),
             metadata_source: "embedded".to_string(),
             metadata: None,
@@ -346,6 +358,7 @@ mod tests {
     fn new_collection(name: &str) -> Collection {
         Collection {
             name: name.to_string(),
+            path: PathBuf::from("/library").join(name),
             child_publication_ids: Vec::new(),
             child_collection_ids: Vec::new(),
         }
@@ -353,7 +366,7 @@ mod tests {
 
     #[test]
     fn set_state_replaces_state_and_rebuilds_indices() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
 
         let collection_id = CollectionId::new();
@@ -364,6 +377,7 @@ mod tests {
             collection_id.clone(),
             Collection {
                 name: "Sci-Fi".to_string(),
+                path: PathBuf::from("/library/Sci-Fi"),
                 child_publication_ids: vec![publication_id.clone()],
                 child_collection_ids: Vec::new(),
             },
@@ -374,6 +388,7 @@ mod tests {
 
         let new_state = LibraryState {
             root_collection_name: "Library".to_string(),
+            root_collection_path: PathBuf::from("/library"),
             root_collection_id: root_id.clone(),
             root_child_publication_ids: Vec::new(),
             root_child_collection_ids: vec![collection_id.clone()],
@@ -397,7 +412,7 @@ mod tests {
 
     #[test]
     fn add_and_get_publication_at_root() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let pub_id = PublicationId::new();
 
@@ -414,7 +429,7 @@ mod tests {
 
     #[test]
     fn add_publication_into_nested_collection() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let collection_id = CollectionId::new();
         store
@@ -444,7 +459,7 @@ mod tests {
 
     #[test]
     fn add_publication_to_missing_collection_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let pub_id = PublicationId::new();
         let missing_collection = CollectionId::new();
 
@@ -454,7 +469,7 @@ mod tests {
 
     #[test]
     fn add_duplicate_publication_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let pub_id = PublicationId::new();
 
@@ -468,14 +483,14 @@ mod tests {
 
     #[test]
     fn get_missing_publication_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let result = store.get_publication(PublicationId::new());
         assert!(matches!(result, Err(Error::PublicationDoesntExist)));
     }
 
     #[test]
     fn update_publication_replaces_contents() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let pub_id = PublicationId::new();
 
@@ -493,14 +508,14 @@ mod tests {
 
     #[test]
     fn update_missing_publication_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let result = store.update_publication(PublicationId::new(), new_publication("Dune"));
         assert!(matches!(result, Err(Error::PublicationDoesntExist)));
     }
 
     #[test]
     fn remove_publication_detaches_from_parent() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let pub_id = PublicationId::new();
 
@@ -522,7 +537,7 @@ mod tests {
 
     #[test]
     fn remove_missing_publication_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let result = store.remove_publication(PublicationId::new());
         assert!(matches!(result, Err(Error::PublicationDoesntExist)));
     }
@@ -533,7 +548,7 @@ mod tests {
 
     #[test]
     fn get_root_collection() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
 
         let root = store.get_collection(root_id).unwrap();
@@ -542,14 +557,14 @@ mod tests {
 
     #[test]
     fn get_missing_collection_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let result = store.get_collection(CollectionId::new());
         assert!(matches!(result, Err(Error::CollectionDoesntExist)));
     }
 
     #[test]
     fn add_collection_under_root_registers_under_root() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let collection_id = CollectionId::new();
 
@@ -568,7 +583,7 @@ mod tests {
 
     #[test]
     fn add_nested_collection() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let parent_id = CollectionId::new();
         store
@@ -595,7 +610,7 @@ mod tests {
 
     #[test]
     fn add_collection_to_missing_parent_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let result = store.add_collection(
             CollectionId::new(),
             CollectionId::new(),
@@ -606,7 +621,7 @@ mod tests {
 
     #[test]
     fn add_duplicate_nested_collection_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let collection_id = CollectionId::new();
 
@@ -624,7 +639,7 @@ mod tests {
 
     #[test]
     fn update_root_collection_name() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
 
         store
@@ -636,7 +651,7 @@ mod tests {
 
     #[test]
     fn update_collection_ignores_child_id_tampering() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let collection_id = CollectionId::new();
         store
@@ -662,14 +677,14 @@ mod tests {
 
     #[test]
     fn update_missing_collection_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let result = store.update_collection(CollectionId::new(), new_collection("Sci-Fi"));
         assert!(matches!(result, Err(Error::CollectionDoesntExist)));
     }
 
     #[test]
     fn remove_collection_detaches_from_parent() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let collection_id = CollectionId::new();
 
@@ -695,7 +710,7 @@ mod tests {
 
     #[test]
     fn remove_collection_cascades_to_descendants() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
 
         let parent_id = CollectionId::new();
@@ -752,7 +767,7 @@ mod tests {
 
     #[test]
     fn remove_root_collection_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let root_id = store.get_state().root_collection_id;
         let result = store.remove_collection(root_id);
         assert!(matches!(result, Err(Error::CollectionDoesntExist)));
@@ -760,7 +775,7 @@ mod tests {
 
     #[test]
     fn remove_missing_collection_errors() {
-        let store = LibraryStore::new("Library".to_string());
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let result = store.remove_collection(CollectionId::new());
         assert!(matches!(result, Err(Error::CollectionDoesntExist)));
     }
