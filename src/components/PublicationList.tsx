@@ -2,7 +2,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject }
 import { Fzf, extendedMatch } from 'fzf';
 import { FaFilePdf } from 'react-icons/fa';
 import { Globe } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import styles from './PublicationList.module.css';
+import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
+import { logger } from '../app/logger';
+import { useTabActive } from './TabView';
 
 interface PublicationListItem {
     id: string;
@@ -18,9 +22,6 @@ interface PublicationListProps {
     publications: Array<PublicationListItem>
     selectedPublicationId: string;
     onSelectPublication: (publicationId: string) => void;
-    fuzzyFindVisible: boolean;
-    isActive: boolean;
-    publicationNavRequest: { delta: 1 | -1 } | null;
 }
 
 interface HighlightPart {
@@ -111,16 +112,6 @@ function ContentIndicators({ contentFiles }: { contentFiles: string[] }) {
     );
 }
 
-function isTextProducingKey(event: KeyboardEvent): boolean {
-    if (event.isComposing) return true;
-    const key = event.key;
-    if (key.length === 1 && !event.metaKey && !(event.ctrlKey && !event.altKey)) return true;
-    if (key === 'Backspace' || key === 'Delete' || key === 'Home' || key === 'End') return true;
-    if (key.startsWith('Arrow')) return true;
-    const mod = event.ctrlKey || event.metaKey;
-    return mod && (key === 'a' || key === 'c' || key === 'v' || key === 'x');
-}
-
 function useFuzzyInputFocus(
     fuzzyFindVisible: boolean,
     isActive: boolean,
@@ -195,31 +186,6 @@ function useScrollToSelected(
             ?.querySelector<HTMLElement>('[data-selected="true"]')
             ?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
     }, [selectedPublicationId, displayedPublications]);
-}
-
-function usePublicationNavigation(
-    fuzzyFindVisible: boolean,
-    navigateFuzzyList: (delta: number) => void,
-    publications: PublicationListItem[],
-    selectedPublicationId: string,
-    onSelectPublication: (publicationId: string) => void,
-    publicationNavRequest: { delta: 1 | -1 } | null,
-) {
-    useEffect(() => {
-        if (publicationNavRequest === null) return;
-        const delta = publicationNavRequest.delta;
-
-        if (fuzzyFindVisible) {
-            navigateFuzzyList(delta);
-            return;
-        } else {
-            if (publications.length === 0) return;
-            const currentIdx = publications.findIndex(p => p.id === selectedPublicationId);
-            const startIdx = currentIdx < 0 ? 0 : currentIdx;
-            const nextIdx = (startIdx + delta + publications.length) % publications.length;
-            onSelectPublication(publications[nextIdx].id);
-        }
-    }, [publicationNavRequest]);
 }
 
 function useFuzzySearch(
@@ -323,11 +289,10 @@ function PublicationList({
     publications,
     selectedPublicationId,
     onSelectPublication,
-    fuzzyFindVisible,
-    isActive,
-    publicationNavRequest,
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
+    const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
+    const tabActive = useTabActive();
 
     useScrollToSelected(listRef, selectedPublicationId, publications);
 
@@ -339,16 +304,36 @@ function PublicationList({
             listRef,
         );
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
-        useFuzzyInputFocus(fuzzyFindVisible, isActive);
+        useFuzzyInputFocus(fuzzyFindVisible, tabActive);
 
-    usePublicationNavigation(
-        fuzzyFindVisible,
-        navigate,
-        publications,
-        selectedPublicationId,
-        onSelectPublication,
-        publicationNavRequest,
-    );
+    // While the fuzzy bar is open the highlight moves within the filtered
+    // view. Otherwise the selection moves through the full list.
+    const selectAdjacentPublication = (delta: 1 | -1) => {
+        if (fuzzyFindVisible) {
+            navigate(delta);
+            return;
+        }
+
+        if (publications.length === 0) return;
+        const currentIdx = publications.findIndex(p => p.id === selectedPublicationId);
+        const startIdx = currentIdx < 0 ? 0 : currentIdx;
+        const nextIdx = (startIdx + delta + publications.length) % publications.length;
+        onSelectPublication(publications[nextIdx].id);
+    };
+
+    const openSelectedPublication = () => {
+        if (!selectedPublicationId) return;
+        invoke('open_publication', { publicationId: selectedPublicationId })
+            .catch(e => logger.error(String(e)));
+    };
+
+    useActionHandler(Action.SelectNext, () => selectAdjacentPublication(1), tabActive);
+    useActionHandler(Action.SelectPrev, () => selectAdjacentPublication(-1), tabActive);
+    useActionHandler(Action.Submit, openSelectedPublication, tabActive);
+    useActionHandler(Action.OpenFuzzyFind, () => setFuzzyFindVisible(true), tabActive);
+    // Escape is only claimed while the bar is actually open, so it stays free
+    // for anything else when it is not.
+    useActionHandler(Action.Cancel, () => setFuzzyFindVisible(false), tabActive && fuzzyFindVisible);
 
     return (
         <div className={styles.publicationList}

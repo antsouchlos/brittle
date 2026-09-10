@@ -1,11 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
+import { runWithoutConsoleForwarding } from './consoleLog';
 
 type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace';
 
 const TOAST_LEVELS: LogLevel[] = ['error', 'warn', 'info'];
 
 async function log(level: LogLevel, message: string) {
-    console[level](message);
+    runWithoutConsoleForwarding(() => console[level](message));
 
     if (TOAST_LEVELS.includes(level)) {
         window.dispatchEvent(new CustomEvent('brittle:toast', {

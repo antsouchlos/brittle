@@ -284,53 +284,6 @@ pub fn run() {
     }
 }
 
-// ---------- Serialized (wire) types ----------
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SerializedTab {
-    id: String,
-    kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    document_id: Option<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SerializedTreeState {
-    expanded_folder_ids: Vec<String>,
-    selected_id: Option<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SerializedPanelSizes {
-    left: f64,
-    right: f64,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SerializedPdfViewerState {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    page: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    zoom: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    scroll_y: Option<f64>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SerializedUiState {
-    version: u32,
-    tabs: Vec<SerializedTab>,
-    active_tab_id: String,
-    tree: SerializedTreeState,
-    panels: SerializedPanelSizes,
-    viewer_states: HashMap<String, SerializedPdfViewerState>,
-}
-
 // ---------- Commands ----------
 
 #[tauri::command]
@@ -360,14 +313,44 @@ async fn write_publication_source(
 /// Stub: always returns `None` so the frontend initializes from defaults.
 /// Real implementation will read a versioned JSON file from `app_config_dir()`.
 #[tauri::command]
-fn load_ui_state(_state: State<AppState>) -> Option<SerializedUiState> {
-    None
+fn load_ui_state(state: State<AppState>) -> Result<HashMap<String, serde_json::Value>, String> {
+    let path = ui_state_path(&state);
+
+    if !path.exists() {
+        return Ok(HashMap::new());
+    }
+
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read UI state: {}", e))?;
+
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse UI state: {}", e))
 }
 
-/// Stub: no-op. Real implementation will write atomically (temp file + rename)
-/// to `app_config_dir()/ui-state.json`.
 #[tauri::command]
-fn save_ui_state(_state: State<AppState>, _ui_state: SerializedUiState) {}
+fn save_ui_state(
+    state: State<AppState>,
+    ui_state: HashMap<String, serde_json::Value>,
+) -> Result<(), String> {
+    let path = ui_state_path(&state);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    let content = serde_json::to_string_pretty(&ui_state)
+        .map_err(|e| format!("Failed to serialize UI state: {}", e))?;
+
+    let tmp_path = path.with_extension("json.tmp");
+    std::fs::write(&tmp_path, &content).map_err(|e| format!("Failed to write UI state: {}", e))?;
+    std::fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to save UI state: {}", e))?;
+
+    Ok(())
+}
+
+fn ui_state_path(state: &State<AppState>) -> PathBuf {
+    let config = state.config.read().unwrap();
+    PathBuf::from(config.opts.data_path.clone()).join("ui_state.json")
+}
 
 #[tauri::command]
 fn get_config(state: State<AppState>) -> Config {

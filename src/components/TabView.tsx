@@ -1,6 +1,16 @@
-import { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject, useCallback, useRef, useState, useEffect } from 'react';
+import { createContext, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject, useCallback, useContext, useRef, useState, useEffect } from 'react';
 import styles from './TabView.module.css';
 import { logger } from '../app/logger';
+import { Action, useActionHandler } from '../app/actions';
+
+// Whether the tab a component is rendered into is the one in front. Components
+// use this to gate their action handlers, so nothing needs to be told which tab
+// is selected. Defaults to true for anything rendered outside a TabView.
+const TabActiveContext = createContext(true);
+
+export function useTabActive(): boolean {
+    return useContext(TabActiveContext);
+}
 
 export interface TabData {
     id: string;
@@ -11,8 +21,6 @@ export interface TabData {
 export interface TabViewProps {
     fixedTabs: Array<TabData>;
     variableTabs: Array<TabData>;
-    selectedTabId: string;
-    onSelectTab: (id: string) => void;
     onCloseTab: (id: string) => void;
     onReorderTabs: (fromIndex: number, toIndex: number) => void;
 }
@@ -232,18 +240,47 @@ function useVisitedTabs(initialId: string) {
 }
 
 export default function TabView({
-    fixedTabs, variableTabs, selectedTabId, onSelectTab, onCloseTab, onReorderTabs
+    fixedTabs, variableTabs, onCloseTab, onReorderTabs
 }: TabViewProps) {
+    const [selectedTabId, setSelectedTabId] = useState(fixedTabs[0].id);
     const { visitedOrder, markVisited, forgetVisited } = useVisitedTabs(selectedTabId);
 
-    const tabsById = new Map(fixedTabs.concat(variableTabs).map(t => [t.id, t]));
+    const allTabs = fixedTabs.concat(variableTabs);
+    const tabsById = new Map(allTabs.map(t => [t.id, t]));
 
     const tabBarRef = useRef<HTMLDivElement | null>(null);
-    const gestures = useTabGestures(tabBarRef, onSelectTab, onReorderTabs);
+    const gestures = useTabGestures(tabBarRef, setSelectedTabId, onReorderTabs);
 
     useEffect(() => {
         markVisited(selectedTabId);
     }, [selectedTabId, markVisited]);
+
+    const cycleTab = (delta: 1 | -1) => {
+        const tabIds = allTabs.map(t => t.id);
+        const currentIdx = tabIds.indexOf(selectedTabId);
+        const nextIdx = (currentIdx + delta + tabIds.length) % tabIds.length;
+        setSelectedTabId(tabIds[nextIdx]);
+    };
+
+    useActionHandler(Action.NextTab, () => cycleTab(1));
+    useActionHandler(Action.PrevTab, () => cycleTab(-1));
+
+    // Selects a neighbour when the tab being closed is the one in front.
+    const closeTab = (id: string) => {
+        forgetVisited(id);
+        onCloseTab(id);
+
+        if (id !== selectedTabId) return;
+
+        const closedIdx = allTabs.findIndex(tab => tab.id === id);
+        if (closedIdx < 0) {
+            logger.error("Could not find closed tab id");
+            return;
+        }
+
+        const neighbour = allTabs[closedIdx + 1] ?? allTabs[closedIdx - 1];
+        if (neighbour) setSelectedTabId(neighbour.id);
+    };
 
     return (
         <div className={styles.tabView}>
@@ -258,7 +295,7 @@ export default function TabView({
                             className={styles.tabHeader}
                             data-state={v.id == selectedTabId ? "active" : "inactive"}
                             data-tab-fixed={true}
-                            onClick={() => { onSelectTab(v.id) }}
+                            onClick={() => { setSelectedTabId(v.id) }}
                         >
                             <span className={styles.tabLabel}>
                                 {v.label}
@@ -283,8 +320,7 @@ export default function TabView({
                             <span
                                 className={styles.tabCloseButton}
                                 onClick={(e) => {
-                                    onCloseTab(v.id);
-                                    forgetVisited(v.id);
+                                    closeTab(v.id);
                                     e.stopPropagation();
                                     e.preventDefault();
                                 }}
@@ -309,7 +345,9 @@ export default function TabView({
                             className={styles.tabContent}
                             data-state={id == selectedTabId ? "active" : "inactive"}
                         >
-                            {tab.renderContent()}
+                            <TabActiveContext.Provider value={id === selectedTabId}>
+                                {tab.renderContent()}
+                            </TabActiveContext.Provider>
                         </div>
                     );
                 })

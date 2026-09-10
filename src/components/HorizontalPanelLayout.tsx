@@ -1,6 +1,7 @@
 import { PointerEvent as ReactPointerEvent, Fragment, ReactNode, RefObject, useRef, useState } from 'react';
 import styles from './HorizontalPanelLayout.module.css';
 import { logger } from '../app/logger';
+import { useRestoredState } from '../app/uiState';
 
 interface DragData {
     separatorIdx: number;
@@ -51,7 +52,7 @@ function computeNewWidths(
 
 function usePanelResize(
     panelLayoutRef: RefObject<HTMLDivElement | null>,
-    panelWidthSetters: Array<(width: number) => void>
+    setWidths: (widths: Array<number>) => void,
 ) {
     const [dragData, setDragData] = useState<DragData | null>(null);
 
@@ -99,9 +100,9 @@ function usePanelResize(
             dragData.startWidths, dragDiffPercent, MIN_PANEL_WIDTH, dragData.separatorIdx
         );
 
-        for (let i = 0; i < newWidths.length; i++) {
-            panelWidthSetters[i](newWidths[i]);
-        }
+        // The last panel takes whatever is left over, so only the leading
+        // panels have a width of their own.
+        setWidths(newWidths.slice(0, newWidths.length - 1));
     };
 
     const onPointerUp = () => { setDragData(null); };
@@ -126,27 +127,25 @@ function usePanelResize(
 }
 
 interface PanelData {
-    width: number,
-    setWidth: (width: number) => void;
     renderContent: () => ReactNode;
 }
 
 interface HorizontalPanelLayoutProps {
     firstPanelsData: Array<PanelData>,
     renderLastPanelContent: () => ReactNode,
+    defaultWidths: Array<number>,
+    // Key the dragged widths are restored from and saved under.
+    persistKey: string,
 }
 
 export default function HorizontalPanelLayout(
-    { firstPanelsData, renderLastPanelContent }: HorizontalPanelLayoutProps
+    { firstPanelsData, renderLastPanelContent, defaultWidths, persistKey }: HorizontalPanelLayoutProps
 ) {
     const panelLayoutRef = useRef<HTMLDivElement | null>(null);
-
-    // Aditional empty handler for last panel
-    const panelResizeHandlers
-        = firstPanelsData.map((data) => data.setWidth).concat([() => { }]);
+    const [widths, setWidths] = useRestoredState(persistKey, defaultWidths);
 
     const { getTriggerHandlers, isDragging }
-        = usePanelResize(panelLayoutRef, panelResizeHandlers);
+        = usePanelResize(panelLayoutRef, setWidths);
 
     return (
         <div
@@ -158,7 +157,7 @@ export default function HorizontalPanelLayout(
                 <Fragment key={index}>
                     <div
                         className={styles.panel}
-                        style={{ width: `${data.width * 100}%` }}
+                        style={{ width: `${(widths[index] ?? defaultWidths[index]) * 100}%` }}
                     >
                         {data.renderContent()}
                     </div>

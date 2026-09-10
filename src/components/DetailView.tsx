@@ -5,6 +5,9 @@ import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
 import { type Publication, type PublicationId } from '../app/LibraryModel';
 import { logger } from '../app/logger';
+import { Action, useActionHandler } from '../app/actions';
+import { useConfig } from '../app/config';
+import { useTabActive } from './TabView';
 
 interface SourceEntry {
     source: string;
@@ -140,14 +143,17 @@ interface DetailViewProps {
     publicationId: PublicationId | null,
     publication: Publication | null,
     collectionName: string,
-    bibEditorFocused: boolean,
-    onBibEditorFocusedChange: (value: boolean) => void,
-    autosaveDebounceMs: number,
 }
 
 function DetailView(
-    { publicationId, publication, collectionName, bibEditorFocused, onBibEditorFocusedChange, autosaveDebounceMs }: DetailViewProps
+    { publicationId, publication, collectionName }: DetailViewProps
 ) {
+    const [bibEditorFocused, setBibEditorFocused] = useState(false);
+    const { opts: { autosaveDebounceMs } } = useConfig();
+    const tabActive = useTabActive();
+
+    useActionHandler(Action.FocusBibEditor, () => setBibEditorFocused(true), tabActive);
+
     const { value, version, onChange } = usePublicationSource(
         publicationId,
         publication,
@@ -188,7 +194,7 @@ function DetailView(
                     value={value}
                     onChange={onChange}
                     focused={bibEditorFocused}
-                    onFocusedChange={onBibEditorFocusedChange}
+                    onFocusedChange={setBibEditorFocused}
                 />
             )}
         </div>
