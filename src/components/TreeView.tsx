@@ -149,8 +149,8 @@ export default function TreeView(
         onSelectNode(visibleIds[nextIdx]);
     };
 
-    useActionHandler(Action.SelectNextCollection, () => cycleSelection(1), tabActive);
-    useActionHandler(Action.SelectPrevCollection, () => cycleSelection(-1), tabActive);
+    useActionHandler(Action.CycleNext, () => cycleSelection(1), tabActive);
+    useActionHandler(Action.CyclePrev, () => cycleSelection(-1), tabActive);
 
     useDropRemovedIds(root, setExpandedNodeIds);
 

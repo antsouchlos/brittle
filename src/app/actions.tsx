@@ -2,34 +2,52 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useRef } 
 import { logger } from './logger';
 
 export enum Action {
-    SelectNextCollection,
-    SelectPrevCollection,
-    SelectNextPublication,
-    SelectPrevPublication,
+    CycleNext,
+    CyclePrev,
+    SelectNext,
+    SelectPrev,
+    HistoryPrev,
+    HistoryNext,
     NextTab,
     PrevTab,
-    OpenSelectedPublication,
+    Submit,
+    Cancel,
     OpenCmdLine,
     OpenFuzzyFind,
-    CloseFuzzyFind,
     FocusBibEditor,
 }
 
 export const keymap: Array<[string, Action]> = [
-    ["Tab", Action.SelectNextCollection],
-    ["Shift+Tab", Action.SelectPrevCollection],
-    ["j", Action.SelectNextPublication],
-    ["k", Action.SelectPrevPublication],
-    ["Ctrl+n", Action.SelectNextPublication],
-    ["Ctrl+p", Action.SelectPrevPublication],
+    ["Tab", Action.CycleNext],
+    ["Shift+Tab", Action.CyclePrev],
+    ["j", Action.SelectNext],
+    ["k", Action.SelectPrev],
+    ["Ctrl+n", Action.SelectNext],
+    ["Ctrl+p", Action.SelectPrev],
+    ["ArrowUp", Action.HistoryPrev],
+    ["ArrowDown", Action.HistoryNext],
     ["gt", Action.NextTab],
     ["gT", Action.PrevTab],
-    ["Enter", Action.OpenSelectedPublication],
+    ["Enter", Action.Submit],
     ["Ctrl+e", Action.FocusBibEditor],
     [":", Action.OpenCmdLine],
     [" ff", Action.OpenFuzzyFind],
-    ["Escape", Action.CloseFuzzyFind],
+    ["Escape", Action.Cancel],
 ];
+
+// Whether a key press belongs to the focused text surface rather than to the
+// global keymap. A text surface stops propagation for these and lets the rest
+// bubble to the document listener, which is what keeps the keymap global
+// without swallowing typing.
+export function isTextProducingKey(event: KeyboardEvent): boolean {
+    if (event.isComposing) return true;
+    const key = event.key;
+    if (key.length === 1 && !event.metaKey && !(event.ctrlKey && !event.altKey)) return true;
+    if (key === 'Backspace' || key === 'Delete' || key === 'Home' || key === 'End') return true;
+    if (key === 'ArrowLeft' || key === 'ArrowRight') return true;
+    const mod = event.ctrlKey || event.metaKey;
+    return mod && (key === 'a' || key === 'c' || key === 'v' || key === 'x');
+}
 
 type ActionHandler = () => void;
 

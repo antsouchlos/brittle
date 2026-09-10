@@ -1,143 +1,9 @@
-import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { invoke } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './CmdLine.module.css';
 import { logger } from '../app/logger';
-import { Action, useActionHandler } from '../app/actions';
+import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
 import { useConfigChanged } from '../app/config';
-
-// Converts a React keyboard event into a canonical combo string
-// used for lookup in the key mapping tables.
-const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta']);
-
-function normalizeKeyCombo(event: React.KeyboardEvent<HTMLInputElement>): string | null {
-    const key = event.key;
-
-    if (MODIFIER_KEYS.has(key)) {
-        return null;
-    }
-
-    if (event.ctrlKey && key.length === 1) {
-        return 'Ctrl+' + key.toLowerCase();
-    }
-
-    if (event.altKey && key.length === 1) {
-        return 'Alt+' + key.toLowerCase();
-    }
-
-    return key;
-}
-
-// Action taken upon triggering a key mapping. Takes the current input buffer
-// and returns one of
-//   - `string` -> replaces the buffer
-//   - `Promise<string | null>` -> replaces the buffer when resolved
-//   - `null` -> no-op (buffer unchanged)
-type KeyMappingAction = (buffer: string) => string | Promise<string | null> | null;
-
-type PrefixedKeyMappingTable = Record<string, Record<string, KeyMappingAction>>;
-type KeyMappingTable = Record<string, KeyMappingAction>;
-
-interface CmdLineBindings {
-    keyMapping: KeyMappingTable;
-    prefixedKeyMapping: PrefixedKeyMappingTable;
-}
-
-function createDefaultBindings(
-    onExecute: (cmd: string) => void,
-    onCancel: () => void,
-): CmdLineBindings {
-    return {
-        keyMapping: {
-            'Enter': (buf) => {
-                onExecute(buf);
-                return '';
-            },
-            'Escape': () => {
-                onCancel();
-                return '';
-            },
-        },
-        prefixedKeyMapping: {
-            'Ctrl+r': {
-                '0': async (buf) => {
-                    try {
-                        const text = await readText();
-                        return buf + text;
-                    } catch (e) {
-                        logger.error(`Clipboard paste failed: ${e}`);
-                        return null;
-                    }
-                },
-            },
-        },
-    };
-}
-
-// Manages buffer state and a pending-prefix state for multi-key
-// sequences. The feed() function drives the state machine and returns true
-// when the combo was consumed.
-function useCmdLineInput(bindings: CmdLineBindings) {
-    const [buffer, setBuffer] = useState('');
-    const pendingPrefix = useRef<string | null>(null);
-    const bufferRef = useRef(buffer);
-
-    useEffect(() => {
-        bufferRef.current = buffer;
-    }, [buffer]);
-
-    const feed = useCallback((combo: string): boolean => {
-        // Awaiting second key of a prefix sequence
-        if (pendingPrefix.current !== null) {
-            const prefix = pendingPrefix.current;
-            pendingPrefix.current = null;
-
-            const subTable = bindings.prefixedKeyMapping[prefix];
-            if (subTable && combo in subTable) {
-                const result = subTable[combo](bufferRef.current);
-                if (result instanceof Promise) {
-                    result.then((newBuf) => {
-                        if (newBuf !== null) setBuffer(newBuf);
-                    });
-                } else if (result !== null) {
-                    setBuffer(result);
-                }
-                return true;
-            }
-
-            // Invalid sequence let the key fall through to the input
-            return false;
-        }
-
-        // Start of a prefix sequence
-        if (combo in bindings.prefixedKeyMapping) {
-            pendingPrefix.current = combo;
-            return true;
-        }
-
-        // Direct action key
-        if (combo in bindings.keyMapping) {
-            const result = bindings.keyMapping[combo](bufferRef.current);
-            if (result instanceof Promise) {
-                result.then((newBuf) => {
-                    if (newBuf !== null) setBuffer(newBuf);
-                });
-            } else if (result !== null) {
-                setBuffer(result);
-            }
-            return true;
-        }
-
-        return false;
-    }, [bindings]);
-
-    const clear = useCallback(() => {
-        setBuffer('');
-        pendingPrefix.current = null;
-    }, []);
-
-    return { buffer, setBuffer, feed, clear };
-}
 
 function useCmdHistory(commandHistory: string[], buffer: string) {
     const [historyPosition, setHistoryPosition] = useState(-1);
@@ -198,10 +64,6 @@ function useCmdSuggestions(suggestions: string[], buffer: string) {
         return items[next];
     }, [suggestions, filteredSuggestions, showAllSuggestions, highlightedIndex]);
 
-    const resetHighlight = useCallback(() => {
-        setHighlightedIndex(-1);
-    }, []);
-
     const resetDropdown = useCallback(() => {
         setShowAllSuggestions(false);
         setHighlightedIndex(-1);
@@ -215,36 +77,20 @@ function useCmdSuggestions(suggestions: string[], buffer: string) {
         setSuggestionPrefix: setPrefix,
         setShowAllSuggestions,
         navigateSuggestion,
-        resetSuggestionHighlight: resetHighlight,
         resetSuggestionDropdown: resetDropdown,
     };
 }
 
 function useCmdFocus(onCancel: () => void) {
     const inputRef = useRef<HTMLInputElement>(null);
-    const blurGuardRef = useRef(false);
 
     const focusInput = useCallback(() => {
         requestAnimationFrame(() => inputRef.current?.focus());
     }, []);
 
-    const handleBlur = useCallback(() => {
-        if (blurGuardRef.current) {
-            blurGuardRef.current = false;
-            return;
-        }
-        onCancel();
-    }, [onCancel]);
+    const handleBlur = useCallback(() => { onCancel(); }, [onCancel]);
 
-    const guardBlur = useCallback(() => {
-        blurGuardRef.current = true;
-    }, []);
-
-    const resetBlurGuard = useCallback(() => {
-        blurGuardRef.current = false;
-    }, []);
-
-    return { inputRef, focusInput, handleBlur, guardBlur, resetBlurGuard };
+    return { inputRef, focusInput, handleBlur };
 }
 
 // Loads the available commands and the persisted history, and writes the
@@ -296,30 +142,14 @@ function useCommandData() {
 
 export default function CmdLine() {
     const [visible, setVisible] = useState(false);
+    const [buffer, setBuffer] = useState('');
     const { suggestions, commandHistory, rememberCommand } = useCommandData();
 
-    useActionHandler(Action.OpenCmdLine, () => setVisible(true));
-
-    const onExecute = useCallback((cmdLine: string) => {
-        const spaceIdx = cmdLine.indexOf(' ');
-        const cmd = spaceIdx === -1 ? cmdLine : cmdLine.slice(0, spaceIdx);
-        const args = spaceIdx === -1 ? '' : cmdLine.slice(spaceIdx + 1);
-
-        invoke<string>('execute_command', { cmd, args })
-            .then(message => { if (message) logger.info(message); })
-            .catch(e => logger.error(String(e)));
-
+    const close = useCallback(() => {
         setVisible(false);
-        rememberCommand(cmdLine);
-    }, [rememberCommand]);
+        setBuffer('');
+    }, []);
 
-    const onCancel = useCallback(() => setVisible(false), []);
-
-    const bindings = useMemo(
-        () => createDefaultBindings(onExecute, onCancel),
-        [onExecute, onCancel],
-    );
-    const { buffer, setBuffer, feed } = useCmdLineInput(bindings);
     const { historyNavigate, resetHistoryPosition } = useCmdHistory(commandHistory, buffer);
     const {
         filteredSuggestions,
@@ -329,86 +159,72 @@ export default function CmdLine() {
         setSuggestionPrefix,
         setShowAllSuggestions,
         navigateSuggestion,
-        resetSuggestionHighlight,
         resetSuggestionDropdown,
     } = useCmdSuggestions(suggestions, buffer);
 
-    const { inputRef, focusInput, handleBlur, guardBlur, resetBlurGuard } = useCmdFocus(onCancel);
+    const { inputRef, focusInput, handleBlur } = useCmdFocus(close);
 
     // Auto-focus the input whenever the cmdline becomes visible.
     useEffect(() => {
         if (visible) {
             setSuggestionPrefix('');
             resetHistoryPosition();
-            resetBlurGuard();
             focusInput();
         }
     }, [visible]);
 
+    const execute = () => {
+        const spaceIdx = buffer.indexOf(' ');
+        const cmd = spaceIdx === -1 ? buffer : buffer.slice(0, spaceIdx);
+        const args = spaceIdx === -1 ? '' : buffer.slice(spaceIdx + 1);
+
+        invoke<string>('execute_command', { cmd, args })
+            .then(message => { if (message) logger.info(message); })
+            .catch(e => logger.error(String(e)));
+
+        rememberCommand(buffer);
+        close();
+    };
+
+    const replaceBuffer = (next: string | null) => {
+        if (next !== null) setBuffer(next);
+    };
+
+    // Tab both walks the dropdown and, on an empty buffer, opens it.
+    const cycleSuggestion = (direction: 1 | -1) => {
+        if (showSuggestionDropdown) {
+            replaceBuffer(navigateSuggestion(direction));
+            return;
+        }
+
+        if (buffer.length === 0 && direction === 1) {
+            setShowAllSuggestions(true);
+            setSuggestionPrefix('');
+        }
+    };
+
+    useActionHandler(Action.OpenCmdLine, () => setVisible(true));
+
+    useActionHandler(Action.Submit, execute, visible);
+    useActionHandler(Action.Cancel, close, visible);
+    useActionHandler(Action.SelectNext, () => replaceBuffer(navigateSuggestion(1)), visible);
+    useActionHandler(Action.SelectPrev, () => replaceBuffer(navigateSuggestion(-1)), visible);
+    useActionHandler(Action.CycleNext, () => cycleSuggestion(1), visible);
+    useActionHandler(Action.CyclePrev, () => cycleSuggestion(-1), visible);
+    useActionHandler(Action.HistoryPrev, () => replaceBuffer(historyNavigate(-1)), visible);
+    useActionHandler(Action.HistoryNext, () => replaceBuffer(historyNavigate(1)), visible);
+
+    // Typing belongs to the input. Every other key bubbles to the global
+    // keymap.
     const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-        event.stopPropagation();
-
-        const combo = normalizeKeyCombo(event);
-        if (combo === null) return;
-
-        if (combo === 'ArrowUp' || combo === 'ArrowDown') {
-            event.preventDefault();
-            const result = historyNavigate(combo === 'ArrowUp' ? -1 : 1);
-            if (result !== null) setBuffer(result);
-            return;
-        }
-
-        if (combo === 'Ctrl+n') {
-            event.preventDefault();
-            event.stopPropagation();
-            const result = navigateSuggestion(1);
-            if (result !== null) setBuffer(result);
-            return;
-        }
-
-        if (combo === 'Ctrl+p') {
-            event.preventDefault();
-            event.stopPropagation();
-            const result = navigateSuggestion(-1);
-            if (result !== null) setBuffer(result);
-            return;
-        }
-
-        if (combo === 'Tab') {
-            event.preventDefault();
-            event.stopPropagation();
-
-            if (showSuggestionDropdown) {
-                const result = navigateSuggestion(event.shiftKey ? -1 : 1);
-                if (result !== null) setBuffer(result);
-                return;
-            }
-
-            if (buffer.length === 0 && !event.shiftKey) {
-                setShowAllSuggestions(true);
-                setSuggestionPrefix('');
-            }
-            return;
-        }
-
-        resetSuggestionDropdown();
-
-        const wasHandled = feed(combo);
-        if (wasHandled) {
-            event.preventDefault();
-            event.stopPropagation();
-
-            if (combo === 'Enter' || combo === 'Escape') {
-                guardBlur();
-            }
-        }
+        if (isTextProducingKey(event.nativeEvent)) event.stopPropagation();
     };
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const newVal = event.target.value;
         setBuffer(newVal);
         setSuggestionPrefix(newVal);
-        resetSuggestionHighlight();
+        resetSuggestionDropdown();
         resetHistoryPosition();
     };
 

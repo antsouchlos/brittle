@@ -4,7 +4,7 @@ import { FaFilePdf } from 'react-icons/fa';
 import { Globe } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import styles from './PublicationList.module.css';
-import { Action, useActionHandler } from '../app/actions';
+import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
 import { logger } from '../app/logger';
 import { useTabActive } from './TabView';
 
@@ -110,16 +110,6 @@ function ContentIndicators({ contentFiles }: { contentFiles: string[] }) {
             {hasHtml && <Globe aria-hidden="true" />}
         </span>
     );
-}
-
-function isTextProducingKey(event: KeyboardEvent): boolean {
-    if (event.isComposing) return true;
-    const key = event.key;
-    if (key.length === 1 && !event.metaKey && !(event.ctrlKey && !event.altKey)) return true;
-    if (key === 'Backspace' || key === 'Delete' || key === 'Home' || key === 'End') return true;
-    if (key.startsWith('Arrow')) return true;
-    const mod = event.ctrlKey || event.metaKey;
-    return mod && (key === 'a' || key === 'c' || key === 'v' || key === 'x');
 }
 
 function useFuzzyInputFocus(
@@ -337,13 +327,13 @@ function PublicationList({
             .catch(e => logger.error(String(e)));
     };
 
-    useActionHandler(Action.SelectNextPublication, () => selectAdjacentPublication(1), tabActive);
-    useActionHandler(Action.SelectPrevPublication, () => selectAdjacentPublication(-1), tabActive);
-    useActionHandler(Action.OpenSelectedPublication, openSelectedPublication, tabActive);
+    useActionHandler(Action.SelectNext, () => selectAdjacentPublication(1), tabActive);
+    useActionHandler(Action.SelectPrev, () => selectAdjacentPublication(-1), tabActive);
+    useActionHandler(Action.Submit, openSelectedPublication, tabActive);
     useActionHandler(Action.OpenFuzzyFind, () => setFuzzyFindVisible(true), tabActive);
     // Escape is only claimed while the bar is actually open, so it stays free
     // for anything else when it is not.
-    useActionHandler(Action.CloseFuzzyFind, () => setFuzzyFindVisible(false), tabActive && fuzzyFindVisible);
+    useActionHandler(Action.Cancel, () => setFuzzyFindVisible(false), tabActive && fuzzyFindVisible);
 
     return (
         <div className={styles.publicationList}
