@@ -65,7 +65,10 @@ impl Orchestrator {
 
     /// Enqueues an action carrying a oneshot response channel and blocks until the worker
     /// answers. Used by the commands whose result the frontend awaits.
-    pub fn request<T>(&self, build: impl FnOnce(mpsc::Sender<T>) -> Action) -> Result<T, String> {
+    pub fn enqueue_with_response<T>(
+        &self,
+        build: impl FnOnce(mpsc::Sender<T>) -> Action,
+    ) -> Result<T, String> {
         let (respond_tx, respond_rx) = mpsc::channel::<T>();
 
         self.tx

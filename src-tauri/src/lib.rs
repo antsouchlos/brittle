@@ -339,18 +339,22 @@ fn get_library_state(state: State<AppState>) -> LibraryState {
 }
 
 #[tauri::command]
-fn write_publication_source(
+async fn write_publication_source(
     publication_id: PublicationId,
     content: String,
-    state: State<AppState>,
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
-    state
-        .orchestrator
-        .request(|respond| Action::WritePublicationSource {
+    let orchestrator = state.orchestrator.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        orchestrator.enqueue_with_response(|respond| Action::WritePublicationSource {
             publication_id,
             content,
             respond,
-        })?
+        })
+    })
+    .await
+    .map_err(|e| format!("Orchestrator request failed: {}", e))??
 }
 
 /// Stub: always returns `None` so the frontend initializes from defaults.
@@ -376,14 +380,22 @@ fn list_commands(state: State<AppState>) -> Vec<String> {
 }
 
 #[tauri::command]
-fn execute_command(cmd: String, args: String, state: State<AppState>) -> Result<String, String> {
-    state
-        .orchestrator
-        .request(|respond| Action::ExecuteCommand {
+async fn execute_command(
+    cmd: String,
+    args: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let orchestrator = state.orchestrator.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        orchestrator.enqueue_with_response(|respond| Action::ExecuteCommand {
             command: cmd,
             args,
             respond,
-        })?
+        })
+    })
+    .await
+    .map_err(|e| format!("Orchestrator request failed: {}", e))??
 }
 
 #[tauri::command]
