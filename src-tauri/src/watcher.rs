@@ -133,8 +133,14 @@ pub struct TauriActionRunner {
 impl ActionRunner for TauriActionRunner {
     fn run(&self, action: &str) {
         match action {
-            "library" => emit(&self.app_handle, "library-changed"),
-            "publication_metadata" => emit(&self.app_handle, "publication-metadata-changed"),
+            "library" => {
+                crate::reload_library(&self.app_handle);
+                emit(&self.app_handle, "library-changed");
+            }
+            "publication_metadata" => {
+                crate::reload_library(&self.app_handle);
+                emit(&self.app_handle, "publication-metadata-changed");
+            }
             "config" => crate::reload_config(&self.app_handle),
             other => warn!("Unknown watch action '{}'", other),
         }
