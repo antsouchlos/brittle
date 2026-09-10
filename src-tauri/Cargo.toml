@@ -32,7 +32,7 @@ ignore = "0.4.31"
 notify = "6"
 brittle-lua = { git = "ssh://git@100.123.176.93:2222/an.tsouchlos/brittle-lua-api-def.git", version = "0.1.0" }
 parking_lot = "0.12.5"
-uuid = { version = "1.26.1", features = ["v4"] }
+uuid = { version = "1.26.1", features = ["v5"] }
 
 [target."cfg(target_os = \"linux\")".dependencies]
 gtk = "0.18.2"

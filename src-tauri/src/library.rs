@@ -85,7 +85,7 @@ pub fn read_library(
     let mut state = LibraryState {
         root_collection_name: root_name,
         root_collection_path: library_root.to_path_buf(),
-        root_collection_id: CollectionId::new(),
+        root_collection_id: CollectionId::from_path(library_root),
         root_child_publication_ids: Vec::new(),
         root_child_collection_ids: Vec::new(),
         collections: HashMap::new(),
@@ -182,7 +182,7 @@ fn read_collection_contents(
             parse_metadata,
         )?;
 
-        let collection_id = CollectionId::new();
+        let collection_id = CollectionId::from_path(&entry.path);
         state.collections.insert(
             collection_id.clone(),
             Collection {
@@ -296,7 +296,7 @@ fn build_publications(
             }
         };
 
-        let publication_id = PublicationId::new();
+        let publication_id = PublicationId::from_path(&f.path);
         publications.insert(
             publication_id.clone(),
             Publication {
@@ -626,6 +626,43 @@ mod tests {
         for publication in state.publications.values() {
             assert_eq!(publication.metadata_file_extension, "bib".to_string());
         }
+    }
+
+    #[test]
+    fn ids_are_stable_across_scans() {
+        let (_dir, root_path, _root_name) = create_literature_env(&["paper.bib", "sub/nested.bib"]);
+
+        let first = read_test_library(&root_path, &empty_gitignore(), &["bib"], &["pdf"]).unwrap();
+        let second = read_test_library(&root_path, &empty_gitignore(), &["bib"], &["pdf"]).unwrap();
+
+        assert_eq!(first.root_collection_id, second.root_collection_id);
+        assert_eq!(
+            first.collections.keys().collect::<HashSet<_>>(),
+            second.collections.keys().collect::<HashSet<_>>()
+        );
+        assert_eq!(
+            first.publications.keys().collect::<HashSet<_>>(),
+            second.publications.keys().collect::<HashSet<_>>()
+        );
+
+        // A new file leaves every id that was already there untouched
+
+        fs::write(root_path.join("added.bib"), b"added.bib").unwrap();
+        let third = read_test_library(&root_path, &empty_gitignore(), &["bib"], &["pdf"]).unwrap();
+
+        assert_eq!(third.root_collection_id, first.root_collection_id);
+        assert!(first
+            .publications
+            .keys()
+            .all(|id| third.publications.contains_key(id)));
+
+        let added_ids: Vec<&PublicationId> = third
+            .publications
+            .keys()
+            .filter(|id| !first.publications.contains_key(*id))
+            .collect();
+        assert_eq!(added_ids.len(), 1);
+        assert_eq!(third.publications[added_ids[0]].name, "added");
     }
 
     #[test]
