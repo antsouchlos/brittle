@@ -21,7 +21,7 @@ impl PublicationId {
     pub fn from_path(path: &Path) -> Self {
         Self(Uuid::new_v5(
             &PUBLICATION_UUID_NAMESPACE,
-            path.to_string_lossy().as_bytes(),
+            normalize_path_for_id(path).to_string_lossy().as_bytes(),
         ))
     }
 }
@@ -34,9 +34,13 @@ impl CollectionId {
     pub fn from_path(path: &Path) -> Self {
         Self(Uuid::new_v5(
             &COLLECTION_UUID_NAMESPACE,
-            path.to_string_lossy().as_bytes(),
+            normalize_path_for_id(path).to_string_lossy().as_bytes(),
         ))
     }
+}
+
+fn normalize_path_for_id(path: &Path) -> PathBuf {
+    path.components().collect()
 }
 
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -327,33 +331,114 @@ impl LibraryStore {
         let mut publication_parents = self.publication_parents.write();
         let mut collection_parents = self.collection_parents.write();
 
-        if let Some(parent_collection_id) = collection_parents.remove(&collection_id) {
-            if parent_collection_id == state.root_collection_id {
-                state
-                    .root_child_collection_ids
-                    .retain(|id| *id != collection_id);
-            } else if let Some(parent) = state.collections.get_mut(&parent_collection_id) {
-                parent
-                    .child_collection_ids
-                    .retain(|id| *id != collection_id);
-            }
-        }
-
-        let mut pending = vec![collection_id];
-        while let Some(id) = pending.pop() {
-            let Some(removed) = state.collections.remove(&id) else {
-                continue;
-            };
-            collection_parents.remove(&id);
-
-            for publication_id in removed.child_publication_ids {
-                state.publications.remove(&publication_id);
-                publication_parents.remove(&publication_id);
-            }
-            pending.extend(removed.child_collection_ids);
-        }
+        remove_collection_impl(
+            &mut state,
+            &mut publication_parents,
+            &mut collection_parents,
+            collection_id,
+        );
 
         Ok(())
+    }
+
+    pub fn replace_subtree(
+        &self,
+        parent_collection_id: CollectionId,
+        subtree: LibraryState,
+    ) -> Result<(), Error> {
+        let mut state = self.state.write();
+
+        if subtree.root_collection_id == state.root_collection_id {
+            return Err(Error::CollectionAlreadyExists);
+        }
+        if parent_collection_id != state.root_collection_id
+            && !state.collections.contains_key(&parent_collection_id)
+        {
+            return Err(Error::CollectionDoesntExist);
+        }
+
+        let mut publication_parents = self.publication_parents.write();
+        let mut collection_parents = self.collection_parents.write();
+
+        remove_collection_impl(
+            &mut state,
+            &mut publication_parents,
+            &mut collection_parents,
+            subtree.root_collection_id.clone(),
+        );
+
+        for (collection_id, collection) in &subtree.collections {
+            for publication_id in &collection.child_publication_ids {
+                publication_parents.insert(publication_id.clone(), collection_id.clone());
+            }
+            for child_collection_id in &collection.child_collection_ids {
+                collection_parents.insert(child_collection_id.clone(), collection_id.clone());
+            }
+        }
+        for publication_id in &subtree.root_child_publication_ids {
+            publication_parents.insert(publication_id.clone(), subtree.root_collection_id.clone());
+        }
+        for child_collection_id in &subtree.root_child_collection_ids {
+            collection_parents.insert(child_collection_id.clone(), subtree.root_collection_id.clone());
+        }
+
+        state.collections.extend(subtree.collections);
+        state.publications.extend(subtree.publications);
+        state.collections.insert(
+            subtree.root_collection_id.clone(),
+            Collection {
+                name: subtree.root_collection_name,
+                path: subtree.root_collection_path,
+                child_publication_ids: subtree.root_child_publication_ids,
+                child_collection_ids: subtree.root_child_collection_ids,
+            },
+        );
+
+        if parent_collection_id == state.root_collection_id {
+            state
+                .root_child_collection_ids
+                .push(subtree.root_collection_id.clone());
+        } else if let Some(parent) = state.collections.get_mut(&parent_collection_id) {
+            parent
+                .child_collection_ids
+                .push(subtree.root_collection_id.clone());
+        }
+        collection_parents.insert(subtree.root_collection_id, parent_collection_id);
+
+        Ok(())
+    }
+}
+
+fn remove_collection_impl(
+    state: &mut LibraryState,
+    publication_parents: &mut HashMap<PublicationId, CollectionId>,
+    collection_parents: &mut HashMap<CollectionId, CollectionId>,
+    collection_id: CollectionId,
+) {
+    if let Some(parent_collection_id) = collection_parents.remove(&collection_id) {
+        if parent_collection_id == state.root_collection_id {
+            state
+                .root_child_collection_ids
+                .retain(|id| *id != collection_id);
+        } else if let Some(parent) = state.collections.get_mut(&parent_collection_id) {
+            parent
+                .child_collection_ids
+                .retain(|id| *id != collection_id);
+        }
+    }
+
+    let mut pending = vec![collection_id];
+    while let Some(id) = pending.pop() {
+        let Some(removed) = state.collections.remove(&id) else {
+            continue;
+        };
+        collection_parents.remove(&id);
+
+        for publication_id in removed.child_publication_ids {
+            state.publications.remove(&publication_id);
+            publication_parents.remove(&publication_id);
+        }
+        pending.extend(removed.child_collection_ids);
     }
 }
 
@@ -836,6 +921,92 @@ mod tests {
     fn remove_missing_collection_errors() {
         let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
         let result = store.remove_collection(collection_id_for("Missing"));
+        assert!(matches!(result, Err(Error::CollectionDoesntExist)));
+    }
+    fn new_subtree(name: &str, child_publication_names: &[&str]) -> LibraryState {
+        LibraryState {
+            root_collection_name: name.to_string(),
+            root_collection_path: collection_path_for(name),
+            root_collection_id: collection_id_for(name),
+            root_child_publication_ids: child_publication_names
+                .iter()
+                .map(|n| publication_id_for(n))
+                .collect(),
+            root_child_collection_ids: Vec::new(),
+            collections: HashMap::new(),
+            publications: child_publication_names
+                .iter()
+                .map(|n| (publication_id_for(n), new_publication(n)))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn ids_ignore_how_the_same_path_is_spelled() {
+        assert_eq!(
+            CollectionId::from_path(Path::new("/library/papers/")),
+            CollectionId::from_path(Path::new("/library/./papers"))
+        );
+        assert_eq!(
+            PublicationId::from_path(Path::new("/library//papers/a.opf")),
+            PublicationId::from_path(Path::new("/library/papers/a.opf"))
+        );
+    }
+
+    #[test]
+    fn replace_subtree_grafts_a_new_collection_under_the_root() {
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
+        let root_id = store.get_state().root_collection_id;
+
+        store
+            .replace_subtree(root_id.clone(), new_subtree("papers", &["a", "b"]))
+            .unwrap();
+
+        let state = store.get_state();
+        assert_eq!(state.root_child_collection_ids, vec![collection_id_for("papers")]);
+        assert_eq!(state.publications.len(), 2);
+
+        let grafted = store.get_collection(collection_id_for("papers")).unwrap();
+        assert_eq!(grafted.name, "papers".to_string());
+        assert_eq!(grafted.child_publication_ids.len(), 2);
+
+        // The parent index has to know the grafted publications, or removing one
+        // would leave a dangling child id behind.
+        store.remove_publication(publication_id_for("a")).unwrap();
+        assert_eq!(
+            store
+                .get_collection(collection_id_for("papers"))
+                .unwrap()
+                .child_publication_ids,
+            vec![publication_id_for("b")]
+        );
+    }
+
+    #[test]
+    fn replace_subtree_drops_what_the_collection_held_before() {
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
+        let root_id = store.get_state().root_collection_id;
+
+        store
+            .replace_subtree(root_id.clone(), new_subtree("papers", &["stale"]))
+            .unwrap();
+        store
+            .replace_subtree(root_id.clone(), new_subtree("papers", &["fresh"]))
+            .unwrap();
+
+        let state = store.get_state();
+        assert_eq!(state.root_child_collection_ids, vec![collection_id_for("papers")]);
+        assert!(!state.publications.contains_key(&publication_id_for("stale")));
+        assert!(state.publications.contains_key(&publication_id_for("fresh")));
+        assert_eq!(state.publications.len(), 1);
+    }
+
+    #[test]
+    fn replace_subtree_rejects_an_unknown_parent() {
+        let store = LibraryStore::new("Library".to_string(), PathBuf::from("/library"));
+
+        let result = store.replace_subtree(collection_id_for("nowhere"), new_subtree("papers", &[]));
+
         assert!(matches!(result, Err(Error::CollectionDoesntExist)));
     }
 }

@@ -1,5 +1,15 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { LibraryModel, LibraryState, Publication, PublicationId, CollectionId } from './LibraryModel';
+import {
+    applyCollectionRemoved,
+    applyCollectionUpserted,
+    applyPublicationRemoved,
+    applyPublicationUpserted,
+    CollectionRemoved,
+    CollectionUpserted,
+    PublicationRemoved,
+    PublicationUpserted,
+} from './libraryUpdates.ts';
 import { logger } from './logger';
 
 import styles from './App.module.css'
@@ -82,26 +92,40 @@ function useGlobalKeymap() {
 
 // Loads the library and keeps it in sync with the backend.
 function useLibrary(): LibraryModel | null {
-    const [lib, setLib] = useState<LibraryModel | null>(null);
+    const [state, setState] = useState<LibraryState | null>(null);
 
     const loadLibraryData = useCallback(async () => {
-        const state = await invoke<LibraryState>('get_library_state');
-        setLib(new LibraryModel(state));
+        setState(await invoke<LibraryState>('get_library_state'));
     }, []);
 
     useEffect(() => {
         loadLibraryData().catch(e => logger.error(String(e)));
 
-        const libraryChanged = listen('library-changed', () => {
-            loadLibraryData().catch(e => logger.error(String(e)));
-        });
+        const applyEvent = <T,>(apply: (state: LibraryState, event: T) => LibraryState) =>
+            (event: { payload: T }) =>
+                setState(current => (current ? apply(current, event.payload) : current));
+
+        const unlisteners = [
+            listen('library-changed', () => {
+                loadLibraryData().catch(e => logger.error(String(e)));
+            }),
+            listen<PublicationUpserted>(
+                'publication-upserted',
+                applyEvent(applyPublicationUpserted),
+            ),
+            listen<PublicationRemoved>('publication-removed', applyEvent(applyPublicationRemoved)),
+            listen<CollectionUpserted>('collection-upserted', applyEvent(applyCollectionUpserted)),
+            listen<CollectionRemoved>('collection-removed', applyEvent(applyCollectionRemoved)),
+        ];
 
         return () => {
-            libraryChanged.then(unlisten => unlisten());
+            for (const unlistener of unlisteners) {
+                unlistener.then(unlisten => unlisten());
+            }
         };
     }, [loadLibraryData]);
 
-    return lib;
+    return useMemo(() => (state ? new LibraryModel(state) : null), [state]);
 }
 
 function Workspace() {

@@ -60,18 +60,38 @@ pub fn read_library(
     valid_content_extensions: &[String],
     parse_metadata: ParseMetadata,
 ) -> Result<LibraryState, LoadError> {
-    if !library_root.exists() {
+    read_collection_subtree(
+        library_root,
+        library_root,
+        ignore_filter,
+        valid_metadata_extensions,
+        valid_content_extensions,
+        parse_metadata,
+    )
+}
+
+/// Reads `dir` and everything below it into a `LibraryState` whose `root_*`
+/// fields describe `dir` itself. `library_root` is only used to resolve
+/// `ignore_filter` patterns, which are written relative to the library root, so
+/// a subtree scan filters exactly like the full scan does.
+pub fn read_collection_subtree(
+    dir: &Path,
+    library_root: &Path,
+    ignore_filter: &Gitignore,
+    valid_metadata_extensions: &[String],
+    valid_content_extensions: &[String],
+    parse_metadata: ParseMetadata,
+) -> Result<LibraryState, LoadError> {
+    if !dir.exists() {
         return Err(LoadError::LibraryNotFound(
-            library_root.to_string_lossy().to_string(),
+            dir.to_string_lossy().to_string(),
         ));
     }
-    if !library_root.is_dir() {
-        return Err(LoadError::NotADirectory(
-            library_root.to_string_lossy().to_string(),
-        ));
+    if !dir.is_dir() {
+        return Err(LoadError::NotADirectory(dir.to_string_lossy().to_string()));
     }
 
-    let root_name = library_root
+    let root_name = dir
         .file_name()
         .ok_or_else(|| {
             LoadError::Io(std::io::Error::new(
@@ -84,8 +104,8 @@ pub fn read_library(
 
     let mut state = LibraryState {
         root_collection_name: root_name,
-        root_collection_path: library_root.to_path_buf(),
-        root_collection_id: CollectionId::from_path(library_root),
+        root_collection_path: dir.to_path_buf(),
+        root_collection_id: CollectionId::from_path(dir),
         root_child_publication_ids: Vec::new(),
         root_child_collection_ids: Vec::new(),
         collections: HashMap::new(),
@@ -93,7 +113,7 @@ pub fn read_library(
     };
 
     let (child_publication_ids, child_collection_ids) = read_collection_contents(
-        library_root,
+        dir,
         library_root,
         &mut state,
         ignore_filter,
@@ -106,6 +126,42 @@ pub fn read_library(
     state.root_child_collection_ids = child_collection_ids;
 
     Ok(state)
+}
+
+pub fn read_publication(
+    dir: &Path,
+    library_root: &Path,
+    stem: &str,
+    ignore_filter: &Gitignore,
+    valid_metadata_extensions: &[String],
+    valid_content_extensions: &[String],
+    parse_metadata: ParseMetadata,
+) -> Result<Option<Publication>, LoadError> {
+    let entries = list_and_filter_dir_contents(dir, library_root, ignore_filter)?;
+    let (metadata_files, content_files) =
+        classify_dir_files(&entries, valid_metadata_extensions, valid_content_extensions);
+
+    let metadata_files: Vec<ClassifiedFile> = metadata_files
+        .into_iter()
+        .filter(|f| f.stem == stem)
+        .collect();
+    let content_files: Vec<ClassifiedFile> = content_files
+        .into_iter()
+        .filter(|f| f.stem == stem)
+        .collect();
+
+    let mut publications: HashMap<PublicationId, Publication> = HashMap::new();
+    let publication_ids = build_publications(
+        &metadata_files,
+        &content_files,
+        dir,
+        &mut publications,
+        parse_metadata,
+    );
+
+    Ok(publication_ids
+        .first()
+        .and_then(|id| publications.remove(id)))
 }
 
 fn get_stem_and_extension(path: &PathBuf) -> Option<(String, String)> {
@@ -197,10 +253,31 @@ fn read_collection_contents(
 
     // Second pass: classify the files
 
+    let (metadata_files, content_files) =
+        classify_dir_files(&entries, valid_metadata_extensions, valid_content_extensions);
+
+    let child_publication_ids = build_publications(
+        &metadata_files,
+        &content_files,
+        dir,
+        &mut state.publications,
+        parse_metadata,
+    );
+
+    Ok((child_publication_ids, child_collection_ids))
+}
+
+/// Splits the non-directory entries of one directory into metadata files and
+/// content files, dropping anything with an unrecognized extension.
+fn classify_dir_files(
+    entries: &[FoundFileObject],
+    valid_metadata_extensions: &[String],
+    valid_content_extensions: &[String],
+) -> (Vec<ClassifiedFile>, Vec<ClassifiedFile>) {
     let mut metadata_files: Vec<ClassifiedFile> = Vec::new();
     let mut content_files: Vec<ClassifiedFile> = Vec::new();
 
-    for entry in &entries {
+    for entry in entries {
         if entry.file_type.is_dir() {
             continue;
         }
@@ -227,15 +304,7 @@ fn read_collection_contents(
         }
     }
 
-    let child_publication_ids = build_publications(
-        &metadata_files,
-        &content_files,
-        dir,
-        &mut state.publications,
-        parse_metadata,
-    );
-
-    Ok((child_publication_ids, child_collection_ids))
+    (metadata_files, content_files)
 }
 
 fn find_duplicate_metadata_stems<'a>(
@@ -770,6 +839,147 @@ mod tests {
             publication_names(&state, &state.root_child_publication_ids),
             vec!["über-paper".to_string(), "论文".to_string()]
         );
+    }
+
+    fn read_test_publication(
+        dir: &Path,
+        library_root: &Path,
+        stem: &str,
+        ignore_filter: &Gitignore,
+        valid_metadata_extensions: &[&str],
+        valid_content_extensions: &[&str],
+    ) -> Option<Publication> {
+        read_publication(
+            dir,
+            library_root,
+            stem,
+            ignore_filter,
+            &valid_metadata_extensions
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<String>>(),
+            &valid_content_extensions
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<String>>(),
+            &stub_parse_metadata,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn read_publication_reads_one_stem_with_its_content_files() {
+        let (_dir, root_path, _root_name) = create_literature_env(&[
+            "sub/paper.bib",
+            "sub/paper.pdf",
+            "sub/paper.html",
+            "sub/other.bib",
+        ]);
+        let sub_path = root_path.join("sub");
+
+        let publication = read_test_publication(
+            &sub_path,
+            &root_path,
+            "paper",
+            &empty_gitignore(),
+            &["bib"],
+            &["pdf", "html"],
+        )
+        .unwrap();
+
+        assert_eq!(publication.name, "paper");
+        assert_eq!(publication.path, sub_path.join("paper.bib"));
+        assert_eq!(publication.metadata_file_extension, "bib".to_string());
+
+        let mut extensions = publication.available_content_file_extensions.clone();
+        extensions.sort();
+        assert_eq!(extensions, vec!["html".to_string(), "pdf".to_string()]);
+    }
+
+    #[test]
+    fn read_publication_returns_none_for_a_missing_or_conflicting_stem() {
+        let (_dir, root_path, _root_name) =
+            create_literature_env(&["gone.pdf", "clash.bib", "clash.enl"]);
+
+        assert!(read_test_publication(
+            &root_path,
+            &root_path,
+            "gone",
+            &empty_gitignore(),
+            &["bib"],
+            &["pdf"],
+        )
+        .is_none());
+        assert!(read_test_publication(
+            &root_path,
+            &root_path,
+            "never_existed",
+            &empty_gitignore(),
+            &["bib"],
+            &["pdf"],
+        )
+        .is_none());
+        assert!(read_test_publication(
+            &root_path,
+            &root_path,
+            "clash",
+            &empty_gitignore(),
+            &["bib", "enl"],
+            &["pdf"],
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn read_publication_honors_ignore_patterns_relative_to_the_library_root() {
+        let (_dir, root_path, _root_name) =
+            create_literature_env(&["sub/paper.bib", "sub/paper.pdf"]);
+        let sub_path = root_path.join("sub");
+
+        let publication = read_test_publication(
+            &sub_path,
+            &root_path,
+            "paper",
+            &gitignore_from(&["sub/paper.pdf"], &root_path),
+            &["bib"],
+            &["pdf"],
+        )
+        .unwrap();
+
+        assert!(publication.available_content_file_extensions.is_empty());
+    }
+
+    #[test]
+    fn read_collection_subtree_scans_one_directory_relative_to_the_library_root() {
+        let (_dir, root_path, _root_name) = create_literature_env(&[
+            "top.bib",
+            "sub/mid.bib",
+            "sub/hidden.bib",
+            "sub/deep/deep.bib",
+        ]);
+        let sub_path = root_path.join("sub");
+
+        let subtree = read_collection_subtree(
+            &sub_path,
+            &root_path,
+            &gitignore_from(&["sub/hidden.bib"], &root_path),
+            &vec!["bib".to_string()],
+            &vec!["pdf".to_string()],
+            &stub_parse_metadata,
+        )
+        .unwrap();
+
+        assert_eq!(subtree.root_collection_name, "sub".to_string());
+        assert_eq!(subtree.root_collection_id, CollectionId::from_path(&sub_path));
+        assert_eq!(
+            publication_names(&subtree, &subtree.root_child_publication_ids),
+            vec!["mid".to_string()]
+        );
+        assert_eq!(
+            collection_names(&subtree, &subtree.root_child_collection_ids),
+            vec!["deep".to_string()]
+        );
+        assert_eq!(subtree.publications.len(), 2);
     }
 
     #[test]
