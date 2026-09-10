@@ -1,29 +1,37 @@
 import { ReactNode } from 'react';
 import { Folder, Library } from 'lucide-react';
 
-export interface DirectoryEntry {
-    path: string;
-    childDirectoryPaths: string[];
-    publicationPaths: string[];
-}
+export type PublicationId = string;
+export type CollectionId = string;
 
-export interface PublicationEntry {
-    pathStem: string;
-    availableContentFileExtensions: string[],
-    parentDirectoryPath: string;
-    referenceFileExtension: string;
-}
-
-export interface Library {
-    directories: Record<string, DirectoryEntry>;
-    publications: Record<string, PublicationEntry>;
-}
-
-export interface Metadata {
+export interface ParsedMetadata {
     title: string;
-    author: string;
-    year: number;
+    authors: string;
     publisher: string;
+    year: number;
+}
+
+export interface Publication {
+    name: string;
+    metadataFileExtension: string;
+    metadataSource: string;
+    metadata: ParsedMetadata | null;
+    availableContentFileExtensions: string[];
+}
+
+export interface Collection {
+    name: string;
+    childPublicationIds: PublicationId[];
+    childCollectionIds: CollectionId[];
+}
+
+export interface LibraryState {
+    rootCollectionName: string;
+    rootCollectionId: CollectionId;
+    rootChildPublicationIds: PublicationId[];
+    rootChildCollectionIds: CollectionId[];
+    collections: Record<CollectionId, Collection>;
+    publications: Record<PublicationId, Publication>;
 }
 
 export interface TreeNodeData {
@@ -34,56 +42,80 @@ export interface TreeNodeData {
     renderIcon: () => ReactNode;
 }
 
-// Final path segment of a path-like id, used for display names
-export function getFilename(id: string): string {
-    return id.split('/').pop() ?? id;
-}
-
-// Wraps flat directories + publications maps, providing tree/query operations
+// Wraps a LibraryState, providing tree/query operations. The root collection is
+// not part of `collections`; it only exists as the `root*` fields, so every
+// lookup goes through `getCollection`.
 export class LibraryModel {
-    readonly directories: Record<string, DirectoryEntry>;
-    readonly publications: Record<string, PublicationEntry>;
+    readonly collections: Record<CollectionId, Collection>;
+    readonly publications: Record<PublicationId, Publication>;
+    readonly publicationParents: Record<PublicationId, CollectionId>;
 
-    constructor(data: Library) {
-        this.directories = data.directories;
-        this.publications = data.publications;
+    private readonly rootCollection: Collection;
+    private readonly rootCollectionId: CollectionId;
+
+    constructor(state: LibraryState) {
+        this.collections = state.collections;
+        this.publications = state.publications;
+        this.rootCollectionId = state.rootCollectionId;
+        this.rootCollection = {
+            name: state.rootCollectionName,
+            childPublicationIds: state.rootChildPublicationIds,
+            childCollectionIds: state.rootChildCollectionIds,
+        };
+
+        this.publicationParents = {};
+        for (const publicationId of state.rootChildPublicationIds) {
+            this.publicationParents[publicationId] = state.rootCollectionId;
+        }
+        for (const [collectionId, collection] of Object.entries(state.collections)) {
+            for (const publicationId of collection.childPublicationIds) {
+                this.publicationParents[publicationId] = collectionId;
+            }
+        }
     }
 
-    get rootId(): string {
-        return Object.keys(this.directories).find(id => !id.includes('/')) ?? '';
+    get rootId(): CollectionId {
+        return this.rootCollectionId;
     }
 
-    collectPublicationPathStems(folderId: string): string[] {
-        const dir = this.directories[folderId];
-        if (!dir) return [];
+    getCollection(collectionId: CollectionId): Collection | null {
+        if (collectionId === this.rootCollectionId) return this.rootCollection;
+        return this.collections[collectionId] ?? null;
+    }
+
+    collectPublicationIds(collectionId: CollectionId): PublicationId[] {
+        const collection = this.getCollection(collectionId);
+        if (!collection) return [];
         return [
-            ...dir.publicationPaths,
-            ...dir.childDirectoryPaths.flatMap(cid => this.collectPublicationPathStems(cid)),
+            ...collection.childPublicationIds,
+            ...collection.childCollectionIds.flatMap(childId => this.collectPublicationIds(childId)),
         ];
     }
 
-    visibleNodeIds(folderId: string, expanded: string[]): string[] {
-        const result = [folderId];
-        if (expanded.includes(folderId) && this.directories[folderId]) {
-            for (const cid of this.directories[folderId].childDirectoryPaths) {
-                result.push(...this.visibleNodeIds(cid, expanded));
+    visibleNodeIds(collectionId: CollectionId, expanded: CollectionId[]): CollectionId[] {
+        const result = [collectionId];
+        const collection = this.getCollection(collectionId);
+        if (expanded.includes(collectionId) && collection) {
+            for (const childId of collection.childCollectionIds) {
+                result.push(...this.visibleNodeIds(childId, expanded));
             }
         }
         return result;
     }
 
-    buildTree(id: string): TreeNodeData {
-        const dir = this.directories[id];
+    buildTree(collectionId: CollectionId): TreeNodeData {
+        const collection = this.getCollection(collectionId);
+        const isRoot = collectionId === this.rootCollectionId;
 
         return {
-            id,
-            name: getFilename(id),
-            count: this.collectPublicationPathStems(id).length,
-            children: dir.childDirectoryPaths.map(cid => this.buildTree(cid)),
+            id: collectionId,
+            name: collection?.name ?? '',
+            count: this.collectPublicationIds(collectionId).length,
+            children: (collection?.childCollectionIds ?? []).map(childId => this.buildTree(childId)),
             renderIcon: () =>
-                id.includes('/')
-                    ? <Folder size={15} aria-hidden="true" />
-                    : <Library size={15} aria-hidden="true" />,
+                isRoot
+                    ? <Library size={15} aria-hidden="true" />
+                    : <Folder size={15} aria-hidden="true" />,
         };
     }
 }

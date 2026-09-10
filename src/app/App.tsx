@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { LibraryModel, Library, Metadata, getFilename } from './LibraryModel';
+import { LibraryModel, LibraryState, Publication, PublicationId, CollectionId } from './LibraryModel';
 import { logger } from './logger';
 
 import styles from './App.module.css'
@@ -58,26 +58,25 @@ const keymap: Array<[string, Action]> = [
 // Selects the first visible publication whenever the current selection is no
 // longer part of the collection shown in the publication list.
 function useNewPublicationSelectOnHidden(
-    selectedPublicationPathStem: string | null,
-    visiblePublicationPathStems: string[],
-    onSelectPublication: (pathStem: string | null) => void,
+    selectedPublicationId: PublicationId | null,
+    visiblePublicationIds: PublicationId[],
+    onSelectPublication: (publicationId: PublicationId | null) => void,
 ) {
     useEffect(() => {
-        if (selectedPublicationPathStem && visiblePublicationPathStems.includes(selectedPublicationPathStem)) return;
-        onSelectPublication(visiblePublicationPathStems[0] ?? null);
-    }, [selectedPublicationPathStem, visiblePublicationPathStems, onSelectPublication]);
+        if (selectedPublicationId && visiblePublicationIds.includes(selectedPublicationId)) return;
+        onSelectPublication(visiblePublicationIds[0] ?? null);
+    }, [selectedPublicationId, visiblePublicationIds, onSelectPublication]);
 }
 
 function App() {
     const [panel1Width, setPanel1Width] = useState(0.25);
     const [panel2Width, setPanel2Width] = useState(0.4);
-    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-    const [expandedNodeIds, setExpandedNodeIds] = useState<string[]>([]);
-    const [selectedPublicationPathStem, setSelectedPublicationPathStem] = useState<string | null>(null);
+    const [selectedCollectionId, setSelectedCollectionId] = useState<CollectionId | null>(null);
+    const [expandedCollectionIds, setExpandedCollectionIds] = useState<CollectionId[]>([]);
+    const [selectedPublicationId, setSelectedPublicationId] = useState<PublicationId | null>(null);
     const [bibEditorFocused, setBibEditorFocused] = useState(false);
 
     const [lib, setLib] = useState<LibraryModel | null>(null);
-    const [pubMetadata, setPubMetadata] = useState<Record<string, Metadata>>({});
     const [autosaveDebounceMs, setAutosaveDebounceMs] = useState(250);
     const [cmdLineVisible, setCmdLineVisible] = useState(false);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
@@ -87,19 +86,19 @@ function App() {
     const historyLoadedRef = useRef(false);
 
     const handlePublicationSubmit = () => {
-        if (!selectedPublicationPathStem) return;
-        invoke('open_publication', { pathStem: selectedPublicationPathStem })
+        if (!selectedPublicationId) return;
+        invoke('open_publication', { publicationId: selectedPublicationId })
             .catch(e => logger.error(String(e)));
     };
 
-    const prevSelectedPublicationPathStem = useRef(selectedPublicationPathStem);
-    const prevSelectedNodeId = useRef(selectedNodeId);
-    const prevExpandedNodeIds = useRef(expandedNodeIds);
+    const prevSelectedPublicationId = useRef(selectedPublicationId);
+    const prevSelectedCollectionId = useRef(selectedCollectionId);
+    const prevExpandedCollectionIds = useRef(expandedCollectionIds);
 
     useEffect(() => {
-        prevSelectedPublicationPathStem.current = selectedPublicationPathStem;
-        prevSelectedNodeId.current = selectedNodeId;
-        prevExpandedNodeIds.current = expandedNodeIds;
+        prevSelectedPublicationId.current = selectedPublicationId;
+        prevSelectedCollectionId.current = selectedCollectionId;
+        prevExpandedCollectionIds.current = expandedCollectionIds;
     });
 
     const loadCommandList = useCallback(() => {
@@ -122,59 +121,26 @@ function App() {
     }, []);
 
     const loadLibraryData = useCallback(async () => {
-        const data = await invoke<Library>('scan_library');
+        const state = await invoke<LibraryState>('get_library_state');
 
-        const model = new LibraryModel(data);
+        const model = new LibraryModel(state);
         setLib(model);
 
         const rootId = model.rootId;
 
-        const nodeId = prevSelectedNodeId.current && model.directories[prevSelectedNodeId.current]
-            ? prevSelectedNodeId.current
+        const collectionId = prevSelectedCollectionId.current && model.getCollection(prevSelectedCollectionId.current)
+            ? prevSelectedCollectionId.current
             : rootId;
-        setSelectedNodeId(nodeId);
+        setSelectedCollectionId(collectionId);
 
-        const expIds = prevExpandedNodeIds.current.filter(id => model.directories[id]);
-        setExpandedNodeIds(expIds.length > 0 ? expIds : (rootId ? [rootId] : []));
+        const expandedIds = prevExpandedCollectionIds.current.filter(id => model.getCollection(id));
+        setExpandedCollectionIds(expandedIds.length > 0 ? expandedIds : (rootId ? [rootId] : []));
 
-        const pathStems = Object.keys(data.publications);
-        const metas = await Promise.all(
-            pathStems.map(pathStem => invoke<Metadata>('parse_publication', {
-                pathStem,
-                extension: data.publications[pathStem].referenceFileExtension,
-            }))
-        );
-        const metaMap: Record<string, Metadata> = {};
-        pathStems.forEach((pathStem, i) => { metaMap[pathStem] = metas[i]; });
-        setPubMetadata(metaMap);
-
-        const pubPathStem = prevSelectedPublicationPathStem.current && data.publications[prevSelectedPublicationPathStem.current]
-            ? prevSelectedPublicationPathStem.current
-            : (pathStems.length > 0 ? pathStems[0] : null);
-        setSelectedPublicationPathStem(pubPathStem);
-    }, []);
-
-    const libRef = useRef<LibraryModel | null>(null);
-
-    useEffect(() => {
-        libRef.current = lib;
-    }, [lib]);
-
-    const refreshPubMetadata = useCallback(async () => {
-        const currentLib = libRef.current;
-        if (!currentLib) return;
-
-        const pathStems = Object.keys(currentLib.publications);
-        const metas = await Promise.all(
-            pathStems.map(pathStem => invoke<Metadata>('parse_publication', {
-                pathStem,
-                extension: currentLib.publications[pathStem].referenceFileExtension,
-            }))
-        );
-        const metaMap: Record<string, Metadata> = {};
-
-        pathStems.forEach((pathStem, i) => { metaMap[pathStem] = metas[i]; });
-        setPubMetadata(metaMap);
+        const publicationIds = Object.keys(state.publications);
+        const publicationId = prevSelectedPublicationId.current && state.publications[prevSelectedPublicationId.current]
+            ? prevSelectedPublicationId.current
+            : (publicationIds.length > 0 ? publicationIds[0] : null);
+        setSelectedPublicationId(publicationId);
     }, []);
 
     useEffect(() => {
@@ -193,7 +159,7 @@ function App() {
             loadConfig();
         });
         const metadataChanged = listen('publication-metadata-changed', () => {
-            refreshPubMetadata().catch(e => logger.error(String(e)));
+            loadLibraryData().catch(e => logger.error(String(e)));
         });
         const configError = listen('config-reload-error', (event) => {
             logger.error(String(event.payload));
@@ -205,42 +171,46 @@ function App() {
             metadataChanged.then(unlisten => unlisten());
             configError.then(unlisten => unlisten());
         };
-    }, [loadLibraryData, loadCommandList, loadCommandHistory, loadConfig, refreshPubMetadata]);
+    }, [loadLibraryData, loadCommandList, loadCommandHistory, loadConfig]);
 
     const treeRoot = useMemo(() => {
         if (!lib) return null;
         return lib.buildTree(lib.rootId);
     }, [lib]);
 
-    const visiblePublicationPathStems = useMemo(() => {
-        if (!lib || !selectedNodeId) return [];
-        return lib.collectPublicationPathStems(selectedNodeId);
-    }, [lib, selectedNodeId]);
+    const visiblePublicationIds = useMemo(() => {
+        if (!lib || !selectedCollectionId) return [];
+        return lib.collectPublicationIds(selectedCollectionId);
+    }, [lib, selectedCollectionId]);
 
     useNewPublicationSelectOnHidden(
-        selectedPublicationPathStem,
-        visiblePublicationPathStems,
-        setSelectedPublicationPathStem,
+        selectedPublicationId,
+        visiblePublicationIds,
+        setSelectedPublicationId,
     );
 
     const publicationListItems = useMemo(() => {
-        return visiblePublicationPathStems
-            .filter(pathStem => pubMetadata[pathStem])
-            .map(pathStem => ({
-                pathStem,
-                title: pubMetadata[pathStem].title,
-                author: pubMetadata[pathStem].author,
-                publisher: pubMetadata[pathStem].publisher,
-                date: String(pubMetadata[pathStem].year),
-                filename: getFilename(pathStem),
-                contentFiles: lib!.publications[pathStem].availableContentFileExtensions,
+        if (!lib) return [];
+        return visiblePublicationIds
+            .map(publicationId => ({ publicationId, publication: lib.publications[publicationId] }))
+            .filter(({ publication }) => publication?.metadata)
+            .map(({ publicationId, publication }) => ({
+                id: publicationId,
+                title: publication.metadata!.title,
+                author: publication.metadata!.authors,
+                publisher: publication.metadata!.publisher,
+                date: String(publication.metadata!.year),
+                filename: publication.name,
+                contentFiles: publication.availableContentFileExtensions,
             }));
-    }, [visiblePublicationPathStems, pubMetadata, lib]);
+    }, [visiblePublicationIds, lib]);
 
-    const selectedMeta = selectedPublicationPathStem ? pubMetadata[selectedPublicationPathStem] ?? null : null;
-    const selectedPub = selectedPublicationPathStem && lib
-        ? lib.publications[selectedPublicationPathStem] ?? null
+    const selectedPublication: Publication | null = selectedPublicationId && lib
+        ? lib.publications[selectedPublicationId] ?? null
         : null;
+    const selectedPublicationCollectionName = selectedPublicationId && lib
+        ? lib.getCollection(lib.publicationParents[selectedPublicationId])?.name ?? ''
+        : '';
 
     const fixedTabs: TabData[] = [
         {
@@ -254,20 +224,20 @@ function App() {
                             setWidth: setPanel1Width,
                             renderContent: () => (
                                 <div className={styles.panelContainer}>
-                                    {treeRoot && selectedNodeId && (
+                                    {treeRoot && selectedCollectionId && (
                                         <TreeView
                                             root={treeRoot}
-                                            selectedNodeId={selectedNodeId}
-                                            expandedNodeIds={expandedNodeIds}
+                                            selectedNodeId={selectedCollectionId}
+                                            expandedNodeIds={expandedCollectionIds}
                                             onToggleExpanded={(id: string) => {
-                                                setExpandedNodeIds((prev) => (
+                                                setExpandedCollectionIds((prev) => (
                                                     prev.includes(id)
                                                         ? prev.filter((expandedId) => expandedId !== id)
                                                         : [...prev, id]
                                                 ));
                                             }}
                                             onSelectNode={(id) => {
-                                                setSelectedNodeId(id);
+                                                setSelectedCollectionId(id);
                                             }}
                                         />
                                     )}
@@ -283,9 +253,9 @@ function App() {
                                 >
                                     <PublicationList
                                         publications={publicationListItems}
-                                        selectedPublicationPathStem={selectedPublicationPathStem ?? ''}
-                                        onSelectPublication={(pathStem) => {
-                                            setSelectedPublicationPathStem(pathStem)
+                                        selectedPublicationId={selectedPublicationId ?? ''}
+                                        onSelectPublication={(publicationId) => {
+                                            setSelectedPublicationId(publicationId)
                                         }}
                                         fuzzyFindVisible={fuzzyFindVisible}
                                         isActive={selectedTabId === 'Lib'}
@@ -300,8 +270,9 @@ function App() {
                             className={styles.panelContainer}
                         >
                             <DetailView
-                                publication={selectedPub}
-                                metadata={selectedMeta}
+                                publicationId={selectedPublicationId}
+                                publication={selectedPublication}
+                                collectionName={selectedPublicationCollectionName}
                                 bibEditorFocused={bibEditorFocused}
                                 onBibEditorFocusedChange={setBibEditorFocused}
                                 autosaveDebounceMs={autosaveDebounceMs}
@@ -357,18 +328,18 @@ function App() {
 
             if (action == Action.SelectNextCollection) {
                 if (selectedTabId !== 'Lib' || !lib) return;
-                const visibleIds = lib.visibleNodeIds(lib.rootId, expandedNodeIds);
-                if (visibleIds.length === 0 || !selectedNodeId) return;
-                const currentIdx = visibleIds.indexOf(selectedNodeId);
+                const visibleIds = lib.visibleNodeIds(lib.rootId, expandedCollectionIds);
+                if (visibleIds.length === 0 || !selectedCollectionId) return;
+                const currentIdx = visibleIds.indexOf(selectedCollectionId);
                 const nextIdx = (currentIdx + 1) % visibleIds.length;
-                setSelectedNodeId(visibleIds[nextIdx]);
+                setSelectedCollectionId(visibleIds[nextIdx]);
             } else if (action == Action.SelectPrevCollection) {
                 if (selectedTabId !== 'Lib' || !lib) return;
-                const visibleIds = lib.visibleNodeIds(lib.rootId, expandedNodeIds);
-                if (visibleIds.length === 0 || !selectedNodeId) return;
-                const currentIdx = visibleIds.indexOf(selectedNodeId);
+                const visibleIds = lib.visibleNodeIds(lib.rootId, expandedCollectionIds);
+                if (visibleIds.length === 0 || !selectedCollectionId) return;
+                const currentIdx = visibleIds.indexOf(selectedCollectionId);
                 const prevIdx = (currentIdx - 1 + visibleIds.length) % visibleIds.length;
-                setSelectedNodeId(visibleIds[prevIdx]);
+                setSelectedCollectionId(visibleIds[prevIdx]);
             } else if (action == Action.SelectNextPublication) {
                 if (selectedTabId !== 'Lib') return;
                 setPublicationNavRequest({ delta: 1 });
@@ -407,7 +378,7 @@ function App() {
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [selectedTabId, fixedTabs, variableTabs, lib,
-        selectedNodeId, expandedNodeIds, fuzzyFindVisible, handlePublicationSubmit]);
+        selectedCollectionId, expandedCollectionIds, fuzzyFindVisible, handlePublicationSubmit]);
 
     const handleCmd = (cmdLine: string) => {
         const spaceIdx = cmdLine.indexOf(' ');
