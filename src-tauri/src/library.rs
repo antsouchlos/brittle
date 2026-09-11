@@ -376,6 +376,7 @@ fn build_publications(
                 metadata,
                 reference_preview: None,
                 available_content_file_extensions: vec![],
+                notes: None,
             },
         );
 

@@ -18,6 +18,7 @@ export interface Publication {
     metadata: ParsedMetadata | null;
     referencePreview: string | null;
     availableContentFileExtensions: string[];
+    notes: string | null;
 }
 
 export interface Collection {
