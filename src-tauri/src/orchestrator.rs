@@ -460,6 +460,7 @@ impl Worker {
         }
 
         self.reload_library();
+        self.emit("library-changed", ());
 
         self.emit("config-changed", ());
     }
