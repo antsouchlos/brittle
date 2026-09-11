@@ -6,10 +6,13 @@ import {
     PublicationId,
 } from './LibraryModel.tsx';
 
+export type PublicationChangeOrigin = 'editor' | 'disk';
+
 export interface PublicationUpserted {
     publicationId: PublicationId;
     parentCollectionId: CollectionId;
     publication: Publication;
+    origin: PublicationChangeOrigin;
 }
 
 export interface PublicationRemoved {

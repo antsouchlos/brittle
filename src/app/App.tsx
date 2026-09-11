@@ -91,11 +91,13 @@ function useGlobalKeymap() {
 }
 
 // Loads the library and keeps it in sync with the backend.
-function useLibrary(): LibraryModel | null {
+function useLibrary(): { lib: LibraryModel | null; reloadCount: number } {
     const [state, setState] = useState<LibraryState | null>(null);
+    const [reloadCount, setReloadCount] = useState(0);
 
     const loadLibraryData = useCallback(async () => {
         setState(await invoke<LibraryState>('get_library_state'));
+        setReloadCount(count => count + 1);
     }, []);
 
     useEffect(() => {
@@ -125,13 +127,15 @@ function useLibrary(): LibraryModel | null {
         };
     }, [loadLibraryData]);
 
-    return useMemo(() => (state ? new LibraryModel(state) : null), [state]);
+    const lib = useMemo(() => (state ? new LibraryModel(state) : null), [state]);
+
+    return { lib, reloadCount };
 }
 
 function Workspace() {
     useGlobalKeymap();
 
-    const lib = useLibrary();
+    const { lib, reloadCount: libraryReloadCount } = useLibrary();
 
     const [selectedCollectionId, setSelectedCollectionId] =
         useRestoredState<CollectionId | null>('selection.collection', null);
@@ -230,6 +234,7 @@ function Workspace() {
                                 publicationId={selectedPublicationId}
                                 publication={selectedPublication}
                                 collectionName={selectedPublicationCollectionName}
+                                libraryReloadCount={libraryReloadCount}
                             />
                         </div>
                     )}

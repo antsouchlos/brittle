@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 
 import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { drawSelection, KeyBinding, keymap } from '@codemirror/view';
@@ -25,8 +25,7 @@ import styles from './VimTextArea.module.css';
 function useCodeMirrorFocusSync(
     editorRef: React.RefObject<ReactCodeMirrorRef | null>,
     focused: boolean,
-    onFocusedChange: (value: boolean) => void,
-): Extension[] {
+) {
     useEffect(() => {
         if (editorRef.current?.view) {
             if (focused) {
@@ -36,23 +35,6 @@ function useCodeMirrorFocusSync(
             }
         }
     }, [focused, editorRef]);
-
-    return [
-        EditorView.domEventHandlers({
-            focus(_event, _view) {
-                onFocusedChange(true);
-            },
-            blur(_event, view) {
-                // Use requestAnimationFrame to avoid race conditions
-                requestAnimationFrame(() => {
-                    // Check if focus moved outside the editor
-                    if (!view.contentDOM.contains(document.activeElement)) {
-                        onFocusedChange(false);
-                    }
-                });
-            },
-        }),
-    ];
 }
 
 // Selection of key bindings required for the proper function of the text area.
@@ -102,6 +84,21 @@ const minimumFunctionalKeymap: readonly KeyBinding[] = ([
 // ] as KeyBinding[]).concat(emacsStyleKeymap.map(b => ({ mac: b.key, run: b.run, shift: b.shift })));
 
 
+const EDITOR_BASE_EXTENSIONS: Extension[] = [
+    history(),
+    drawSelection({ cursorBlinkRate: 0 }),
+    EditorState.allowMultipleSelections.of(true),
+    bracketMatching(),
+];
+
+const EDITOR_KEY_EXTENSIONS: Extension[] = [
+    keymap.of([
+        // ...historyKeymap,  // TODO: Use this when not in vim mode
+        ...minimumFunctionalKeymap,
+    ]),
+    vim(),
+];
+
 interface VimTextAreaProps {
     value: string;
     onChange: (value: string) => void;
@@ -115,7 +112,13 @@ interface VimTextAreaProps {
 // TODO: Make history work as expected
 export default function VimTextArea({ value, onChange, focused, onFocusedChange }: VimTextAreaProps) {
     const editorRef = useRef<ReactCodeMirrorRef>(null);
-    const focusSyncExtensions = useCodeMirrorFocusSync(editorRef, focused, onFocusedChange);
+    useCodeMirrorFocusSync(editorRef, focused);
+
+    // The handler extensions are built once per editor and read the current callback
+    // through a ref, so the extension array keeps its identity and CodeMirror never
+    // reconfigures the view on a re-render.
+    const onFocusedChangeRef = useRef(onFocusedChange);
+    onFocusedChangeRef.current = onFocusedChange;
 
     // CodeMirror's own keymap handles keys like Tab (its bundled indentWithTab
     // binding) but never stops their propagation, so they bubble past our
@@ -129,17 +132,23 @@ export default function VimTextArea({ value, onChange, focused, onFocusedChange 
         }
     };
 
-    const extensions = [
-        history(),
-        drawSelection({ cursorBlinkRate: 0 }),
-        EditorState.allowMultipleSelections.of(true),
-        bracketMatching(),
-        ...focusSyncExtensions,
-        keymap.of([
-            // ...historyKeymap,  // TODO: Use this when not in vim mode
-            ...minimumFunctionalKeymap,
-        ]),
-        vim(),
+    const extensions = useMemo(() => [
+        ...EDITOR_BASE_EXTENSIONS,
+        EditorView.domEventHandlers({
+            focus(_event, _view) {
+                onFocusedChangeRef.current(true);
+            },
+            blur(_event, view) {
+                // Use requestAnimationFrame to avoid race conditions
+                requestAnimationFrame(() => {
+                    // Check if focus moved outside the editor
+                    if (!view.contentDOM.contains(document.activeElement)) {
+                        onFocusedChangeRef.current(false);
+                    }
+                });
+            },
+        }),
+        ...EDITOR_KEY_EXTENSIONS,
         EditorView.domEventHandlers({
             // TODO: Only use in vim mode
             keydown(event, view) {
@@ -164,7 +173,7 @@ export default function VimTextArea({ value, onChange, focused, onFocusedChange 
                         const vimState = (cm as any).state?.vim;
                         // Check if in normal mode (not insert mode AND not visual mode)
                         if (vimState && !vimState.insertMode && !vimState.visualMode) {
-                            onFocusedChange(false);
+                            onFocusedChangeRef.current(false);
                             return true;
                         }
                     }
@@ -173,8 +182,7 @@ export default function VimTextArea({ value, onChange, focused, onFocusedChange 
                 return false;
             }
         }),
-    ];
-
+    ], []);
 
     return (
         <div className={styles.editorHost} onKeyDown={handleEditorHostKeyDown}>

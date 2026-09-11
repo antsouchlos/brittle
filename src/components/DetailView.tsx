@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
 import { type Publication, type PublicationId } from '../app/LibraryModel';
+import { type PublicationUpserted } from '../app/libraryUpdates';
 import { logger } from '../app/logger';
 import { Action, useActionHandler } from '../app/actions';
 import { useConfig } from '../app/config';
@@ -23,6 +25,7 @@ function usePublicationSource(
     publication: Publication | null,
     bibEditorFocused: boolean,
     autosaveDebounceMs: number,
+    libraryReloadCount: number,
 ) {
     const entriesRef = useRef(new Map<PublicationId, SourceEntry>());
     const [, setRenderVersion] = useState(0);
@@ -33,6 +36,9 @@ function usePublicationSource(
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     activeIdRef.current = publicationId;
+
+    const publicationRef = useRef(publication);
+    publicationRef.current = publication;
 
     const clearDebounceTimer = useCallback(() => {
         if (timerRef.current !== null) {
@@ -71,18 +77,15 @@ function usePublicationSource(
         });
     }, [enqueue]);
 
-    // Adopts the store's metadata source whenever it differs from the last text
-    // we confirmed, replacing the buffer over any unsaved typing.
-    const adoptStoreSource = useCallback((id: PublicationId, metadataSource: string) => {
-        const sourceEntry = ensureSourceEntry(id);
-        if (metadataSource === sourceEntry.diskText) return;
-        sourceEntry.diskText = metadataSource;
-        if (metadataSource === sourceEntry.source) return;
-        clearDebounceTimer();
+    const adoptExternalSource = useCallback((id: PublicationId, metadataSource: string) => {
+        const sourceEntry = entriesRef.current.get(id);
+        if (!sourceEntry || sourceEntry.diskText === null) return;
+        if (id === activeIdRef.current) clearDebounceTimer();
         sourceEntry.source = metadataSource;
+        sourceEntry.diskText = metadataSource;
         sourceEntry.version += 1;
         forceRender();
-    }, [clearDebounceTimer, ensureSourceEntry, forceRender]);
+    }, [clearDebounceTimer, forceRender]);
 
     const handleSourceChange = useCallback((value: string) => {
         const id = activeIdRef.current;
@@ -116,12 +119,40 @@ function usePublicationSource(
         }
     }, [publicationId, flush]);
 
-    // A reload replaces the publication record with a fresh metadata source, so
-    // both activation and external changes are handled here.
+    // Fills a buffer the first time its publication is shown. `diskText` stays null until
+    // then, which is what keeps `persist` from writing a buffer it never read.
     useEffect(() => {
         if (!publicationId || !publication) return;
-        adoptStoreSource(publicationId, publication.metadataSource);
-    }, [publicationId, publication, adoptStoreSource]);
+        const sourceEntry = ensureSourceEntry(publicationId);
+        if (sourceEntry.diskText !== null) return;
+        sourceEntry.source = publication.metadataSource;
+        sourceEntry.diskText = publication.metadataSource;
+        forceRender();
+    }, [publicationId, publication, ensureSourceEntry, forceRender]);
+
+    useEffect(() => {
+        const unlisten = listen<PublicationUpserted>('publication-upserted', event => {
+            if (event.payload.origin !== 'disk') return;
+            adoptExternalSource(
+                event.payload.publicationId,
+                event.payload.publication.metadataSource,
+            );
+        });
+
+        return () => { unlisten.then(stop => stop()); };
+    }, [adoptExternalSource]);
+
+    useEffect(() => {
+        const activeId = activeIdRef.current;
+        for (const id of [...entriesRef.current.keys()]) {
+            if (id !== activeId) entriesRef.current.delete(id);
+        }
+
+        const activePublication = publicationRef.current;
+        if (activeId && activePublication) {
+            adoptExternalSource(activeId, activePublication.metadataSource);
+        }
+    }, [libraryReloadCount]);
 
     // Flush immediately when the editor loses focus.
     useEffect(() => {
@@ -143,10 +174,11 @@ interface DetailViewProps {
     publicationId: PublicationId | null,
     publication: Publication | null,
     collectionName: string,
+    libraryReloadCount: number,
 }
 
 function DetailView(
-    { publicationId, publication, collectionName }: DetailViewProps
+    { publicationId, publication, collectionName, libraryReloadCount }: DetailViewProps
 ) {
     const [bibEditorFocused, setBibEditorFocused] = useState(false);
     const { opts: { autosaveDebounceMs } } = useConfig();
@@ -159,6 +191,7 @@ function DetailView(
         publication,
         bibEditorFocused,
         autosaveDebounceMs,
+        libraryReloadCount,
     );
 
     const metadata = publication?.metadata ?? null;

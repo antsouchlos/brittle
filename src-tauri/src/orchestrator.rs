@@ -15,12 +15,20 @@ use crate::watcher::{WatchRegistry, WatcherCommand};
 
 const CONTENT_FILE_EXTENSIONS: [&str; 2] = ["pdf", "html"];
 
+#[derive(Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+enum PublicationChangeOrigin {
+    Editor,
+    Disk,
+}
+
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PublicationUpserted {
     publication_id: PublicationId,
     parent_collection_id: CollectionId,
     publication: Publication,
+    origin: PublicationChangeOrigin,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -57,6 +65,9 @@ pub enum Action {
         command: String,
         args: String,
         respond: mpsc::Sender<Result<String, String>>,
+    },
+    SaveUiState {
+        ui_state: HashMap<String, serde_json::Value>,
     },
 }
 
@@ -153,6 +164,7 @@ impl Worker {
                 let result = self.config.read().unwrap().execute_command(&command, &args);
                 let _ = respond.send(result);
             }
+            Action::SaveUiState { ui_state } => self.save_ui_state(ui_state),
         }
     }
 
@@ -375,6 +387,7 @@ impl Worker {
                 publication_id,
                 parent_collection_id,
                 publication,
+                origin: PublicationChangeOrigin::Disk,
             },
         );
 
@@ -407,10 +420,6 @@ impl Worker {
         }
     }
 
-    /// Re-evaluates the config, swaps it in, and re-syncs the watcher.
-    ///
-    /// On any failure the previous config and watch registry stay active so the
-    /// next (fixed) save is still caught; the error is surfaced to the frontend.
     fn reload_config(&mut self) {
         let config_path = self
             .app_handle
@@ -451,6 +460,7 @@ impl Worker {
         }
 
         self.reload_library();
+        self.emit("library-changed", ());
 
         self.emit("config-changed", ());
     }
@@ -493,13 +503,13 @@ impl Worker {
             .update_publication(publication_id.clone(), updated.clone())
             .map_err(|e| e.to_string())?;
 
-        debug!("Updated publication '{}' from an edit", path.display());
         self.emit(
             "publication-upserted",
             PublicationUpserted {
                 publication_id,
                 parent_collection_id,
                 publication: updated,
+                origin: PublicationChangeOrigin::Editor,
             },
         );
 
@@ -508,6 +518,36 @@ impl Worker {
 
         std::fs::write(&path, content)
             .map_err(|e| format!("Failed to write {}: {}", path.display(), e))
+    }
+
+    fn save_ui_state(&self, ui_state: HashMap<String, serde_json::Value>) {
+        if let Err(e) = self.try_save_ui_state(ui_state) {
+            error!("{}", e);
+        }
+    }
+
+    fn try_save_ui_state(
+        &self,
+        ui_state: HashMap<String, serde_json::Value>,
+    ) -> Result<(), String> {
+        let path = ui_state_path(&self.config.read().unwrap());
+
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+
+        let content = serde_json::to_string_pretty(&ui_state)
+            .map_err(|e| format!("Failed to serialize UI state: {}", e))?;
+
+        // Written beside the target and renamed over it, so a reader never sees a
+        // half-written file.
+        let tmp_path = path.with_extension("json.tmp");
+        std::fs::write(&tmp_path, &content)
+            .map_err(|e| format!("Failed to write UI state: {}", e))?;
+        std::fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to save UI state: {}", e))?;
+
+        Ok(())
     }
 
     fn report_config_error(&self, message: String) {
@@ -520,6 +560,10 @@ impl Worker {
             error!("Failed to emit {} event: {}", name, e);
         }
     }
+}
+
+pub fn ui_state_path(config: &Config) -> PathBuf {
+    PathBuf::from(config.opts.data_path.clone()).join("ui_state.json")
 }
 
 fn file_matches_last_written_source(
