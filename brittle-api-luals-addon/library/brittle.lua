@@ -26,6 +26,9 @@
 --- @field library_path? string
 --- PDF viewer: "brittle" for built-in or "external".
 --- @field pdf_viewer? string
+--- Debounce interval (ms) before recompiling a reference preview after
+--- its source changed.
+--- @field reference_preview_debounce_ms? integer
 --- File-system watch entries mapping paths to reload actions.
 --- @field watch? Watch[]
 
@@ -42,6 +45,9 @@
 --- @field file_extension string
 --- Parser: receives the file contents as a string, returns metadata.
 --- @field parser fun(src: string): PublicationMetadata
+--- Reference preview compiler: receives the file contents as a string,
+--- returns the compiled reference text shown below the metadata editor.
+--- @field reference_preview (fun(src: string): string)?
 
 --- A user-defined file-system watch entry mapping a path to reload actions.
 --- 

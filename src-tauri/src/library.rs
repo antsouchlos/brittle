@@ -374,6 +374,7 @@ fn build_publications(
                 metadata_file_extension: f.extension.clone(),
                 metadata_source,
                 metadata,
+                reference_preview: None,
                 available_content_file_extensions: vec![],
             },
         );
@@ -472,7 +473,10 @@ mod tests {
         builder.build().unwrap()
     }
 
-    fn stub_parse_metadata(extension: &String, source: &String) -> Result<ParsedMetadata, String> {
+    fn stub_parse_metadata(
+        extension: &String,
+        source: &String,
+    ) -> Result<ParsedMetadata, String> {
         Ok(ParsedMetadata {
             title: source.clone(),
             authors: "Anonymous".to_string(),
@@ -603,7 +607,7 @@ mod tests {
             &empty_gitignore(),
             &vec!["bib".to_string()],
             &vec!["pdf".to_string()],
-            &|_extension, _source| Err("No parser registered".to_string()),
+            &|_extension: &String, _source: &String| Err("No parser registered".to_string()),
         )
         .unwrap();
 

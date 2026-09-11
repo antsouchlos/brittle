@@ -16,6 +16,7 @@ export interface Publication {
     metadataFileExtension: string;
     metadataSource: string;
     metadata: ParsedMetadata | null;
+    referencePreview: string | null;
     availableContentFileExtensions: string[];
 }
 

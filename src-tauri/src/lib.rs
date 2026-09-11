@@ -276,6 +276,7 @@ pub fn run() {
             save_command_history,
             ts_log,
             open_publication,
+            request_reference_preview,
         ])
         .run(tauri::generate_context!());
 
@@ -332,6 +333,28 @@ async fn save_ui_state(
     state
         .orchestrator
         .enqueue(Action::SaveUiState { ui_state })
+        .map_err(|_| "Orchestrator is no longer running".to_string())
+}
+
+#[tauri::command]
+async fn request_reference_preview(
+    publication_id: PublicationId,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let publication = state
+        .store
+        .get_publication(publication_id.clone())
+        .map_err(|e| e.to_string())?;
+
+    // Something is already on screen for this publication. If its source has
+    // since changed, the orchestrator has already scheduled the recompile.
+    if publication.reference_preview.is_some() {
+        return Ok(());
+    }
+
+    state
+        .orchestrator
+        .enqueue(Action::CompileReferencePreview { publication_id })
         .map_err(|_| "Orchestrator is no longer running".to_string())
 }
 
