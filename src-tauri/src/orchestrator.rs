@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use crate::config::Config;
 use crate::library;
+use crate::notes;
 use crate::store::{
     CollectionId, LibraryState, LibraryStore, Publication, PublicationId,
 };
@@ -22,6 +23,7 @@ enum PublicationChangeOrigin {
     MetadataEditor,
     Disk,
     ReferencePreviewCompiler,
+    Notes,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -255,6 +257,17 @@ impl Worker {
             );
         }
 
+        if path
+            .file_name()
+            .is_some_and(|name| name == notes::NOTES_FILE_NAME)
+        {
+            let dir = path
+                .parent()
+                .ok_or_else(|| format!("'{}' has no parent directory", path.display()))?;
+
+            return self.rescan_collection_notes(dir);
+        }
+
         self.rescan_publication(
             path,
             &library_root,
@@ -262,6 +275,51 @@ impl Worker {
             &content_extensions,
             &parse_metadata,
         )
+    }
+
+    fn rescan_collection_notes(&self, dir: &Path) -> Result<(), String> {
+        let collection_id = CollectionId::from_path(dir);
+
+        let Ok(collection) = self.store.get_collection(collection_id.clone()) else {
+            return Ok(());
+        };
+
+        let sections = std::fs::read_to_string(dir.join(notes::NOTES_FILE_NAME))
+            .map(|source| notes::parse_notes(&source))
+            .unwrap_or_default();
+
+        let publications: Vec<(PublicationId, Publication)> = collection
+            .child_publication_ids
+            .iter()
+            .filter_map(|id| {
+                self.store
+                    .get_publication(id.clone())
+                    .ok()
+                    .map(|publication| (id.clone(), publication))
+            })
+            .collect();
+
+        for (publication_id, updated) in changed_notes(publications, &sections) {
+            if let Err(e) = self
+                .store
+                .update_publication(publication_id.clone(), updated.clone())
+            {
+                error!("Failed to store notes: {}", e);
+                continue;
+            }
+
+            self.emit(
+                "publication-upserted",
+                PublicationUpserted {
+                    publication_id,
+                    parent_collection_id: collection_id.clone(),
+                    publication: updated,
+                    origin: PublicationChangeOrigin::Notes,
+                },
+            );
+        }
+
+        Ok(())
     }
 
     fn rescan_collection(
@@ -686,6 +744,30 @@ pub fn ui_state_path(config: &Config) -> PathBuf {
     PathBuf::from(config.opts.data_path.clone()).join("ui_state.json")
 }
 
+fn changed_notes(
+    publications: Vec<(PublicationId, Publication)>,
+    sections: &HashMap<String, String>,
+) -> Vec<(PublicationId, Publication)> {
+    publications
+        .into_iter()
+        .filter_map(|(publication_id, publication)| {
+            let notes = sections.get(&publication.name).cloned();
+
+            if notes == publication.notes {
+                return None;
+            }
+
+            Some((
+                publication_id,
+                Publication {
+                    notes,
+                    ..publication
+                },
+            ))
+        })
+        .collect()
+}
+
 fn file_matches_last_written_source(
     last_written_sources: &HashMap<PathBuf, String>,
     path: &Path,
@@ -708,6 +790,97 @@ mod tests {
 
     fn publication_id(path: &str) -> PublicationId {
         PublicationId::from_path(Path::new(path))
+    }
+
+    fn publication_with_notes(name: &str, notes: Option<&str>) -> Publication {
+        Publication {
+            name: name.to_string(),
+            notes: notes.map(|n| n.to_string()),
+            ..Publication::default()
+        }
+    }
+
+    fn sections(entries: &[(&str, &str)]) -> HashMap<String, String> {
+        entries
+            .iter()
+            .map(|(key, body)| (key.to_string(), body.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn a_publication_gaining_a_section_is_reported() {
+        let publication = publication_with_notes("a", None);
+        let id = publication_id("a.bib");
+
+        let changed = changed_notes(vec![(id.clone(), publication)], &sections(&[("a", "body")]));
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].0, id);
+        assert_eq!(changed[0].1.notes, Some("body".to_string()));
+    }
+
+    #[test]
+    fn a_publication_losing_its_section_is_reported_as_cleared() {
+        let publication = publication_with_notes("a", Some("body"));
+        let id = publication_id("a.bib");
+
+        let changed = changed_notes(vec![(id.clone(), publication)], &sections(&[]));
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].0, id);
+        assert_eq!(changed[0].1.notes, None);
+    }
+
+    #[test]
+    fn an_edited_body_is_reported() {
+        let publication = publication_with_notes("a", Some("old"));
+        let id = publication_id("a.bib");
+
+        let changed = changed_notes(vec![(id.clone(), publication)], &sections(&[("a", "new")]));
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].0, id);
+        assert_eq!(changed[0].1.notes, Some("new".to_string()));
+    }
+
+    #[test]
+    fn an_unchanged_note_is_left_alone() {
+        let publication = publication_with_notes("a", Some("body"));
+        let id = publication_id("a.bib");
+
+        let changed = changed_notes(vec![(id, publication)], &sections(&[("a", "body")]));
+
+        assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn a_section_matching_no_publication_changes_nothing() {
+        let publication = publication_with_notes("a", Some("body"));
+        let id = publication_id("a.bib");
+
+        let changed = changed_notes(
+            vec![(id, publication)],
+            &sections(&[("a", "body"), ("orphan", "dropped")]),
+        );
+
+        assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn only_the_publications_whose_notes_moved_are_reported() {
+        let unchanged = publication_with_notes("a", Some("body"));
+        let edited = publication_with_notes("b", Some("old"));
+        let unchanged_id = publication_id("a.bib");
+        let edited_id = publication_id("b.bib");
+
+        let changed = changed_notes(
+            vec![(unchanged_id, unchanged), (edited_id.clone(), edited)],
+            &sections(&[("a", "body"), ("b", "new")]),
+        );
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].0, edited_id);
+        assert_eq!(changed[0].1.notes, Some("new".to_string()));
     }
 
     #[test]

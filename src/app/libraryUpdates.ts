@@ -6,7 +6,11 @@ import {
     PublicationId,
 } from './LibraryModel.tsx';
 
-export type PublicationChangeOrigin = 'editor' | 'disk';
+export type PublicationChangeOrigin =
+    | 'metadataEditor'
+    | 'disk'
+    | 'referencePreviewCompiler'
+    | 'notes';
 
 export interface PublicationUpserted {
     publicationId: PublicationId;

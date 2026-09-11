@@ -19,6 +19,7 @@ use crate::watcher::{spawn_watcher, WatchRegistry, WatcherCommand};
 
 mod config;
 mod library;
+mod notes;
 mod orchestrator;
 mod store;
 mod watcher;

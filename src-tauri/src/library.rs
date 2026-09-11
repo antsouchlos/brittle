@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use ignore::gitignore::Gitignore;
 
+use crate::notes;
 use crate::store::{
     Collection, CollectionId, LibraryState, ParsedMetadata, Publication, PublicationId,
 };
@@ -341,6 +342,11 @@ fn build_publications(
 ) -> Vec<PublicationId> {
     let conflicted_stems = find_duplicate_metadata_stems(metadata_files, dir);
 
+    // A directory without a notes file is the normal case, not a problem.
+    let notes_by_stem = fs::read_to_string(dir.join(notes::NOTES_FILE_NAME))
+        .map(|source| notes::parse_notes(&source))
+        .unwrap_or_default();
+
     let mut publication_ids: Vec<PublicationId> = Vec::new();
     let mut publication_ids_by_stem: HashMap<&str, PublicationId> = HashMap::new();
 
@@ -376,7 +382,7 @@ fn build_publications(
                 metadata,
                 reference_preview: None,
                 available_content_file_extensions: vec![],
-                notes: None,
+                notes: notes_by_stem.get(&f.stem).cloned(),
             },
         );
 
@@ -700,6 +706,29 @@ mod tests {
         for publication in state.publications.values() {
             assert_eq!(publication.metadata_file_extension, "bib".to_string());
         }
+    }
+
+    #[test]
+    fn notes_attach_by_stem_and_do_not_cross_directories() {
+        let (_dir, root_path, _root_name) =
+            create_literature_env(&["noted.bib", "plain.bib", "sub/noted.bib"]);
+        fs::write(
+            root_path.join("notes.md"),
+            "Preamble\n\n# noted\n\n- a remark\n\n# missing\n\n- orphan\n",
+        )
+        .unwrap();
+
+        let state = read_test_library(&root_path, &empty_gitignore(), &["bib"], &["pdf"]).unwrap();
+
+        let noted = find_publication(&state, &state.root_child_publication_ids, "noted");
+        assert_eq!(noted.notes, Some("- a remark".to_string()));
+
+        let plain = find_publication(&state, &state.root_child_publication_ids, "plain");
+        assert!(plain.notes.is_none());
+
+        let sub = &state.collections[&state.root_child_collection_ids[0]];
+        let nested = find_publication(&state, &sub.child_publication_ids, "noted");
+        assert!(nested.notes.is_none());
     }
 
     #[test]
