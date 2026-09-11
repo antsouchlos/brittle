@@ -5,6 +5,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, RwLock};
+use std::time::Duration;
 
 use crate::config::Config;
 use crate::library;
@@ -18,8 +19,9 @@ const CONTENT_FILE_EXTENSIONS: [&str; 2] = ["pdf", "html"];
 #[derive(Clone, Copy, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 enum PublicationChangeOrigin {
-    Editor,
+    MetadataEditor,
     Disk,
+    ReferencePreviewCompiler,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -69,6 +71,14 @@ pub enum Action {
     SaveUiState {
         ui_state: HashMap<String, serde_json::Value>,
     },
+    CompileReferencePreview {
+        publication_id: PublicationId,
+    },
+}
+
+struct PreviewCompileRequest {
+    publication_id: PublicationId,
+    delay: Duration,
 }
 
 // Acts like the glue between separate components, implementing workflows that require combined
@@ -89,6 +99,7 @@ impl Orchestrator {
         store: LibraryStore,
     ) -> Self {
         let (tx, rx) = mpsc::channel::<Action>();
+        let preview_requests = spawn_preview_debouncer(tx.clone());
 
         std::thread::spawn(move || {
             let mut worker = Worker {
@@ -98,6 +109,7 @@ impl Orchestrator {
                 watcher_tx,
                 store,
                 last_written_sources: HashMap::new(),
+                preview_requests,
             };
             while let Ok(action) = rx.recv() {
                 worker.handle_action(action);
@@ -138,6 +150,7 @@ struct Worker {
     watcher_tx: mpsc::Sender<WatcherCommand>,
     store: LibraryStore,
     last_written_sources: HashMap<PathBuf, String>,
+    preview_requests: mpsc::Sender<PreviewCompileRequest>,
 }
 
 impl Worker {
@@ -165,6 +178,9 @@ impl Worker {
                 let _ = respond.send(result);
             }
             Action::SaveUiState { ui_state } => self.save_ui_state(ui_state),
+            Action::CompileReferencePreview { publication_id } => {
+                self.compile_reference_preview(publication_id)
+            }
         }
     }
 
@@ -225,9 +241,8 @@ impl Worker {
             .iter()
             .map(|e| e.to_string())
             .collect();
-        let parse_metadata = |extension: &String, source: &String| {
-            config.call_ref_parser(extension, source)
-        };
+        let parse_metadata =
+            |extension: &String, source: &String| config.call_ref_parser(extension, source);
 
         if is_collection {
             return self.rescan_collection(
@@ -384,12 +399,14 @@ impl Worker {
         self.emit(
             "publication-upserted",
             PublicationUpserted {
-                publication_id,
+                publication_id: publication_id.clone(),
                 parent_collection_id,
                 publication,
                 origin: PublicationChangeOrigin::Disk,
             },
         );
+
+        self.schedule_reference_preview(publication_id);
 
         Ok(())
     }
@@ -506,18 +523,92 @@ impl Worker {
         self.emit(
             "publication-upserted",
             PublicationUpserted {
-                publication_id,
+                publication_id: publication_id.clone(),
                 parent_collection_id,
                 publication: updated,
-                origin: PublicationChangeOrigin::Editor,
+                origin: PublicationChangeOrigin::MetadataEditor,
             },
         );
+
+        self.schedule_reference_preview(publication_id);
 
         self.last_written_sources
             .insert(path.clone(), content.clone());
 
         std::fs::write(&path, content)
             .map_err(|e| format!("Failed to write {}: {}", path.display(), e))
+    }
+
+    fn schedule_reference_preview(&self, publication_id: PublicationId) {
+        let delay = Duration::from_millis(
+            self.config
+                .read()
+                .unwrap()
+                .opts
+                .reference_preview_debounce_ms,
+        );
+
+        if let Err(e) = self.preview_requests.send(PreviewCompileRequest {
+            publication_id,
+            delay,
+        }) {
+            error!("Failed to schedule a reference preview: {}", e);
+        }
+    }
+
+    fn compile_reference_preview(&self, publication_id: PublicationId) {
+        let Ok(publication) = self.store.get_publication(publication_id.clone()) else {
+            return;
+        };
+
+        let preview = self.config.read().unwrap().compile_reference_preview(
+            &publication.metadata_file_extension,
+            &publication.metadata_source,
+        );
+
+        let preview = match preview {
+            Ok(preview) => preview,
+            Err(e) => {
+                warn!(
+                    "Failed to compile a reference preview for {}: {}",
+                    publication.path.display(),
+                    e
+                );
+                return;
+            }
+        };
+
+        let Some(preview) = preview else {
+            return;
+        };
+
+        let Some(parent_collection_id) = publication.path.parent().map(CollectionId::from_path)
+        else {
+            return;
+        };
+
+        let updated = Publication {
+            reference_preview: Some(preview),
+            ..publication
+        };
+
+        if let Err(e) = self
+            .store
+            .update_publication(publication_id.clone(), updated.clone())
+        {
+            error!("Failed to store a reference preview: {}", e);
+            return;
+        }
+
+        self.emit(
+            "publication-upserted",
+            PublicationUpserted {
+                publication_id,
+                parent_collection_id,
+                publication: updated,
+                origin: PublicationChangeOrigin::ReferencePreviewCompiler,
+            },
+        );
     }
 
     fn save_ui_state(&self, ui_state: HashMap<String, serde_json::Value>) {
@@ -562,6 +653,35 @@ impl Worker {
     }
 }
 
+/// Holds a reference preview recompile back until requests stop arriving, then
+/// enqueues only the last one.
+fn spawn_preview_debouncer(actions: mpsc::Sender<Action>) -> mpsc::Sender<PreviewCompileRequest> {
+    let (tx, rx) = mpsc::channel::<PreviewCompileRequest>();
+
+    std::thread::spawn(move || {
+        while let Ok(mut request) = rx.recv() {
+            loop {
+                match rx.recv_timeout(request.delay) {
+                    Ok(newer) => request = newer,
+                    Err(mpsc::RecvTimeoutError::Timeout) => break,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                }
+            }
+
+            if actions
+                .send(Action::CompileReferencePreview {
+                    publication_id: request.publication_id,
+                })
+                .is_err()
+            {
+                return;
+            }
+        }
+    });
+
+    tx
+}
+
 pub fn ui_state_path(config: &Config) -> PathBuf {
     PathBuf::from(config.opts.data_path.clone()).join("ui_state.json")
 }
@@ -585,6 +705,50 @@ mod tests {
     use super::*;
 
     use std::fs;
+
+    fn publication_id(path: &str) -> PublicationId {
+        PublicationId::from_path(Path::new(path))
+    }
+
+    #[test]
+    fn a_burst_of_requests_compiles_once_for_the_last_publication() {
+        let (action_tx, action_rx) = mpsc::channel::<Action>();
+        let requests = spawn_preview_debouncer(action_tx);
+
+        for name in ["a.bib", "b.bib", "c.bib"] {
+            requests
+                .send(PreviewCompileRequest {
+                    publication_id: publication_id(name),
+                    delay: Duration::from_millis(50),
+                })
+                .unwrap();
+        }
+
+        let action = action_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let Action::CompileReferencePreview { publication_id: id } = action else {
+            panic!("expected a compile action");
+        };
+        assert_eq!(id, publication_id("c.bib"));
+
+        assert!(action_rx.recv_timeout(Duration::from_millis(200)).is_err());
+    }
+
+    #[test]
+    fn a_request_arriving_after_the_delay_compiles_again() {
+        let (action_tx, action_rx) = mpsc::channel::<Action>();
+        let requests = spawn_preview_debouncer(action_tx);
+
+        for _ in 0..2 {
+            requests
+                .send(PreviewCompileRequest {
+                    publication_id: publication_id("a.bib"),
+                    delay: Duration::from_millis(20),
+                })
+                .unwrap();
+
+            assert!(action_rx.recv_timeout(Duration::from_secs(5)).is_ok());
+        }
+    }
 
     #[test]
     fn a_file_still_holding_what_was_written_to_it_matches() {

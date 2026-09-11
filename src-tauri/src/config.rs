@@ -102,6 +102,11 @@ pub mod config {
         /// Parser: receives the file contents as a string, returns metadata.
         #[lua(signature = "fun(src: string): PublicationMetadata")]
         pub parser: mlua::Function,
+        /// Reference preview compiler: receives the file contents as a string,
+        /// returns the compiled reference text shown below the metadata editor.
+        #[lua(signature = "(fun(src: string): string)?")]
+        #[lua(default = "None")]
+        pub reference_preview: Option<mlua::Function>,
     }
 
     /// A user-defined file-system watch entry mapping a path to reload actions.
@@ -147,6 +152,10 @@ pub mod config {
         /// Debounce interval (ms) before writing the metadata editor content to disk.
         #[lua(default = "250u64")]
         pub autosave_debounce_ms: u64,
+        /// Debounce interval (ms) before recompiling a reference preview after
+        /// its source changed.
+        #[lua(default = "500u64")]
+        pub reference_preview_debounce_ms: u64,
     }
 
     /// Top-level application configuration.
@@ -222,6 +231,30 @@ pub mod config {
                 .map_err(|e| format!("Parser error: {}", e))?;
 
             Ok(value.into())
+        }
+
+        pub fn compile_reference_preview(
+            &self,
+            extension: &String,
+            src: &String,
+        ) -> Result<Option<String>, String> {
+            let _ = self.lua.as_ref().ok_or("Lua state unavailable")?;
+
+            let parser = self
+                .ref_parsers
+                .iter()
+                .find(|parser| parser.file_extension.eq(extension))
+                .ok_or_else(|| format!("No parser registered for extension '{}'", extension))?;
+
+            let Some(compiler) = parser.reference_preview.as_ref() else {
+                return Ok(None);
+            };
+
+            let preview: String = compiler
+                .call(src.as_str())
+                .map_err(|e| format!("Reference preview error: {}", e))?;
+
+            Ok(Some(preview))
         }
 
         pub fn list_commands(&self) -> Vec<String> {

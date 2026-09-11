@@ -61,6 +61,7 @@ pub struct Publication {
     pub metadata_file_extension: String,
     pub metadata_source: String,
     pub metadata: Option<ParsedMetadata>,
+    pub reference_preview: Option<String>,
     pub available_content_file_extensions: Vec<String>,
 }
 
@@ -471,6 +472,7 @@ mod tests {
             metadata_file_extension: "opf".to_string(),
             metadata_source: "embedded".to_string(),
             metadata: None,
+            reference_preview: None,
             available_content_file_extensions: vec!["epub".to_string()],
         }
     }

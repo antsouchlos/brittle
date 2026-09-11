@@ -51,3 +51,31 @@
     color: var(--fg2);
     line-height: 1.2;
 }
+
+.referencePreview {
+    flex: none;
+    max-height: 30%;
+    overflow-y: auto;
+}
+
+.referencePreview hr {
+    margin: 0 0 8px 0;
+    border: none;
+    border-top: 2px solid var(--bg2);
+}
+
+.referencePreviewLabel {
+    margin: 0 0 6px 0;
+    color: var(--fg2);
+    font-size: 0.85rem;
+    font-weight: normal;
+    text-transform: uppercase;
+}
+
+.referencePreviewBody {
+    margin: 0;
+    padding-left: 1.5em;
+    text-indent: -1.5em;
+    color: var(--fg0);
+    line-height: 1.4;
+}

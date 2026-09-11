@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 
 import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
+import { parseInlineMarkup } from './inlineMarkup.tsx';
 import { type Publication, type PublicationId } from '../app/LibraryModel';
 import { type PublicationUpserted } from '../app/libraryUpdates';
 import { logger } from '../app/logger';
@@ -170,6 +171,35 @@ function usePublicationSource(
     };
 }
 
+function useRequestReferencePreview(
+    publicationId: PublicationId | null,
+    libraryReloadCount: number,
+) {
+    // `libraryReloadCount` is a dependency because a config reload or a full
+    // rescan rebuilds every publication, dropping the compiled preview with it.
+    useEffect(() => {
+        if (!publicationId) return;
+        invoke('request_reference_preview', { publicationId })
+            .catch(e => logger.error(String(e)));
+    }, [publicationId, libraryReloadCount]);
+}
+
+interface ReferencePreviewProps {
+    markup: string | null,
+}
+
+function ReferencePreview({ markup }: ReferencePreviewProps) {
+    if (markup === null || markup.trim() === '') return null;
+
+    return (
+        <section className={styles.referencePreview}>
+            <hr />
+            <h2 className={styles.referencePreviewLabel}>Compiled Reference Preview</h2>
+            <p className={styles.referencePreviewBody}>{parseInlineMarkup(markup)}</p>
+        </section>
+    );
+}
+
 interface DetailViewProps {
     publicationId: PublicationId | null,
     publication: Publication | null,
@@ -183,6 +213,8 @@ function DetailView(
     const [bibEditorFocused, setBibEditorFocused] = useState(false);
     const { opts: { autosaveDebounceMs } } = useConfig();
     const tabActive = useTabActive();
+
+    useRequestReferencePreview(publicationId, libraryReloadCount);
 
     useActionHandler(Action.FocusBibEditor, () => setBibEditorFocused(true), tabActive);
 
@@ -230,6 +262,8 @@ function DetailView(
                     onFocusedChange={setBibEditorFocused}
                 />
             )}
+
+            {publication && <ReferencePreview markup={publication.referencePreview} />}
         </div>
     );
 }
