@@ -15,7 +15,6 @@ import { useTabActive } from './TabView';
 interface SourceEntry {
     source: string;
     diskText: string | null;
-    version: number;
     queue: Promise<void>;
 }
 
@@ -51,7 +50,7 @@ function usePublicationSource(
     const ensureSourceEntry = useCallback((id: PublicationId): SourceEntry => {
         let sourceEntry = entriesRef.current.get(id);
         if (!sourceEntry) {
-            sourceEntry = { source: '', diskText: null, version: 0, queue: Promise.resolve() };
+            sourceEntry = { source: '', diskText: null, queue: Promise.resolve() };
             entriesRef.current.set(id, sourceEntry);
         }
         return sourceEntry;
@@ -84,7 +83,6 @@ function usePublicationSource(
         if (id === activeIdRef.current) clearDebounceTimer();
         sourceEntry.source = metadataSource;
         sourceEntry.diskText = metadataSource;
-        sourceEntry.version += 1;
         forceRender();
     }, [clearDebounceTimer, forceRender]);
 
@@ -166,7 +164,6 @@ function usePublicationSource(
 
     return {
         value: sourceEntry ? sourceEntry.source : '',
-        version: sourceEntry ? sourceEntry.version : 0,
         onChange: handleSourceChange,
     };
 }
@@ -218,7 +215,7 @@ function DetailView(
 
     useActionHandler(Action.FocusBibEditor, () => setBibEditorFocused(true), tabActive);
 
-    const { value, version, onChange } = usePublicationSource(
+    const { value, onChange } = usePublicationSource(
         publicationId,
         publication,
         bibEditorFocused,
@@ -255,7 +252,7 @@ function DetailView(
 
             {publicationId && publication && (
                 <VimTextArea
-                    key={`${publicationId}:${version}`}
+                    key={publicationId}
                     value={value}
                     onChange={onChange}
                     focused={bibEditorFocused}

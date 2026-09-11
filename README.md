@@ -29,6 +29,21 @@ return {
         library_ignore_patterns = {".git"},
         data_path = "/home/you/.local/share/brittle",
         pdf_viewer = "external",
+        autosave_debounce_ms = 250,
+        reference_preview_debounce_ms = 500,
+        watch = {
+            -- Rescan the library when a reference file changes on disk
+            {
+                path = "/home/you/literature",
+                action = {"library"},
+                ignore = {".git"},
+            },
+            -- Re-evaluate this file when it is edited
+            {
+                path = "/home/you/.config/brittle/init.lua",
+                action = {"config"},
+            },
+        },
     },
     ref_parsers = {
         {
@@ -43,6 +58,16 @@ return {
                 result.authors = src:match("author%s*=%s*{(.-)}")
 
                 return result
+            end,
+            -- Optional. Rendered below the metadata editor. Only <i>, <b>,
+            -- <u>, <sup> and <sub> are interpreted, anything else stays literal
+            reference_preview = function(src)
+                local authors = src:match("author%s*=%s*{(.-)}")
+                local title = src:match("title%s*=%s*{(.-)}")
+                local year = src:match("year%s*=%s*{(.-)}")
+
+                return authors .. " (" .. year .. "). <i>" .. title .. "</i>"
+                -- Or run, e.g., pandoc reference compilation
             end,
         },
     },

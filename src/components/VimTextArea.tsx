@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
-import CodeMirror, { ReactCodeMirrorRef } from '@uiw/react-codemirror';
+import CodeMirror from '@uiw/react-codemirror';
 import { drawSelection, KeyBinding, keymap } from '@codemirror/view';
 // import { cursorDocEnd, cursorDocStart, cursorGroupLeft, cursorGroupRight, cursorLineBoundaryBackward, cursorLineBoundaryForward, cursorLineBoundaryLeft, cursorLineBoundaryRight, cursorLineDown, cursorLineUp, cursorPageDown, cursorPageUp, deleteGroupBackward, deleteGroupForward, deleteLineBoundaryBackward, deleteLineBoundaryForward, emacsStyleKeymap, history, historyKeymap, selectAll, selectDocEnd, selectDocStart, selectGroupLeft, selectGroupRight, selectLineBoundaryBackward, selectLineBoundaryForward, selectLineBoundaryLeft, selectLineBoundaryRight, selectLineDown, selectLineUp, selectPageDown, selectPageUp, standardKeymap } from '@codemirror/commands';
 import { cursorGroupLeft, cursorGroupRight, cursorLineBoundaryBackward, cursorLineBoundaryForward, cursorLineBoundaryLeft, cursorLineBoundaryRight, cursorLineDown, cursorLineUp, cursorPageDown, cursorPageUp, emacsStyleKeymap, history, selectGroupLeft, selectGroupRight, selectLineBoundaryBackward, selectLineBoundaryForward, selectLineBoundaryLeft, selectLineBoundaryRight, selectLineDown, selectLineUp, selectPageDown, selectPageUp } from '@codemirror/commands';
@@ -21,20 +21,17 @@ import {
 import styles from './VimTextArea.module.css';
 
 // This hook mirrors a caller-owned `focused` state with CodeMirror's own
-// focus state
-function useCodeMirrorFocusSync(
-    editorRef: React.RefObject<ReactCodeMirrorRef | null>,
-    focused: boolean,
-) {
+// focus state.
+function useCodeMirrorFocusSync(view: EditorView | null, focused: boolean) {
     useEffect(() => {
-        if (editorRef.current?.view) {
-            if (focused) {
-                editorRef.current.view?.contentDOM.focus();
-            } else {
-                editorRef.current.view?.contentDOM.blur();
-            }
+        if (!view) return;
+
+        if (focused) {
+            view.contentDOM.focus();
+        } else {
+            view.contentDOM.blur();
         }
-    }, [focused, editorRef]);
+    }, [focused, view]);
 }
 
 // Selection of key bindings required for the proper function of the text area.
@@ -111,8 +108,8 @@ interface VimTextAreaProps {
 // TODO: Make vim mode configurable
 // TODO: Make history work as expected
 export default function VimTextArea({ value, onChange, focused, onFocusedChange }: VimTextAreaProps) {
-    const editorRef = useRef<ReactCodeMirrorRef>(null);
-    useCodeMirrorFocusSync(editorRef, focused);
+    const [view, setView] = useState<EditorView | null>(null);
+    useCodeMirrorFocusSync(view, focused);
 
     // The handler extensions are built once per editor and read the current callback
     // through a ref, so the extension array keeps its identity and CodeMirror never
@@ -187,7 +184,7 @@ export default function VimTextArea({ value, onChange, focused, onFocusedChange 
     return (
         <div className={styles.editorHost} onKeyDown={handleEditorHostKeyDown}>
             <CodeMirror
-                ref={editorRef}
+                onCreateEditor={setView}
                 value={value}
                 onChange={onChange}
                 basicSetup={false}
