@@ -13,6 +13,7 @@
     "@embedpdf/react-pdf-viewer": "^2.14.4",
     "@headless-tree/core": "^1.7.0",
     "@headless-tree/react": "^1.7.0",
+    "@lezer/markdown": "^1.7.2",
     "@radix-ui/react-tabs": "^1.1.15",
     "@replit/codemirror-vim": "^6.3.0",
     "@tauri-apps/api": "^2.11.1",

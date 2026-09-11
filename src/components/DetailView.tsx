@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
+import { MARKDOWN_PREVIEW_EXTENSIONS } from './markdownPreview';
 import { parseInlineMarkup } from './inlineMarkup.tsx';
 import { type Publication, type PublicationId } from '../app/LibraryModel';
 import { type PublicationUpserted } from '../app/libraryUpdates';
@@ -11,6 +12,10 @@ import { logger } from '../app/logger';
 import { Action, useActionHandler } from '../app/actions';
 import { useConfig } from '../app/config';
 import { useTabActive } from './TabView';
+
+// Hard-coded until `Config.opts` grows a wrapping field; this is the only call
+// site to replace with `useConfig()`.
+const LINE_WRAPPING = true;
 
 interface SourceEntry {
     source: string;
@@ -197,6 +202,51 @@ function ReferencePreview({ markup }: ReferencePreviewProps) {
     );
 }
 
+interface NotesEditorProps {
+    initialNotes: string,
+}
+
+function NotesEditor({ initialNotes }: NotesEditorProps) {
+    const [notes, setNotes] = useState(initialNotes);
+    const [focused, setFocused] = useState(false);
+
+    return (
+        <div className={styles.notesEditorSlot}>
+            <VimTextArea
+                value={notes}
+                onChange={setNotes}
+                focused={focused}
+                onFocusedChange={setFocused}
+                extraExtensions={MARKDOWN_PREVIEW_EXTENSIONS}
+                lineWrapping={LINE_WRAPPING}
+            />
+        </div>
+    );
+}
+
+interface MetadataSourceEditorProps {
+    value: string,
+    onChange: (value: string) => void,
+    focused: boolean,
+    onFocusedChange: (value: boolean) => void,
+}
+
+function MetadataSourceEditor(
+    { value, onChange, focused, onFocusedChange }: MetadataSourceEditorProps
+) {
+    return (
+        <div className={styles.bibEditorSlot}>
+            <VimTextArea
+                value={value}
+                onChange={onChange}
+                focused={focused}
+                onFocusedChange={onFocusedChange}
+                lineWrapping={LINE_WRAPPING}
+            />
+        </div>
+    );
+}
+
 interface DetailViewProps {
     publicationId: PublicationId | null,
     publication: Publication | null,
@@ -251,13 +301,15 @@ function DetailView(
             </dl>
 
             {publicationId && publication && (
-                <VimTextArea
-                    key={publicationId}
-                    value={value}
-                    onChange={onChange}
-                    focused={bibEditorFocused}
-                    onFocusedChange={setBibEditorFocused}
-                />
+                <Fragment key={publicationId}>
+                    <NotesEditor initialNotes={publication.notes ?? ''} />
+                    <MetadataSourceEditor
+                        value={value}
+                        onChange={onChange}
+                        focused={bibEditorFocused}
+                        onFocusedChange={setBibEditorFocused}
+                    />
+                </Fragment>
             )}
 
             {publication && <ReferencePreview markup={publication.referencePreview} />}

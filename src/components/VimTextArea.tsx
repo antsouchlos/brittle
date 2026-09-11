@@ -18,6 +18,8 @@ import {
     insertNewlineAndIndent,
 } from "@codemirror/commands";
 
+import { WRAP_MARKERS } from './wrapMarkers';
+
 import styles from './VimTextArea.module.css';
 
 // This hook mirrors a caller-owned `focused` state with CodeMirror's own
@@ -101,19 +103,23 @@ interface VimTextAreaProps {
     onChange: (value: string) => void;
     focused: boolean;
     onFocusedChange: (value: boolean) => void;
+    extraExtensions?: readonly Extension[];
+    lineWrapping: boolean;
 }
 
 // TODO: Only focus textarea if the actual textarea is clicked, not the area
 // below it
 // TODO: Make vim mode configurable
 // TODO: Make history work as expected
-export default function VimTextArea({ value, onChange, focused, onFocusedChange }: VimTextAreaProps) {
+export default function VimTextArea(
+    { value, onChange, focused, onFocusedChange, extraExtensions = [], lineWrapping }: VimTextAreaProps
+) {
     const [view, setView] = useState<EditorView | null>(null);
     useCodeMirrorFocusSync(view, focused);
 
-    // The handler extensions are built once per editor and read the current callback
-    // through a ref, so the extension array keeps its identity and CodeMirror never
-    // reconfigures the view on a re-render.
+    // The handler extensions read the current callback through a ref, so the
+    // extension array keeps its identity across re-renders and CodeMirror only
+    // reconfigures when an option below actually changes.
     const onFocusedChangeRef = useRef(onFocusedChange);
     onFocusedChangeRef.current = onFocusedChange;
 
@@ -131,6 +137,8 @@ export default function VimTextArea({ value, onChange, focused, onFocusedChange 
 
     const extensions = useMemo(() => [
         ...EDITOR_BASE_EXTENSIONS,
+        ...(lineWrapping ? [EditorView.lineWrapping, WRAP_MARKERS] : []),
+        ...extraExtensions,
         EditorView.domEventHandlers({
             focus(_event, _view) {
                 onFocusedChangeRef.current(true);
@@ -179,7 +187,7 @@ export default function VimTextArea({ value, onChange, focused, onFocusedChange 
                 return false;
             }
         }),
-    ], []);
+    ], [lineWrapping]);
 
     return (
         <div className={styles.editorHost} onKeyDown={handleEditorHostKeyDown}>
