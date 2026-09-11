@@ -13,7 +13,7 @@ use tauri::{Manager, State};
 
 use crate::config::{Config, Opts};
 use crate::library::LoadError;
-use crate::orchestrator::{Action, Orchestrator};
+use crate::orchestrator::{ui_state_path, Action, Orchestrator};
 use crate::store::{LibraryState, LibraryStore, PublicationId};
 use crate::watcher::{spawn_watcher, WatchRegistry, WatcherCommand};
 
@@ -310,11 +310,9 @@ async fn write_publication_source(
     .map_err(|e| format!("Orchestrator request failed: {}", e))??
 }
 
-/// Stub: always returns `None` so the frontend initializes from defaults.
-/// Real implementation will read a versioned JSON file from `app_config_dir()`.
 #[tauri::command]
 fn load_ui_state(state: State<AppState>) -> Result<HashMap<String, serde_json::Value>, String> {
-    let path = ui_state_path(&state);
+    let path = ui_state_path(&state.config.read().unwrap());
 
     if !path.exists() {
         return Ok(HashMap::new());
@@ -327,29 +325,14 @@ fn load_ui_state(state: State<AppState>) -> Result<HashMap<String, serde_json::V
 }
 
 #[tauri::command]
-fn save_ui_state(
-    state: State<AppState>,
+async fn save_ui_state(
+    state: State<'_, AppState>,
     ui_state: HashMap<String, serde_json::Value>,
 ) -> Result<(), String> {
-    let path = ui_state_path(&state);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
-    }
-
-    let content = serde_json::to_string_pretty(&ui_state)
-        .map_err(|e| format!("Failed to serialize UI state: {}", e))?;
-
-    let tmp_path = path.with_extension("json.tmp");
-    std::fs::write(&tmp_path, &content).map_err(|e| format!("Failed to write UI state: {}", e))?;
-    std::fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to save UI state: {}", e))?;
-
-    Ok(())
-}
-
-fn ui_state_path(state: &State<AppState>) -> PathBuf {
-    let config = state.config.read().unwrap();
-    PathBuf::from(config.opts.data_path.clone()).join("ui_state.json")
+    state
+        .orchestrator
+        .enqueue(Action::SaveUiState { ui_state })
+        .map_err(|_| "Orchestrator is no longer running".to_string())
 }
 
 #[tauri::command]
