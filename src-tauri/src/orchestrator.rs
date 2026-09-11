@@ -15,12 +15,20 @@ use crate::watcher::{WatchRegistry, WatcherCommand};
 
 const CONTENT_FILE_EXTENSIONS: [&str; 2] = ["pdf", "html"];
 
+#[derive(Clone, Copy, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+enum PublicationChangeOrigin {
+    Editor,
+    Disk,
+}
+
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PublicationUpserted {
     publication_id: PublicationId,
     parent_collection_id: CollectionId,
     publication: Publication,
+    origin: PublicationChangeOrigin,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -379,6 +387,7 @@ impl Worker {
                 publication_id,
                 parent_collection_id,
                 publication,
+                origin: PublicationChangeOrigin::Disk,
             },
         );
 
@@ -499,6 +508,7 @@ impl Worker {
                 publication_id,
                 parent_collection_id,
                 publication: updated,
+                origin: PublicationChangeOrigin::Editor,
             },
         );
 
