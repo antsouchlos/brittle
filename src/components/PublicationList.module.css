@@ -64,6 +64,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.5em;
     line-height: 1.1;
 }
 
@@ -75,10 +76,8 @@
 }
 
 .publisher {
-    /* Shrinks before the tag chips do; the floor keeps a heavily tagged card
-       from erasing the publisher entirely. */
     flex: 1 1 auto;
-    min-width: 3em;
+    min-width: 0;
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -91,7 +90,8 @@
 }
 
 .dateBadge {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
+    max-width: 100%;
     min-width: 0;
     display: inline-flex;
     align-items: center;
