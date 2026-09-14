@@ -1,5 +1,11 @@
 .publicationList {
     --tag-band-width: 110px;
+    --min-card-body-width: 160px;
+    /* A percentage inside a custom property resolves against whichever element
+       uses it, so the band clamps against its card and the handle against the
+       list. */
+    --effective-tag-band-width:
+        max(0px, min(var(--tag-band-width), 100% - var(--min-card-body-width)));
 
     height: 100%;
     display: flex;
@@ -22,7 +28,7 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    right: calc(var(--tag-band-width) - 3px);
+    right: calc(var(--effective-tag-band-width) - 3px);
     width: 6px;
     cursor: col-resize;
 }
@@ -74,7 +80,8 @@
 
 .tagBand {
     box-sizing: border-box;
-    flex: 0 0 var(--tag-band-width);
+    flex: 0 0 auto;
+    width: var(--effective-tag-band-width);
     display: flex;
     flex-wrap: wrap;
     align-content: flex-start;

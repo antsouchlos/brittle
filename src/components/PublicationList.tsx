@@ -138,10 +138,11 @@ function TagBand({ tags }: { tags: string[] }) {
 
 function useTagBandResize(
     listRef: RefObject<HTMLDivElement | null>,
-    tagBandWidth: number,
-    setTagBandWidth: (width: number) => void,
+    preferredTagBandWidth: number,
+    setPreferredTagBandWidth: (width: number) => void,
 ) {
-    const [dragStart, setDragStart] = useState<{ x: number; width: number } | null>(null);
+    const [dragStart, setDragStart] =
+        useState<{ x: number; width: number; maxWidth: number } | null>(null);
 
     const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
         if (e.button !== 0) return;
@@ -149,17 +150,29 @@ function useTagBandResize(
         e.currentTarget.setPointerCapture(e.pointerId);
         e.preventDefault();
 
-        setDragStart({ x: e.clientX, width: tagBandWidth });
+        const list = listRef.current;
+        const listWidth = list?.getBoundingClientRect().width ?? 0;
+
+        // The band on screen can be narrower than the preference, so start the
+        // drag from what the user sees.
+        const bandWidth = list
+            ?.querySelector<HTMLElement>(`.${styles.tagBand}`)
+            ?.getBoundingClientRect().width;
+
+        setDragStart({
+            x: e.clientX,
+            width: bandWidth ?? preferredTagBandWidth,
+            maxWidth: Math.max(MIN_TAG_BAND_WIDTH, listWidth - MIN_CARD_BODY_WIDTH),
+        });
     };
 
     const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
         if (!dragStart) return;
 
-        const listWidth = listRef.current?.getBoundingClientRect().width ?? 0;
-        const maxWidth = Math.max(MIN_TAG_BAND_WIDTH, listWidth - MIN_CARD_BODY_WIDTH);
         const dragged = dragStart.width - (e.clientX - dragStart.x);
+        const clamped = Math.min(dragStart.maxWidth, Math.max(MIN_TAG_BAND_WIDTH, dragged));
 
-        setTagBandWidth(Math.round(Math.min(maxWidth, Math.max(MIN_TAG_BAND_WIDTH, dragged))));
+        setPreferredTagBandWidth(Math.round(clamped));
     };
 
     const endDrag = () => { setDragStart(null); };
@@ -355,7 +368,8 @@ function PublicationList({
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
-    const [tagBandWidth, setTagBandWidth] = useRestoredState('panels.library.tagBandWidth', 110);
+    const [preferredTagBandWidth, setPreferredTagBandWidth] =
+        useRestoredState('panels.library.tagBandWidth', 110);
     const tabActive = useTabActive();
 
     useScrollToSelected(listRef, selectedPublicationId, publications);
@@ -370,7 +384,7 @@ function PublicationList({
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
         useFuzzyInputFocus(fuzzyFindVisible, tabActive);
     const { isDragging, handleProps: tagBandHandleProps } =
-        useTagBandResize(listRef, tagBandWidth, setTagBandWidth);
+        useTagBandResize(listRef, preferredTagBandWidth, setPreferredTagBandWidth);
 
     // While the fuzzy bar is open the highlight moves within the filtered
     // view. Otherwise the selection moves through the full list.
@@ -404,7 +418,7 @@ function PublicationList({
     return (
         <div
             className={`${styles.publicationList} ${isDragging ? styles.isDragging : ''}`}
-            style={{ '--tag-band-width': `${tagBandWidth}px` } as CSSProperties}
+            style={{ '--tag-band-width': `${preferredTagBandWidth}px` } as CSSProperties}
             onMouseDown={onContainerMouseDown}
         >
             {fuzzyFindVisible && (
