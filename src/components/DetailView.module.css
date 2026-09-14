@@ -83,11 +83,72 @@
     line-height: 1.4;
 }
 
-.notesEditorSlot {
+.notesPreview {
     flex: 1 1 0;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
+    overflow-y: auto;
+    color: var(--fg0);
+    line-height: 1.4;
+}
+
+.notesPreview > :first-child {
+    margin-top: 0;
+}
+
+.notesPreview h1,
+.notesPreview h2,
+.notesPreview h3,
+.notesPreview h4,
+.notesPreview h5,
+.notesPreview h6 {
+    margin: 0.8em 0 0.3em;
+    color: var(--accent1);
+    line-height: 1.4;
+}
+
+.notesPreview p,
+.notesPreview ul,
+.notesPreview ol,
+.notesPreview pre {
+    margin: 0.5em 0;
+}
+
+.notesPreview ul,
+.notesPreview ol {
+    padding-left: 1.5em;
+}
+
+.notesPreview code {
+    color: var(--accent4);
+}
+
+.notesPreview a {
+    color: var(--accent3);
+}
+
+.notesPreview blockquote {
+    margin: 0.5em 0;
+    padding-left: 0.8em;
+    border-left: 2px solid var(--accent3);
+    color: var(--fg2);
+    font-style: italic;
+}
+
+.notesPreview table {
+    border-collapse: collapse;
+    margin: 0.5em 0;
+}
+
+.notesPreview th,
+.notesPreview td {
+    border: 1px solid var(--bg3);
+    padding: 1px 6px;
+}
+
+.notesPreview th {
+    background: var(--bg2);
+    color: var(--fg0);
+    font-weight: 700;
 }
 
 .bibEditorSlot {
@@ -99,8 +160,4 @@
 .bibEditorSlot :global(.cm-editor) {
     min-height: 7em;
     max-height: 28em;
-}
-
-.notesEditorSlot :global(.cm-editor) {
-    height: 100%;
 }

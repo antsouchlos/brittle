@@ -1,10 +1,10 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import Markdown from 'markdown-to-jsx';
 
 import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
-import { MARKDOWN_PREVIEW_EXTENSIONS } from './markdownPreview';
 import { parseInlineMarkup } from './inlineMarkup.tsx';
 import { type Publication, type PublicationId } from '../app/LibraryModel';
 import { type PublicationUpserted } from '../app/libraryUpdates';
@@ -202,24 +202,14 @@ function ReferencePreview({ markup }: ReferencePreviewProps) {
     );
 }
 
-interface NotesEditorProps {
-    initialNotes: string,
+interface NotesPreviewProps {
+    notes: string,
 }
 
-function NotesEditor({ initialNotes }: NotesEditorProps) {
-    const [notes, setNotes] = useState(initialNotes);
-    const [focused, setFocused] = useState(false);
-
+function NotesPreview({ notes }: NotesPreviewProps) {
     return (
-        <div className={styles.notesEditorSlot}>
-            <VimTextArea
-                value={notes}
-                onChange={setNotes}
-                focused={focused}
-                onFocusedChange={setFocused}
-                extraExtensions={MARKDOWN_PREVIEW_EXTENSIONS}
-                lineWrapping={LINE_WRAPPING}
-            />
+        <div className={styles.notesPreview}>
+            <Markdown>{notes}</Markdown>
         </div>
     );
 }
@@ -283,36 +273,42 @@ function DetailView(
 
     return (
         <div className={styles.detailPane}>
-            <div className={styles.detailBadgeRow}>
-                <span className={styles.detailBadge}>{publisher}</span>
-            </div>
-
-            <dl className={styles.detailGrid}>
-                <dt>Title</dt>
-                <dd>{title}</dd>
-                <dt>Author</dt>
-                <dd>{author}</dd>
-                <dt>Published</dt>
-                <dd>{date}</dd>
-                <dt>Collection</dt>
-                <dd>{collection}</dd>
-                <dt>Filename</dt>
-                <dd>{filename}</dd>
-            </dl>
+            {/* <div className={styles.detailBadgeRow}> */}
+            {/*     <span className={styles.detailBadge}>{publisher}</span> */}
+            {/* </div> */}
+            {/**/}
+            {/* <dl className={styles.detailGrid}> */}
+            {/*     <dt>Title</dt> */}
+            {/*     <dd>{title}</dd> */}
+            {/*     <dt>Author</dt> */}
+            {/*     <dd>{author}</dd> */}
+            {/*     <dt>Published</dt> */}
+            {/*     <dd>{date}</dd> */}
+            {/*     <dt>Collection</dt> */}
+            {/*     <dd>{collection}</dd> */}
+            {/*     <dt>Filename</dt> */}
+            {/*     <dd>{filename}</dd> */}
+            {/* </dl> */}
 
             {publicationId && publication && (
                 <Fragment key={publicationId}>
-                    <NotesEditor initialNotes={publication.notes ?? ''} />
-                    <MetadataSourceEditor
-                        value={value}
-                        onChange={onChange}
-                        focused={bibEditorFocused}
-                        onFocusedChange={setBibEditorFocused}
-                    />
+                    <NotesPreview notes={publication.notes ?? ''} />
                 </Fragment>
             )}
 
-            {publication && <ReferencePreview markup={publication.referencePreview} />}
+            {/* {publicationId && publication && ( */}
+            {/*     <Fragment key={publicationId}> */}
+            {/*         <NotesEditor initialNotes={publication.notes ?? ''} /> */}
+            {/*         <MetadataSourceEditor */}
+            {/*             value={value} */}
+            {/*             onChange={onChange} */}
+            {/*             focused={bibEditorFocused} */}
+            {/*             onFocusedChange={setBibEditorFocused} */}
+            {/*         /> */}
+            {/*     </Fragment> */}
+            {/* )} */}
+            {/**/}
+            {/* {publication && <ReferencePreview markup={publication.referencePreview} />} */}
         </div>
     );
 }

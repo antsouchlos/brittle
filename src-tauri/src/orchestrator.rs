@@ -297,9 +297,16 @@ impl Worker {
             return Ok(());
         };
 
-        let sections = std::fs::read_to_string(dir.join(notes::NOTES_FILE_NAME))
-            .map(|source| notes::parse_notes(&source))
-            .unwrap_or_default();
+        let sections = match std::fs::read_to_string(dir.join(notes::NOTES_FILE_NAME)) {
+            Ok(source) => match notes::parse_notes(&source) {
+                Ok(sections) => sections,
+                Err(e) => {
+                    warn!("Failed to parse notes in '{}': {}", dir.display(), e);
+                    return Ok(());
+                }
+            },
+            Err(_) => HashMap::new(),
+        };
 
         let publications: Vec<(PublicationId, Publication)> = collection
             .child_publication_ids

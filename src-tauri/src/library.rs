@@ -348,6 +348,20 @@ fn read_tags(dir: &Path) -> HashMap<String, Vec<String>> {
     }
 }
 
+fn read_notes(dir: &Path) -> HashMap<String, String> {
+    let Ok(source) = fs::read_to_string(dir.join(notes::NOTES_FILE_NAME)) else {
+        return HashMap::new();
+    };
+
+    match notes::parse_notes(&source) {
+        Ok(notes_by_stem) => notes_by_stem,
+        Err(e) => {
+            log::warn!("Failed to parse notes in '{}': {}", dir.display(), e);
+            HashMap::new()
+        }
+    }
+}
+
 fn build_publications(
     metadata_files: &[ClassifiedFile],
     content_files: &[ClassifiedFile],
@@ -358,9 +372,7 @@ fn build_publications(
     let conflicted_stems = find_duplicate_metadata_stems(metadata_files, dir);
 
     // A directory without a notes file is the normal case, not a problem.
-    let notes_by_stem = fs::read_to_string(dir.join(notes::NOTES_FILE_NAME))
-        .map(|source| notes::parse_notes(&source))
-        .unwrap_or_default();
+    let notes_by_stem = read_notes(dir);
     let tags_by_stem = read_tags(dir);
 
     let mut publication_ids: Vec<PublicationId> = Vec::new();
@@ -730,8 +742,8 @@ mod tests {
         let (_dir, root_path, _root_name) =
             create_literature_env(&["noted.bib", "plain.bib", "sub/noted.bib"]);
         fs::write(
-            root_path.join("notes.md"),
-            "Preamble\n\n# noted\n\n- a remark\n\n# missing\n\n- orphan\n",
+            root_path.join("notes.yml"),
+            "noted: |\n    - a remark\n\nmissing: |\n    - orphan\n",
         )
         .unwrap();
 
