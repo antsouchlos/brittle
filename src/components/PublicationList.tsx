@@ -1,4 +1,13 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type CSSProperties,
+    type PointerEvent as ReactPointerEvent,
+    type RefObject,
+} from 'react';
 import { Fzf, extendedMatch } from 'fzf';
 import { FaFilePdf } from 'react-icons/fa';
 import { Globe } from 'lucide-react';
@@ -7,6 +16,10 @@ import styles from './PublicationList.module.css';
 import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
 import { logger } from '../app/logger';
 import { useTabActive } from './TabView';
+import { useRestoredState } from '../app/uiState';
+
+const MIN_TAG_BAND_WIDTH = 56;
+const MIN_CARD_BODY_WIDTH = 160;
 
 interface PublicationListItem {
     id: string;
@@ -16,6 +29,7 @@ interface PublicationListItem {
     date: string;
     filename: string;
     contentFiles: string[];
+    tags: string[];
 }
 
 interface PublicationListProps {
@@ -110,6 +124,55 @@ function ContentIndicators({ contentFiles }: { contentFiles: string[] }) {
             {hasHtml && <Globe aria-hidden="true" />}
         </span>
     );
+}
+
+function TagBand({ tags }: { tags: string[] }) {
+    return (
+        <div className={styles.tagBand}>
+            {tags.map(tag => (
+                <span className={styles.tag} key={tag} title={tag}>{tag}</span>
+            ))}
+        </div>
+    );
+}
+
+function useTagBandResize(
+    listRef: RefObject<HTMLDivElement | null>,
+    tagBandWidth: number,
+    setTagBandWidth: (width: number) => void,
+) {
+    const [dragStart, setDragStart] = useState<{ x: number; width: number } | null>(null);
+
+    const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+        if (e.button !== 0) return;
+
+        e.currentTarget.setPointerCapture(e.pointerId);
+        e.preventDefault();
+
+        setDragStart({ x: e.clientX, width: tagBandWidth });
+    };
+
+    const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+        if (!dragStart) return;
+
+        const listWidth = listRef.current?.getBoundingClientRect().width ?? 0;
+        const maxWidth = Math.max(MIN_TAG_BAND_WIDTH, listWidth - MIN_CARD_BODY_WIDTH);
+        const dragged = dragStart.width - (e.clientX - dragStart.x);
+
+        setTagBandWidth(Math.round(Math.min(maxWidth, Math.max(MIN_TAG_BAND_WIDTH, dragged))));
+    };
+
+    const endDrag = () => { setDragStart(null); };
+
+    return {
+        isDragging: dragStart !== null,
+        handleProps: {
+            onPointerDown,
+            onPointerMove,
+            onPointerUp: endDrag,
+            onPointerCancel: endDrag,
+        },
+    };
 }
 
 function useFuzzyInputFocus(
@@ -292,6 +355,7 @@ function PublicationList({
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
+    const [tagBandWidth, setTagBandWidth] = useRestoredState('panels.library.tagBandWidth', 110);
     const tabActive = useTabActive();
 
     useScrollToSelected(listRef, selectedPublicationId, publications);
@@ -305,6 +369,8 @@ function PublicationList({
         );
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
         useFuzzyInputFocus(fuzzyFindVisible, tabActive);
+    const { isDragging, handleProps: tagBandHandleProps } =
+        useTagBandResize(listRef, tagBandWidth, setTagBandWidth);
 
     // While the fuzzy bar is open the highlight moves within the filtered
     // view. Otherwise the selection moves through the full list.
@@ -336,7 +402,9 @@ function PublicationList({
     useActionHandler(Action.Cancel, () => setFuzzyFindVisible(false), tabActive && fuzzyFindVisible);
 
     return (
-        <div className={styles.publicationList}
+        <div
+            className={`${styles.publicationList} ${isDragging ? styles.isDragging : ''}`}
+            style={{ '--tag-band-width': `${tagBandWidth}px` } as CSSProperties}
             onMouseDown={onContainerMouseDown}
         >
             {fuzzyFindVisible && (
@@ -369,28 +437,32 @@ function PublicationList({
                             }
                             onClick={() => selectByClick(idx, pub.id)}
                         >
-                            <div className={styles.cardTopRow}>
-                                <span className={styles.publisher}>
-                                    <HighlightedText text={pub.publisher} matchPositions={publisherPositions} />
+                            <div className={styles.cardBody}>
+                                <div className={styles.cardTopRow}>
+                                    <span className={styles.publisher}>
+                                        <HighlightedText text={pub.publisher} matchPositions={publisherPositions} />
+                                    </span>
+                                    <span className={styles.dateBadge}>
+                                        <ContentIndicators contentFiles={pub.contentFiles} />
+                                        <HighlightedText text={pub.date} matchPositions={datePositions} />
+                                    </span>
+                                </div>
+                                <span className={styles.cardTitle}>
+                                    <HighlightedText text={pub.title} matchPositions={titlePositions} />
                                 </span>
-                                <span className={styles.dateBadge}>
-                                    <ContentIndicators contentFiles={pub.contentFiles} />
-                                    <HighlightedText text={pub.date} matchPositions={datePositions} />
-                                </span>
+                                <div className={styles.cardBottomRow}>
+                                    <span className={styles.author}>
+                                        <HighlightedText text={pub.author} matchPositions={authorPositions} />
+                                    </span>
+                                    <span className={styles.filenameBadge}>
+                                        <HighlightedText text={pub.filename} matchPositions={filenamePositions} />
+                                    </span>
+                                </div>
                             </div>
-                            <span className={styles.cardTitle}>
-                                <HighlightedText text={pub.title} matchPositions={titlePositions} />
-                            </span>
-                            <div className={styles.cardBottomRow}>
-                                <span className={styles.author}>
-                                    <HighlightedText text={pub.author} matchPositions={authorPositions} />
-                                </span>
-                                <span className={styles.filenameBadge}>
-                                    <HighlightedText text={pub.filename} matchPositions={filenamePositions} />
-                                </span>
-                            </div>
+                            <TagBand tags={pub.tags} />
                         </div>
                     ))}
+                    <div className={styles.tagBandHandle} {...tagBandHandleProps} />
                 </div>
             </div>
         </div>

@@ -179,6 +179,7 @@ function Workspace() {
                 date: String(publication.metadata!.year),
                 filename: publication.name,
                 contentFiles: publication.availableContentFileExtensions,
+                tags: publication.tags,
             }));
     }, [visiblePublicationIds, lib]);
 

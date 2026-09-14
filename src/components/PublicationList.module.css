@@ -1,4 +1,6 @@
 .publicationList {
+    --tag-band-width: 110px;
+
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -11,15 +13,46 @@
 }
 
 .list {
+    position: relative;
     display: flex;
     flex-direction: column;
 }
 
+.tagBandHandle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: calc(var(--tag-band-width) - 3px);
+    width: 6px;
+    cursor: col-resize;
+}
+
+.tagBandHandle::before {
+    content: "";
+    display: block;
+    margin-left: 50%;
+    transform: translateX(-50%);
+    width: 1px;
+    height: 100%;
+    background: var(--bg2);
+}
+
+.tagBandHandle:hover::before {
+    background: var(--bg3);
+}
+
+.isDragging .tagBandHandle::before {
+    background: var(--accent1);
+}
+
+.isDragging {
+    cursor: col-resize !important;
+}
+
 .card {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 6px 8px;
+    flex-direction: row;
+    align-items: stretch;
     border-left: 1px solid transparent;
     border-bottom: 1px solid var(--bg3);
     cursor: pointer;
@@ -28,6 +61,38 @@
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+}
+
+.cardBody {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 8px;
+}
+
+.tagBand {
+    box-sizing: border-box;
+    flex: 0 0 var(--tag-band-width);
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 4px;
+    padding: 6px 8px;
+}
+
+.tag {
+    max-width: 100%;
+    padding: 0 4px;
+    background: var(--bg2);
+    border-radius: 2px;
+    color: var(--fg3);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .card:hover {
