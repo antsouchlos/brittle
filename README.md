@@ -31,6 +31,10 @@ return {
         pdf_viewer = "external",
         autosave_debounce_ms = 250,
         reference_preview_debounce_ms = 500,
+        tag_colors = {
+            S1 = { foreground = "var(--bg0)", background = "var(--accent7)" },
+            BRD = { foreground = "#d3869b" },
+        },
         watch = {
             -- Rescan the library when a reference file changes on disk
             {

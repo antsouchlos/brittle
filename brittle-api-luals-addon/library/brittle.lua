@@ -29,6 +29,8 @@
 --- Debounce interval (ms) before recompiling a reference preview after
 --- its source changed.
 --- @field reference_preview_debounce_ms? integer
+--- Tag chip colors, keyed by tag name.
+--- @field tag_colors? table<string, TagColors>
 --- File-system watch entries mapping paths to reload actions.
 --- @field watch? Watch[]
 
@@ -48,6 +50,13 @@
 --- Reference preview compiler: receives the file contents as a string,
 --- returns the compiled reference text shown below the metadata editor.
 --- @field reference_preview (fun(src: string): string)?
+
+--- Colors for a tag's chip in the publication list.
+--- @class TagColors
+--- Background color.
+--- @field background string?
+--- Text color.
+--- @field foreground string?
 
 --- A user-defined file-system watch entry mapping a path to reload actions.
 --- 

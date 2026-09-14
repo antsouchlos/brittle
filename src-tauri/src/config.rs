@@ -6,6 +6,7 @@ use brittle_lua;
 
 #[brittle_lua::lua_module(crate = "brittle_lua")]
 pub mod config {
+    use std::collections::HashMap;
     use std::path::PathBuf;
 
     //
@@ -127,6 +128,18 @@ pub mod config {
         pub ignore: Vec<String>,
     }
 
+    /// Colors for a tag's chip in the publication list.
+    #[luaclass]
+    #[derive(Clone, Debug, serde::Serialize)]
+    pub struct TagColors {
+        /// Text color.
+        #[lua(default = "None")]
+        pub foreground: Option<String>,
+        /// Background color.
+        #[lua(default = "None")]
+        pub background: Option<String>,
+    }
+
     /// User-configurable options.
     #[luaclass]
     #[derive(Clone, Debug, serde::Serialize)]
@@ -156,6 +169,9 @@ pub mod config {
         /// its source changed.
         #[lua(default = "500u64")]
         pub reference_preview_debounce_ms: u64,
+        /// Tag chip colors, keyed by tag name.
+        #[lua(default = "HashMap::new()")]
+        pub tag_colors: HashMap<String, TagColors>,
     }
 
     /// Top-level application configuration.
@@ -287,7 +303,7 @@ pub mod config {
     }
 }
 
-pub use config::{Command, Config, Opts, RefParser, Watch};
+pub use config::{Command, Config, Opts, RefParser, TagColors, Watch};
 
 /// Evaluates the config from a concrete path. Shared by startup and runtime
 /// reload, so the reload path (which only has an `AppHandle`) can re-evaluate
@@ -329,6 +345,40 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
 
 #[cfg(test)]
 mod tests {
+    use tempfile::TempDir;
+
+    use super::Config;
+
+    // Every fixture sets `data_path`, since its default reads DEFAULT_DATA_PATH,
+    // a OnceLock only populated by `load_config`.
+    fn load_opts_source(opts_body: &str) -> (TempDir, Config) {
+        let dir = TempDir::new().expect("temp dir");
+        let config_path = dir.path().join("init.lua");
+        let source = format!(
+            "return {{ opts = {{ data_path = \"/tmp\", {} }} }}",
+            opts_body,
+        );
+        std::fs::write(&config_path, source).expect("write init.lua");
+
+        let config = super::load_config_from(&config_path).expect("config should load");
+
+        (dir, config)
+    }
+
+    #[test]
+    fn tag_colors_parse_both_fields() {
+        let (_dir, config) = load_opts_source(
+            r##"tag_colors = { S1 = { foreground = "var(--bg0)", background = "#b8bb26" } }"##,
+        );
+
+        let colors = config
+            .opts
+            .tag_colors
+            .get("S1")
+            .expect("S1 should be configured");
+        assert_eq!(colors.foreground.as_deref(), Some("var(--bg0)"));
+        assert_eq!(colors.background.as_deref(), Some("#b8bb26"));
+    }
     #[test]
     fn addon_matches_emmylua_generation() {
         let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));

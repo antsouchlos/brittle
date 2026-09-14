@@ -17,6 +17,7 @@ import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
 import { logger } from '../app/logger';
 import { useTabActive } from './TabView';
 import { useRestoredState } from '../app/uiState';
+import { useConfig, type TagColors } from '../app/config';
 
 const MIN_TAG_BAND_WIDTH = 56;
 const MIN_CARD_BODY_WIDTH = 160;
@@ -126,11 +127,25 @@ function ContentIndicators({ contentFiles }: { contentFiles: string[] }) {
     );
 }
 
-function TagBand({ tags }: { tags: string[] }) {
+function tagChipStyle(colors: TagColors | undefined): CSSProperties | undefined {
+    if (!colors) return undefined;
+
+    return {
+        color: colors.foreground ?? undefined,
+        backgroundColor: colors.background ?? undefined,
+    };
+}
+
+function TagBand({ tags, tagColors }: { tags: string[]; tagColors: Record<string, TagColors> }) {
     return (
         <div className={styles.tagBand}>
             {tags.map(tag => (
-                <span className={styles.tag} key={tag} title={tag}>{tag}</span>
+                <span
+                    className={styles.tag}
+                    key={tag}
+                    title={tag}
+                    style={tagChipStyle(tagColors[tag])}
+                >{tag}</span>
             ))}
         </div>
     );
@@ -371,6 +386,7 @@ function PublicationList({
     const [preferredTagBandWidth, setPreferredTagBandWidth] =
         useRestoredState('panels.library.tagBandWidth', 110);
     const tabActive = useTabActive();
+    const { opts: { tagColors } } = useConfig();
 
     useScrollToSelected(listRef, selectedPublicationId, publications);
 
@@ -473,7 +489,7 @@ function PublicationList({
                                     </span>
                                 </div>
                             </div>
-                            <TagBand tags={pub.tags} />
+                            <TagBand tags={pub.tags} tagColors={tagColors} />
                         </div>
                     ))}
                     <div className={styles.tagBandHandle} {...tagBandHandleProps} />

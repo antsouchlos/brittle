@@ -3,15 +3,22 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { logger } from './logger';
 
+export interface TagColors {
+    foreground: string | null;
+    background: string | null;
+}
+
 export interface Config {
     opts: {
         autosaveDebounceMs: number;
+        tagColors: Record<string, TagColors>;
     };
 }
 
 const DEFAULT_CONFIG: Config = {
     opts: {
         autosaveDebounceMs: 250,
+        tagColors: {},
     },
 };
 

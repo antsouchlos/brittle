@@ -94,9 +94,9 @@
 .tag {
     max-width: 100%;
     padding: 0 4px;
-    background: var(--bg2);
+    background: var(--bg3);
     border-radius: 2px;
-    color: var(--fg3);
+    color: var(--fg2);
     font-size: 0.8rem;
     line-height: 1.4;
     white-space: nowrap;
