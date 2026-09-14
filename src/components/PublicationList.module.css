@@ -40,18 +40,20 @@
     transform: translateX(-50%);
     width: 1px;
     height: 100%;
-    background: var(--bg2);
+    background: var(--bg3);
 }
 
-.tagBandHandle:hover::before {
-    background: var(--bg3);
+.tagBandHandle:hover::before,
+.isDragging .tagBandHandle::before {
+    width: 2px;
 }
 
 .isDragging .tagBandHandle::before {
     background: var(--accent1);
 }
 
-.isDragging {
+.isDragging,
+.isDragging * {
     cursor: col-resize !important;
 }
 

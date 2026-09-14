@@ -3,7 +3,8 @@
     height: 100%;
 }
 
-.isDragging {
+.isDragging,
+.isDragging * {
     cursor: col-resize !important;
 }
 
