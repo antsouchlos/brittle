@@ -68,8 +68,8 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 6px 8px;
+    gap: 3px;
+    padding: 5px 8px;
 }
 
 .tagBand {
@@ -79,7 +79,7 @@
     flex-wrap: wrap;
     align-content: flex-start;
     gap: 4px;
-    padding: 6px 8px;
+    padding: 5px 8px;
 }
 
 .tag {
@@ -120,12 +120,20 @@
 }
 
 .publisher {
+    min-width: 0;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     color: var(--accent3);
+    line-height: 1.35;
     text-transform: uppercase;
     font-size: 0.85rem;
 }
 
 .dateBadge {
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -152,17 +160,29 @@
 }
 
 .cardTitle {
-    line-height: 1.1;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    line-height: 1.35;
     color: var(--fg0);
 }
 
 .author {
+    min-width: 0;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
     color: var(--accent1);
-    line-height: 1.1;
+    line-height: 1.35;
     font-size: 0.85rem;
 }
 
 .filenameBadge {
+    flex: 0 0 auto;
     color: var(--fg3);
     font-size: 0.85rem;
     margin-left: 1.5em;
