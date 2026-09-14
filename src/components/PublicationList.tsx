@@ -5,7 +5,6 @@ import {
     useRef,
     useState,
     type CSSProperties,
-    type PointerEvent as ReactPointerEvent,
     type RefObject,
 } from 'react';
 import { Fzf, extendedMatch } from 'fzf';
@@ -16,11 +15,7 @@ import styles from './PublicationList.module.css';
 import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
 import { logger } from '../app/logger';
 import { useTabActive } from './TabView';
-import { useRestoredState } from '../app/uiState';
 import { useConfig, type TagColors } from '../app/config';
-
-const MIN_TAG_BAND_WIDTH = 56;
-const MIN_CARD_BODY_WIDTH = 160;
 
 interface PublicationListItem {
     id: string;
@@ -136,9 +131,11 @@ function tagChipStyle(colors: TagColors | undefined): CSSProperties | undefined 
     };
 }
 
-function TagBand({ tags, tagColors }: { tags: string[]; tagColors: Record<string, TagColors> }) {
+function TagChips({ tags, tagColors }: { tags: string[]; tagColors: Record<string, TagColors> }) {
+    if (tags.length === 0) return null;
+
     return (
-        <div className={styles.tagBand}>
+        <span className={styles.tagChips}>
             {tags.map(tag => (
                 <span
                     className={styles.tag}
@@ -147,60 +144,8 @@ function TagBand({ tags, tagColors }: { tags: string[]; tagColors: Record<string
                     style={tagChipStyle(tagColors[tag])}
                 >{tag}</span>
             ))}
-        </div>
+        </span>
     );
-}
-
-function useTagBandResize(
-    listRef: RefObject<HTMLDivElement | null>,
-    preferredTagBandWidth: number,
-    setPreferredTagBandWidth: (width: number) => void,
-) {
-    const [dragStart, setDragStart] =
-        useState<{ x: number; width: number; maxWidth: number } | null>(null);
-
-    const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-        if (e.button !== 0) return;
-
-        e.currentTarget.setPointerCapture(e.pointerId);
-        e.preventDefault();
-
-        const list = listRef.current;
-        const listWidth = list?.getBoundingClientRect().width ?? 0;
-
-        // The band on screen can be narrower than the preference, so start the
-        // drag from what the user sees.
-        const bandWidth = list
-            ?.querySelector<HTMLElement>(`.${styles.tagBand}`)
-            ?.getBoundingClientRect().width;
-
-        setDragStart({
-            x: e.clientX,
-            width: bandWidth ?? preferredTagBandWidth,
-            maxWidth: Math.max(MIN_TAG_BAND_WIDTH, listWidth - MIN_CARD_BODY_WIDTH),
-        });
-    };
-
-    const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-        if (!dragStart) return;
-
-        const dragged = dragStart.width - (e.clientX - dragStart.x);
-        const clamped = Math.min(dragStart.maxWidth, Math.max(MIN_TAG_BAND_WIDTH, dragged));
-
-        setPreferredTagBandWidth(Math.round(clamped));
-    };
-
-    const endDrag = () => { setDragStart(null); };
-
-    return {
-        isDragging: dragStart !== null,
-        handleProps: {
-            onPointerDown,
-            onPointerMove,
-            onPointerUp: endDrag,
-            onPointerCancel: endDrag,
-        },
-    };
 }
 
 function useFuzzyInputFocus(
@@ -383,8 +328,6 @@ function PublicationList({
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
-    const [preferredTagBandWidth, setPreferredTagBandWidth] =
-        useRestoredState('panels.library.tagBandWidth', 110);
     const tabActive = useTabActive();
     const { opts: { tagColors } } = useConfig();
 
@@ -399,8 +342,6 @@ function PublicationList({
         );
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
         useFuzzyInputFocus(fuzzyFindVisible, tabActive);
-    const { isDragging, handleProps: tagBandHandleProps } =
-        useTagBandResize(listRef, preferredTagBandWidth, setPreferredTagBandWidth);
 
     // While the fuzzy bar is open the highlight moves within the filtered
     // view. Otherwise the selection moves through the full list.
@@ -433,8 +374,7 @@ function PublicationList({
 
     return (
         <div
-            className={`${styles.publicationList} ${isDragging ? styles.isDragging : ''}`}
-            style={{ '--tag-band-width': `${preferredTagBandWidth}px` } as CSSProperties}
+            className={styles.publicationList}
             onMouseDown={onContainerMouseDown}
         >
             {fuzzyFindVisible && (
@@ -473,8 +413,10 @@ function PublicationList({
                                         <HighlightedText text={pub.publisher} matchPositions={publisherPositions} />
                                     </span>
                                     <span className={styles.dateBadge}>
-                                        <ContentIndicators contentFiles={pub.contentFiles} />
-                                        <HighlightedText text={pub.date} matchPositions={datePositions} />
+                                        <TagChips tags={pub.tags} tagColors={tagColors} />
+                                        <span className={styles.year}>
+                                            <HighlightedText text={pub.date} matchPositions={datePositions} />
+                                        </span>
                                     </span>
                                 </div>
                                 <span className={styles.cardTitle}>
@@ -485,14 +427,13 @@ function PublicationList({
                                         <HighlightedText text={pub.author} matchPositions={authorPositions} />
                                     </span>
                                     <span className={styles.filenameBadge}>
+                                        <ContentIndicators contentFiles={pub.contentFiles} />
                                         <HighlightedText text={pub.filename} matchPositions={filenamePositions} />
                                     </span>
                                 </div>
                             </div>
-                            <TagBand tags={pub.tags} tagColors={tagColors} />
                         </div>
                     ))}
-                    <div className={styles.tagBandHandle} {...tagBandHandleProps} />
                 </div>
             </div>
         </div>

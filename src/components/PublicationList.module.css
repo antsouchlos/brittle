@@ -1,11 +1,6 @@
 .publicationList {
-    --tag-band-width: 110px;
-    --min-card-body-width: 160px;
-    /* A percentage inside a custom property resolves against whichever element
-       uses it, so the band clamps against its card and the handle against the
-       list. */
-    --effective-tag-band-width:
-        max(0px, min(var(--tag-band-width), 100% - var(--min-card-body-width)));
+    /* TODO: Make this configurable */
+    --optical-lift: 0.22em;
 
     height: 100%;
     display: flex;
@@ -19,48 +14,11 @@
 }
 
 .list {
-    position: relative;
     display: flex;
     flex-direction: column;
 }
 
-.tagBandHandle {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    right: calc(var(--effective-tag-band-width) - 3px);
-    width: 6px;
-    cursor: col-resize;
-}
-
-.tagBandHandle::before {
-    content: "";
-    display: block;
-    margin-left: 50%;
-    transform: translateX(-50%);
-    width: 1px;
-    height: 100%;
-    background: var(--bg3);
-}
-
-.tagBandHandle:hover::before,
-.isDragging .tagBandHandle::before {
-    width: 2px;
-}
-
-.isDragging .tagBandHandle::before {
-    background: var(--accent1);
-}
-
-.isDragging,
-.isDragging * {
-    cursor: col-resize !important;
-}
-
 .card {
-    display: flex;
-    flex-direction: row;
-    align-items: stretch;
     border-left: 1px solid transparent;
     border-bottom: 1px solid var(--bg3);
     cursor: pointer;
@@ -72,22 +30,10 @@
 }
 
 .cardBody {
-    flex: 1 1 auto;
     min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 3px;
-    padding: 5px 8px;
-}
-
-.tagBand {
-    box-sizing: border-box;
-    flex: 0 0 auto;
-    width: var(--effective-tag-band-width);
-    display: flex;
-    flex-wrap: wrap;
-    align-content: flex-start;
-    gap: 4px;
     padding: 5px 8px;
 }
 
@@ -129,7 +75,10 @@
 }
 
 .publisher {
-    min-width: 0;
+    /* Shrinks before the tag chips do; the floor keeps a heavily tagged card
+       from erasing the publisher entirely. */
+    flex: 1 1 auto;
+    min-width: 3em;
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -142,19 +91,33 @@
 }
 
 .dateBadge {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    min-width: 0;
     display: inline-flex;
     align-items: center;
     gap: 5px;
     color: var(--accent4);
 }
 
+.tagChips {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    transform: translateY(calc(-1 * var(--optical-lift)));
+}
+
+.year {
+    flex: 0 0 auto;
+}
+
 .contentIndicators {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    margin-left: 0.5em;
-    transform: translateY(-0.3em);
+    margin-right: 0.4em;
+    transform: translateY(calc(-1 * var(--optical-lift)));
 }
 
 .contentIndicators svg {
@@ -192,6 +155,8 @@
 
 .filenameBadge {
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
     color: var(--fg3);
     font-size: 0.85rem;
     margin-left: 1.5em;
