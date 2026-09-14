@@ -22,6 +22,7 @@ mod library;
 mod notes;
 mod orchestrator;
 mod store;
+mod tags;
 mod watcher;
 
 pub fn get_emmy_lua() -> &'static str {

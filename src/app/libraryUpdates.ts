@@ -10,7 +10,8 @@ export type PublicationChangeOrigin =
     | 'metadataEditor'
     | 'disk'
     | 'referencePreviewCompiler'
-    | 'notes';
+    | 'notes'
+    | 'tags';
 
 export interface PublicationUpserted {
     publicationId: PublicationId;

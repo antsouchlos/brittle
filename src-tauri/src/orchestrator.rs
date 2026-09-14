@@ -13,6 +13,7 @@ use crate::notes;
 use crate::store::{
     CollectionId, LibraryState, LibraryStore, Publication, PublicationId,
 };
+use crate::tags;
 use crate::watcher::{WatchRegistry, WatcherCommand};
 
 const CONTENT_FILE_EXTENSIONS: [&str; 2] = ["pdf", "html"];
@@ -24,6 +25,7 @@ enum PublicationChangeOrigin {
     Disk,
     ReferencePreviewCompiler,
     Notes,
+    Tags,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -268,6 +270,17 @@ impl Worker {
             return self.rescan_collection_notes(dir);
         }
 
+        if path
+            .file_name()
+            .is_some_and(|name| name == tags::TAGS_FILE_NAME)
+        {
+            let dir = path
+                .parent()
+                .ok_or_else(|| format!("'{}' has no parent directory", path.display()))?;
+
+            return self.rescan_collection_tags(dir);
+        }
+
         self.rescan_publication(
             path,
             &library_root,
@@ -315,6 +328,58 @@ impl Worker {
                     parent_collection_id: collection_id.clone(),
                     publication: updated,
                     origin: PublicationChangeOrigin::Notes,
+                },
+            );
+        }
+
+        Ok(())
+    }
+
+    fn rescan_collection_tags(&self, dir: &Path) -> Result<(), String> {
+        let collection_id = CollectionId::from_path(dir);
+
+        let Ok(collection) = self.store.get_collection(collection_id.clone()) else {
+            return Ok(());
+        };
+
+        let tags_by_stem = match std::fs::read_to_string(dir.join(tags::TAGS_FILE_NAME)) {
+            Ok(source) => match tags::parse_tags(&source) {
+                Ok(tags_by_stem) => tags_by_stem,
+                Err(e) => {
+                    warn!("Failed to parse tags in '{}': {}", dir.display(), e);
+                    return Ok(());
+                }
+            },
+            Err(_) => HashMap::new(),
+        };
+
+        let publications: Vec<(PublicationId, Publication)> = collection
+            .child_publication_ids
+            .iter()
+            .filter_map(|id| {
+                self.store
+                    .get_publication(id.clone())
+                    .ok()
+                    .map(|publication| (id.clone(), publication))
+            })
+            .collect();
+
+        for (publication_id, updated) in changed_tags(publications, &tags_by_stem) {
+            if let Err(e) = self
+                .store
+                .update_publication(publication_id.clone(), updated.clone())
+            {
+                error!("Failed to store tags: {}", e);
+                continue;
+            }
+
+            self.emit(
+                "publication-upserted",
+                PublicationUpserted {
+                    publication_id,
+                    parent_collection_id: collection_id.clone(),
+                    publication: updated,
+                    origin: PublicationChangeOrigin::Tags,
                 },
             );
         }
@@ -768,6 +833,33 @@ fn changed_notes(
         .collect()
 }
 
+fn changed_tags(
+    publications: Vec<(PublicationId, Publication)>,
+    tags_by_stem: &HashMap<String, Vec<String>>,
+) -> Vec<(PublicationId, Publication)> {
+    publications
+        .into_iter()
+        .filter_map(|(publication_id, publication)| {
+            let tags = tags_by_stem
+                .get(&publication.name)
+                .cloned()
+                .unwrap_or_default();
+
+            if tags == publication.tags {
+                return None;
+            }
+
+            Some((
+                publication_id,
+                Publication {
+                    tags,
+                    ..publication
+                },
+            ))
+        })
+        .collect()
+}
+
 fn file_matches_last_written_source(
     last_written_sources: &HashMap<PathBuf, String>,
     path: &Path,
@@ -881,6 +973,79 @@ mod tests {
         assert_eq!(changed.len(), 1);
         assert_eq!(changed[0].0, edited_id);
         assert_eq!(changed[0].1.notes, Some("new".to_string()));
+    }
+
+    fn publication_with_tags(name: &str, tags: &[&str]) -> Publication {
+        Publication {
+            name: name.to_string(),
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            ..Publication::default()
+        }
+    }
+
+    fn tag_entries(entries: &[(&str, &[&str])]) -> HashMap<String, Vec<String>> {
+        entries
+            .iter()
+            .map(|(key, tags)| {
+                (
+                    key.to_string(),
+                    tags.iter().map(|t| t.to_string()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_publication_gaining_tags_is_reported() {
+        let publication = publication_with_tags("a", &[]);
+        let id = publication_id("a.bib");
+
+        let changed = changed_tags(
+            vec![(id.clone(), publication)],
+            &tag_entries(&[("a", &["S1", "BRD"])]),
+        );
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].0, id);
+        assert_eq!(changed[0].1.tags, vec!["S1", "BRD"]);
+    }
+
+    #[test]
+    fn a_publication_losing_its_entry_is_cleared() {
+        let publication = publication_with_tags("a", &["S1"]);
+        let id = publication_id("a.bib");
+
+        let changed = changed_tags(vec![(id.clone(), publication)], &tag_entries(&[]));
+
+        assert_eq!(changed.len(), 1);
+        assert!(changed[0].1.tags.is_empty());
+    }
+
+    #[test]
+    fn an_edited_tag_list_is_reported() {
+        let publication = publication_with_tags("a", &["S1", "BRD"]);
+        let id = publication_id("a.bib");
+
+        let changed = changed_tags(
+            vec![(id.clone(), publication)],
+            &tag_entries(&[("a", &["S1", "CTX"])]),
+        );
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].1.tags, vec!["S1", "CTX"]);
+    }
+
+    #[test]
+    fn an_unchanged_tag_list_is_not_reported() {
+        let publication = publication_with_tags("a", &["S1", "BRD"]);
+        let id = publication_id("a.bib");
+
+        let changed = changed_tags(
+            vec![(id, publication)],
+            &tag_entries(&[("a", &["S1", "BRD"])]),
+        );
+
+        assert!(changed.is_empty());
     }
 
     #[test]

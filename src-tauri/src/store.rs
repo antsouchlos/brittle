@@ -64,6 +64,7 @@ pub struct Publication {
     pub reference_preview: Option<String>,
     pub available_content_file_extensions: Vec<String>,
     pub notes: Option<String>,
+    pub tags: Vec<String>,
 }
 
 #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -476,6 +477,7 @@ mod tests {
             reference_preview: None,
             available_content_file_extensions: vec!["epub".to_string()],
             notes: None,
+            tags: Vec::new(),
         }
     }
 

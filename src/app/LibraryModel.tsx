@@ -19,6 +19,7 @@ export interface Publication {
     referencePreview: string | null;
     availableContentFileExtensions: string[];
     notes: string | null;
+    tags: string[];
 }
 
 export interface Collection {
