@@ -190,6 +190,13 @@ function Workspace() {
         ? lib.getCollection(lib.publicationParents[selectedPublicationId])?.name ?? ''
         : '';
 
+    const selectedCollectionName = selectedCollectionId && lib
+        ? lib.getCollection(selectedCollectionId)?.name ?? ''
+        : '';
+    const libraryPanelLabel = selectedCollectionId && selectedCollectionId !== lib?.rootId
+        ? `LIBRARY - ${selectedCollectionName}`
+        : 'LIBRARY';
+
     const fixedTabs: TabData[] = [
         {
             id: 'Lib',
@@ -198,8 +205,13 @@ function Workspace() {
                 <HorizontalPanelLayout
                     defaultWidths={DEFAULT_LIBRARY_PANEL_WIDTHS}
                     persistKey="panels.library.widths"
-                    firstPanelsData={[
+                    collapsePersistKey="panels.library.collapsed"
+                    panelsData={[
                         {
+                            // The tree keeps claiming the cycle actions while
+                            // it is collapsed.
+                            collapsedBehaviour: 'hide',
+                            collapsedLabel: libraryPanelLabel,
                             renderContent: () => (
                                 <div className={styles.panelContainer}>
                                     {treeRoot && selectedCollectionId && (
@@ -225,20 +237,23 @@ function Workspace() {
                                     />
                                 </div>
                             ),
-                        }
+                        },
+                        {
+                            collapsedLabel: 'METADATA | NOTES',
+                            renderContent: () => (
+                                <div
+                                    className={styles.panelContainer}
+                                >
+                                    <DetailView
+                                        publicationId={selectedPublicationId}
+                                        publication={selectedPublication}
+                                        collectionName={selectedPublicationCollectionName}
+                                        libraryReloadCount={libraryReloadCount}
+                                    />
+                                </div>
+                            ),
+                        },
                     ]}
-                    renderLastPanelContent={() => (
-                        <div
-                            className={styles.panelContainer}
-                        >
-                            <DetailView
-                                publicationId={selectedPublicationId}
-                                publication={selectedPublication}
-                                collectionName={selectedPublicationCollectionName}
-                                libraryReloadCount={libraryReloadCount}
-                            />
-                        </div>
-                    )}
                 />
             ),
         },
