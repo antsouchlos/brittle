@@ -178,6 +178,8 @@ export default function VimTextArea(
                         const vimState = (cm as any).state?.vim;
                         // Check if in normal mode (not insert mode AND not visual mode)
                         if (vimState && !vimState.insertMode && !vimState.visualMode) {
+                            event.stopPropagation();
+
                             onFocusedChangeRef.current(false);
                             return true;
                         }
