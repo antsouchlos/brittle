@@ -11,6 +11,9 @@
     --line-height: 22px;
     --font-weight: 450;
 
+    /* Lifts a bottom-aligned icon onto the text baseline; halve it for center-aligned icons. */
+    --optical-lift: 0.22em;
+
     /* Gruvbox dark palette */
     --bg0: #1d2021;
     --bg1: #282828;

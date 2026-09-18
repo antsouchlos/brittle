@@ -15,6 +15,7 @@ export enum Action {
     OpenCmdLine,
     OpenFuzzyFind,
     FocusBibEditor,
+    FocusNotesEditor,
 }
 
 export const keymap: Array<[string, Action]> = [
@@ -30,10 +31,20 @@ export const keymap: Array<[string, Action]> = [
     ["gT", Action.PrevTab],
     ["Enter", Action.Submit],
     ["Ctrl+e", Action.FocusBibEditor],
+    ["i", Action.FocusNotesEditor],
     [":", Action.OpenCmdLine],
     [" ff", Action.OpenFuzzyFind],
     ["Escape", Action.Cancel],
 ];
+
+const LEADER_KEY_GLYPH = '\u2423';
+
+export function keybindingForAction(action: Action): string | null {
+    const keySequence = keymap.find(([, boundAction]) => boundAction === action)?.[0];
+    if (keySequence === undefined) return null;
+
+    return keySequence.replace(/^ /, LEADER_KEY_GLYPH);
+}
 
 // Whether a key press belongs to the focused text surface rather than to the
 // global keymap. A text surface stops propagation for these and lets the rest

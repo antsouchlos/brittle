@@ -83,6 +83,90 @@
     line-height: 1.4;
 }
 
+.notesSection {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.notesHeader {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--bg2);
+}
+
+.notesLabel {
+    margin: 0;
+    color: var(--fg2);
+    font-size: 0.85rem;
+    font-weight: normal;
+    text-transform: uppercase;
+}
+
+.notesEditingMarker {
+    color: var(--accent1);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+}
+
+.notesToggle {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg2);
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.notesToggle svg {
+    display: block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    transform: translateY(calc(-0.5 * var(--optical-lift)));
+}
+
+.notesToggle:hover {
+    background: var(--bg1);
+    color: var(--fg0);
+}
+
+.notesToggle:focus-visible {
+    outline: none;
+    border-color: var(--accent1);
+}
+
+.notesToggle[data-mode="source"] {
+    color: var(--accent1);
+}
+
+.notesToggleShortcut {
+    color: var(--fg4);
+    font-size: 0.8rem;
+}
+
+.notesEditorSlot {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.notesEditorSlot :global(.cm-editor) {
+    height: 100%;
+}
+
 .notesPreview {
     flex: 1 1 0;
     min-height: 0;
