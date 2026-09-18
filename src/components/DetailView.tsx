@@ -2,211 +2,49 @@ import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent } f
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import Markdown from 'markdown-to-jsx';
-import { Eye, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, LogOut, Pencil } from 'lucide-react';
 
 import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
-// import { parseInlineMarkup } from './inlineMarkup.tsx';
+import { parseInlineMarkup } from './inlineMarkup.tsx';
 import { type Publication, type PublicationId } from '../app/LibraryModel';
-import { type PublicationUpserted } from '../app/libraryUpdates';
+import { type PublicationChangeOrigin, type PublicationUpserted } from '../app/libraryUpdates';
 import { logger } from '../app/logger';
 import { Action, findKeybindingForAction, useActionHandler } from '../app/actions';
 import { useConfig } from '../app/config';
+import { useRestoredState } from '../app/uiState';
 import { useTabActive } from './TabView';
 
 const LINE_WRAPPING = true;
 
-// interface SourceEntry {
-//     source: string;
-//     diskText: string | null;
-//     queue: Promise<void>;
-// }
-//
-// // Keeps the store as source of truth for the active publication's metadata
-// // source and autosaves edits.
-// function usePublicationSource(
-//     publicationId: PublicationId | null,
-//     publication: Publication | null,
-//     bibEditorFocused: boolean,
-//     autosaveDebounceMs: number,
-//     libraryReloadCount: number,
-// ) {
-//     const entriesRef = useRef(new Map<PublicationId, SourceEntry>());
-//     const [, setRenderVersion] = useState(0);
-//     const forceRender = useCallback(() => setRenderVersion(v => v + 1), []);
-//
-//     const activeIdRef = useRef(publicationId);
-//     const prevIdRef = useRef<PublicationId | null>(null);
-//     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-//
-//     activeIdRef.current = publicationId;
-//
-//     const publicationRef = useRef(publication);
-//     publicationRef.current = publication;
-//
-//     const clearDebounceTimer = useCallback(() => {
-//         if (timerRef.current !== null) {
-//             clearTimeout(timerRef.current);
-//             timerRef.current = null;
-//         }
-//     }, []);
-//
-//     const ensureSourceEntry = useCallback((id: PublicationId): SourceEntry => {
-//         let sourceEntry = entriesRef.current.get(id);
-//         if (!sourceEntry) {
-//             sourceEntry = { source: '', diskText: null, queue: Promise.resolve() };
-//             entriesRef.current.set(id, sourceEntry);
-//         }
-//         return sourceEntry;
-//     }, []);
-//
-//     // Serializes writes per buffer, so two autosaves of the same publication
-//     // never race each other.
-//     const enqueue = useCallback((sourceEntry: SourceEntry, op: () => Promise<void>) => {
-//         sourceEntry.queue = sourceEntry.queue
-//             .then(op)
-//             .catch(e => logger.error(String(e)));
-//     }, []);
-//
-//     const persist = useCallback((id: PublicationId) => {
-//         const sourceEntry = entriesRef.current.get(id);
-//         if (!sourceEntry || sourceEntry.diskText === null) return;
-//         enqueue(sourceEntry, async () => {
-//             const current = entriesRef.current.get(id);
-//             if (!current) return;
-//             const content = current.source;
-//             if (content === current.diskText) return;
-//             await invoke('write_publication_source', { publicationId: id, content });
-//             current.diskText = content;
-//         });
-//     }, [enqueue]);
-//
-//     const adoptExternalSource = useCallback((id: PublicationId, metadataSource: string) => {
-//         const sourceEntry = entriesRef.current.get(id);
-//         if (!sourceEntry || sourceEntry.diskText === null) return;
-//         if (id === activeIdRef.current) clearDebounceTimer();
-//         sourceEntry.source = metadataSource;
-//         sourceEntry.diskText = metadataSource;
-//         forceRender();
-//     }, [clearDebounceTimer, forceRender]);
-//
-//     const handleSourceChange = useCallback((value: string) => {
-//         const id = activeIdRef.current;
-//         if (!id) return;
-//         const sourceEntry = ensureSourceEntry(id);
-//         if (sourceEntry.source === value) return;
-//         sourceEntry.source = value;
-//
-//         clearDebounceTimer();
-//         timerRef.current = setTimeout(() => {
-//             timerRef.current = null;
-//             persist(id);
-//         }, autosaveDebounceMs);
-//
-//         forceRender();
-//     }, [autosaveDebounceMs, clearDebounceTimer, ensureSourceEntry, forceRender, persist]);
-//
-//     const flush = useCallback((id: PublicationId) => {
-//         if (!entriesRef.current.has(id)) return;
-//         clearDebounceTimer();
-//         persist(id);
-//     }, [clearDebounceTimer, persist]);
-//
-//     // Flush the publication we are leaving. Only the active publication can be
-//     // dirty, so writes stay uncontended between publications.
-//     useEffect(() => {
-//         const prevId = prevIdRef.current;
-//         prevIdRef.current = publicationId;
-//         if (prevId !== null && prevId !== publicationId) {
-//             flush(prevId);
-//         }
-//     }, [publicationId, flush]);
-//
-//     // Fills a buffer the first time its publication is shown. `diskText` stays null until
-//     // then, which is what keeps `persist` from writing a buffer it never read.
-//     useEffect(() => {
-//         if (!publicationId || !publication) return;
-//         const sourceEntry = ensureSourceEntry(publicationId);
-//         if (sourceEntry.diskText !== null) return;
-//         sourceEntry.source = publication.metadataSource;
-//         sourceEntry.diskText = publication.metadataSource;
-//         forceRender();
-//     }, [publicationId, publication, ensureSourceEntry, forceRender]);
-//
-//     useEffect(() => {
-//         const unlisten = listen<PublicationUpserted>('publication-upserted', event => {
-//             if (event.payload.origin !== 'disk') return;
-//             adoptExternalSource(
-//                 event.payload.publicationId,
-//                 event.payload.publication.metadataSource,
-//             );
-//         });
-//
-//         return () => { unlisten.then(stop => stop()); };
-//     }, [adoptExternalSource]);
-//
-//     useEffect(() => {
-//         const activeId = activeIdRef.current;
-//         for (const id of [...entriesRef.current.keys()]) {
-//             if (id !== activeId) entriesRef.current.delete(id);
-//         }
-//
-//         const activePublication = publicationRef.current;
-//         if (activeId && activePublication) {
-//             adoptExternalSource(activeId, activePublication.metadataSource);
-//         }
-//     }, [libraryReloadCount]);
-//
-//     // Flush immediately when the editor loses focus.
-//     useEffect(() => {
-//         if (bibEditorFocused) return;
-//         const id = activeIdRef.current;
-//         if (id) flush(id);
-//     }, [bibEditorFocused, flush]);
-//
-//     const sourceEntry = publicationId ? entriesRef.current.get(publicationId) ?? null : null;
-//
-//     return {
-//         value: sourceEntry ? sourceEntry.source : '',
-//         onChange: handleSourceChange,
-//     };
-// }
+const METADATA_EDITOR_PINNED_KEY = 'detail.metadataEditor.pinned';
 
-// function useRequestReferencePreview(
-//     publicationId: PublicationId | null,
-//     libraryReloadCount: number,
-// ) {
-//     // `libraryReloadCount` is a dependency because a config reload or a full
-//     // rescan rebuilds every publication, dropping the compiled preview with it.
-//     useEffect(() => {
-//         if (!publicationId) return;
-//         invoke('request_reference_preview', { publicationId })
-//             .catch(e => logger.error(String(e)));
-//     }, [publicationId, libraryReloadCount]);
-// }
-//
-// interface ReferencePreviewProps {
-//     markup: string | null,
-// }
-//
-// function ReferencePreview({ markup }: ReferencePreviewProps) {
-//     if (markup === null || markup.trim() === '') return null;
-//
-//     return (
-//         <section className={styles.referencePreview}>
-//             <hr />
-//             <h2 className={styles.referencePreviewLabel}>Compiled Reference Preview</h2>
-//             <p className={styles.referencePreviewBody}>{parseInlineMarkup(markup)}</p>
-//         </section>
-//     );
-// }
+interface PublicationTextFile {
+    writeCommand: string;
+    originsThatRereadFile: PublicationChangeOrigin[];
+    readText: (publication: Publication) => string;
+}
 
-const ORIGINS_THAT_REREAD_NOTES_FILE = ['disk', 'notes'];
+const NOTES_FILE: PublicationTextFile = {
+    writeCommand: 'write_publication_notes',
+    originsThatRereadFile: ['disk', 'notes'],
+    readText: publication => publication.notes ?? '',
+};
+
+const METADATA_SOURCE_FILE: PublicationTextFile = {
+    writeCommand: 'write_publication_source',
+    originsThatRereadFile: ['disk'],
+    readText: publication => publication.metadataSource,
+};
 
 // Disk wins outright: an external change replaces the buffer, unwritten
 // keystrokes included.
-function useNotesSource(publicationId: PublicationId, notes: string) {
-    const [value, setValue] = useState(notes);
+function useAutosavedPublicationText(
+    publicationId: PublicationId,
+    text: string,
+    file: PublicationTextFile,
+) {
+    const [value, setValue] = useState(text);
     const { opts: { autosaveDebounceMs } } = useConfig();
 
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -220,17 +58,17 @@ function useNotesSource(publicationId: PublicationId, notes: string) {
         timerRef.current = null;
     }, []);
 
-    // Chained, so two autosaves never race over the same `notes.yml`.
-    const writeNotes = useCallback(() => {
+    // Chained, so two autosaves never race over the same file.
+    const writeText = useCallback(() => {
         const content = unwrittenRef.current;
         if (content === null) return;
         unwrittenRef.current = null;
 
         queueRef.current = queueRef.current
-            .then(() => invoke('write_publication_notes', { publicationId, content }))
+            .then(() => invoke(file.writeCommand, { publicationId, content }))
             .then(() => undefined)
             .catch(e => logger.error(String(e)));
-    }, [publicationId]);
+    }, [publicationId, file]);
 
     const handleChange = useCallback((next: string) => {
         setValue(next);
@@ -239,30 +77,50 @@ function useNotesSource(publicationId: PublicationId, notes: string) {
         cancelPendingWrite();
         timerRef.current = setTimeout(() => {
             timerRef.current = null;
-            writeNotes();
+            writeText();
         }, autosaveDebounceMs);
-    }, [autosaveDebounceMs, cancelPendingWrite, writeNotes]);
+    }, [autosaveDebounceMs, cancelPendingWrite, writeText]);
 
     useEffect(() => {
         const unlisten = listen<PublicationUpserted>('publication-upserted', event => {
             if (event.payload.publicationId !== publicationId) return;
-            if (!ORIGINS_THAT_REREAD_NOTES_FILE.includes(event.payload.origin)) return;
+            if (!file.originsThatRereadFile.includes(event.payload.origin)) return;
 
             cancelPendingWrite();
             unwrittenRef.current = null;
-            setValue(event.payload.publication.notes ?? '');
+            setValue(file.readText(event.payload.publication));
         });
 
         return () => { unlisten.then(stop => stop()); };
-    }, [publicationId, cancelPendingWrite]);
+    }, [publicationId, file, cancelPendingWrite]);
 
     // Selecting another publication unmounts this subtree mid-debounce.
     useEffect(() => () => {
         cancelPendingWrite();
-        writeNotes();
-    }, [cancelPendingWrite, writeNotes]);
+        writeText();
+    }, [cancelPendingWrite, writeText]);
 
     return { value, onChange: handleChange };
+}
+
+// `libraryReloadCount` is a dependency because a config reload or a full
+// rescan rebuilds every publication, dropping the compiled preview with it.
+function useRequestReferencePreview(
+    publicationId: PublicationId | null,
+    libraryReloadCount: number,
+) {
+    useEffect(() => {
+        if (!publicationId) return;
+
+        invoke('request_reference_preview', { publicationId })
+            .catch(e => logger.error(String(e)));
+    }, [publicationId, libraryReloadCount]);
+}
+
+// Letting a toggle button take focus blurs CodeMirror, which releases the
+// editor before the click handler runs.
+function preventToggleFocus(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
 }
 
 type NotesMode = 'preview' | 'source';
@@ -274,9 +132,10 @@ interface NotesSectionProps {
 
 function NotesSection({ publicationId, notes }: NotesSectionProps) {
     const [notesMode, setNotesMode] = useState<NotesMode>('preview');
-    const { value: notesSource, onChange: handleNotesChange } = useNotesSource(
+    const { value: notesSource, onChange: handleNotesChange } = useAutosavedPublicationText(
         publicationId,
         notes,
+        NOTES_FILE,
     );
 
     const tabActive = useTabActive();
@@ -288,12 +147,6 @@ function NotesSection({ publicationId, notes }: NotesSectionProps) {
 
     const handleToggleClick = () => setNotesMode(editing ? 'preview' : 'source');
 
-    // Letting the button take focus blurs CodeMirror, which closes the editor
-    // before the click handler can toggle it.
-    const handleToggleMouseDown = (event: MouseEvent<HTMLButtonElement>) => {
-        event.preventDefault();
-    };
-
     // Escape is not in the keymap; `VimTextArea` releases focus on it in normal
     // mode, and that is what closes the editor.
     const handleEditorFocusedChange = (focused: boolean) => {
@@ -302,15 +155,16 @@ function NotesSection({ publicationId, notes }: NotesSectionProps) {
 
     return (
         <section className={styles.notesSection}>
-            <header className={styles.notesHeader}>
-                <h2 className={styles.notesLabel}>Notes</h2>
-                {editing && <span className={styles.notesEditingMarker}>&#9679; Editing</span>}
+            <header className={styles.sectionHeader}>
+                <h2 className={editing ? styles.editingMarker : styles.sectionLabel}>
+                    {editing ? '\u25cf Editing' : 'Notes'}
+                </h2>
 
                 <button
                     type="button"
-                    className={styles.notesToggle}
-                    data-mode={notesMode}
-                    onMouseDown={handleToggleMouseDown}
+                    className={styles.sectionToggle}
+                    data-active={editing}
+                    onMouseDown={preventToggleFocus}
                     onClick={handleToggleClick}
                     aria-label={editing ? 'Show rendered notes' : 'Edit notes source'}
                 >
@@ -318,7 +172,7 @@ function NotesSection({ publicationId, notes }: NotesSectionProps) {
                         ? <Eye aria-hidden="true" />
                         : <Pencil aria-hidden="true" />}
                     {toggleShortcut && (
-                        <span className={styles.notesToggleShortcut}>{toggleShortcut}</span>
+                        <span className={styles.sectionToggleShortcut}>{toggleShortcut}</span>
                     )}
                 </button>
             </header>
@@ -342,28 +196,109 @@ function NotesSection({ publicationId, notes }: NotesSectionProps) {
     );
 }
 
-// interface MetadataSourceEditorProps {
-//     value: string,
-//     onChange: (value: string) => void,
-//     focused: boolean,
-//     onFocusedChange: (value: boolean) => void,
-// }
-//
-// function MetadataSourceEditor(
-//     { value, onChange, focused, onFocusedChange }: MetadataSourceEditorProps
-// ) {
-//     return (
-//         <div className={styles.bibEditorSlot}>
-//             <VimTextArea
-//                 value={value}
-//                 onChange={onChange}
-//                 focused={focused}
-//                 onFocusedChange={onFocusedChange}
-//                 lineWrapping={LINE_WRAPPING}
-//             />
-//         </div>
-//     );
-// }
+interface ReferencePreviewProps {
+    markup: string | null,
+}
+
+function ReferencePreview({ markup }: ReferencePreviewProps) {
+    if (markup === null || markup.trim() === '') return null;
+
+    return (
+        <div className={styles.referencePreview}>
+            <hr />
+            <p className={styles.referencePreviewBody}>{parseInlineMarkup(markup)}</p>
+        </div>
+    );
+}
+
+interface MetadataSectionProps {
+    publicationId: PublicationId,
+    metadataSource: string,
+    referencePreview: string | null,
+    visible: boolean,
+    onToggle: () => void,
+    focused: boolean,
+    onFocusedChange: (focused: boolean) => void,
+}
+
+function MetadataSection({
+    publicationId,
+    metadataSource,
+    referencePreview,
+    visible,
+    onToggle,
+    focused,
+    onFocusedChange,
+}: MetadataSectionProps) {
+    const { value, onChange } = useAutosavedPublicationText(
+        publicationId,
+        metadataSource,
+        METADATA_SOURCE_FILE,
+    );
+
+    const toggleShortcut = findKeybindingForAction(Action.ToggleMetadataEditor);
+    const focusShortcut = focused ? 'Esc' : findKeybindingForAction(Action.FocusMetadataEditor);
+
+    const handleFocusClick = () => onFocusedChange(!focused);
+
+    return (
+        <section className={styles.metadataSection}>
+            <header className={styles.sectionHeader}>
+                <h2 className={focused ? styles.editingMarker : styles.sectionLabel}>
+                    {focused ? '\u25cf Editing' : 'Metadata'}
+                </h2>
+
+                <button
+                    type="button"
+                    className={styles.sectionToggle}
+                    data-active={focused}
+                    onMouseDown={preventToggleFocus}
+                    onClick={handleFocusClick}
+                    aria-label={focused ? 'Leave metadata editor' : 'Edit metadata source'}
+                >
+                    {focused
+                        ? <LogOut aria-hidden="true" />
+                        : <Pencil aria-hidden="true" />}
+                    {focusShortcut && (
+                        <span className={styles.sectionToggleShortcut}>{focusShortcut}</span>
+                    )}
+                </button>
+
+                <button
+                    type="button"
+                    className={styles.sectionToggle}
+                    data-active={focused}
+                    onMouseDown={preventToggleFocus}
+                    onClick={onToggle}
+                    aria-label={visible ? 'Hide metadata editor' : 'Show metadata editor'}
+                >
+                    {visible
+                        ? <ChevronDown aria-hidden="true" />
+                        : <ChevronUp aria-hidden="true" />}
+                    {toggleShortcut && (
+                        <span className={styles.sectionToggleShortcut}>{toggleShortcut}</span>
+                    )}
+                </button>
+            </header>
+
+            {visible && (
+                <Fragment>
+                    <div className={styles.metadataEditorSlot}>
+                        <VimTextArea
+                            value={value}
+                            onChange={onChange}
+                            focused={focused}
+                            onFocusedChange={onFocusedChange}
+                            lineWrapping={LINE_WRAPPING}
+                        />
+                    </div>
+
+                    <ReferencePreview markup={referencePreview} />
+                </Fragment>
+            )}
+        </section>
+    );
+}
 
 interface DetailViewProps {
     publicationId: PublicationId | null,
@@ -374,24 +309,32 @@ interface DetailViewProps {
 
 function DetailView(
     // { publicationId, publication, collectionName, libraryReloadCount }: DetailViewProps
-    { publicationId, publication}: DetailViewProps
+    { publicationId, publication, libraryReloadCount }: DetailViewProps
 ) {
-    // const [bibEditorFocused, setBibEditorFocused] = useState(false);
-    // const { opts: { autosaveDebounceMs } } = useConfig();
-    // const tabActive = useTabActive();
-    //
-    // useRequestReferencePreview(publicationId, libraryReloadCount);
-    //
-    // useActionHandler(Action.FocusBibEditor, () => setBibEditorFocused(true), tabActive);
-    //
-    // const { value, onChange } = usePublicationSource(
-    //     publicationId,
-    //     publication,
-    //     bibEditorFocused,
-    //     autosaveDebounceMs,
-    //     libraryReloadCount,
-    // );
-    //
+    const [metadataEditorPinned, setMetadataEditorPinned] =
+        useRestoredState<boolean>(METADATA_EDITOR_PINNED_KEY, false);
+    const [metadataEditorFocused, setMetadataEditorFocused] = useState(false);
+    const tabActive = useTabActive();
+
+    useRequestReferencePreview(publicationId, libraryReloadCount);
+
+    // Focus is a reveal of its own, so a section that was not pinned open
+    // collapses again the moment the editor releases the keyboard.
+    const metadataEditorVisible = metadataEditorPinned || metadataEditorFocused;
+
+    const toggleMetadataEditor = useCallback(() => {
+        setMetadataEditorPinned(!metadataEditorVisible);
+        setMetadataEditorFocused(false);
+    }, [metadataEditorVisible, setMetadataEditorPinned]);
+
+    useActionHandler(
+        Action.FocusMetadataEditor,
+        () => setMetadataEditorFocused(true),
+        tabActive,
+    );
+
+    useActionHandler(Action.ToggleMetadataEditor, toggleMetadataEditor, tabActive);
+
     // const metadata = publication?.metadata ?? null;
     // const publisher = metadata?.publisher ?? '';
     // const title = metadata?.title ?? '';
@@ -422,22 +365,18 @@ function DetailView(
             {publicationId && publication && (
                 <Fragment key={publicationId}>
                     <NotesSection publicationId={publicationId} notes={publication.notes ?? ''} />
+
+                    <MetadataSection
+                        publicationId={publicationId}
+                        metadataSource={publication.metadataSource}
+                        referencePreview={publication.referencePreview}
+                        visible={metadataEditorVisible}
+                        onToggle={toggleMetadataEditor}
+                        focused={metadataEditorFocused}
+                        onFocusedChange={setMetadataEditorFocused}
+                    />
                 </Fragment>
             )}
-
-            {/* {publicationId && publication && ( */}
-            {/*     <Fragment key={publicationId}> */}
-            {/*         <NotesEditor initialNotes={publication.notes ?? ''} /> */}
-            {/*         <MetadataSourceEditor */}
-            {/*             value={value} */}
-            {/*             onChange={onChange} */}
-            {/*             focused={bibEditorFocused} */}
-            {/*             onFocusedChange={setBibEditorFocused} */}
-            {/*         /> */}
-            {/*     </Fragment> */}
-            {/* )} */}
-            {/**/}
-            {/* {publication && <ReferencePreview markup={publication.referencePreview} />} */}
         </div>
     );
 }

@@ -14,7 +14,8 @@ export enum Action {
     Cancel,
     OpenCmdLine,
     OpenFuzzyFind,
-    FocusBibEditor,
+    FocusMetadataEditor,
+    ToggleMetadataEditor,
     FocusNotesEditor,
 }
 
@@ -30,8 +31,9 @@ export const keymap: Array<[string, Action]> = [
     ["gt", Action.NextTab],
     ["gT", Action.PrevTab],
     ["Enter", Action.Submit],
-    // ["Ctrl+e", Action.FocusBibEditor],
     ["Ctrl+e", Action.FocusNotesEditor],
+    ["Ctrl+b", Action.FocusMetadataEditor],
+    [" m", Action.ToggleMetadataEditor],
     [":", Action.OpenCmdLine],
     [" ff", Action.OpenFuzzyFind],
     ["Escape", Action.Cancel],

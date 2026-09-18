@@ -57,22 +57,14 @@
 
 .referencePreview {
     flex: none;
-    max-height: 30%;
+    max-height: 8em;
     overflow-y: auto;
 }
 
 .referencePreview hr {
-    margin: 0 0 8px 0;
+    margin: 8px 0;
     border: none;
-    border-top: 2px solid var(--bg2);
-}
-
-.referencePreviewLabel {
-    margin: 0 0 6px 0;
-    color: var(--fg2);
-    font-size: 0.85rem;
-    font-weight: normal;
-    text-transform: uppercase;
+    border-top: 1px solid var(--bg2);
 }
 
 .referencePreviewBody {
@@ -90,7 +82,7 @@
     flex-direction: column;
 }
 
-.notesHeader {
+.sectionHeader {
     flex: none;
     display: flex;
     align-items: center;
@@ -100,7 +92,11 @@
     border-bottom: 1px solid var(--bg2);
 }
 
-.notesLabel {
+.sectionHeader:last-child {
+    margin-bottom: 0;
+}
+
+.sectionLabel {
     margin: 0;
     color: var(--fg2);
     font-size: 0.85rem;
@@ -108,18 +104,20 @@
     text-transform: uppercase;
 }
 
-.notesEditingMarker {
+.editingMarker {
+    margin: 0;
     color: var(--accent1);
     font-size: 0.85rem;
+    font-weight: normal;
     text-transform: uppercase;
 }
 
-.notesToggle {
+.sectionToggle {
     margin-left: auto;
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 8px;
+    padding: 2px 4px;
     border: 1px solid transparent;
     border-radius: 4px;
     background: transparent;
@@ -129,7 +127,11 @@
     cursor: pointer;
 }
 
-.notesToggle svg {
+.sectionToggle + .sectionToggle {
+    margin-left: -8px;
+}
+
+.sectionToggle svg {
     display: block;
     width: 1em;
     height: 1em;
@@ -137,21 +139,21 @@
     transform: translateY(calc(-0.5 * var(--optical-lift)));
 }
 
-.notesToggle:hover {
+.sectionToggle:hover {
     background: var(--bg1);
     color: var(--fg0);
 }
 
-.notesToggle:focus-visible {
+.sectionToggle:focus-visible {
     outline: none;
     border-color: var(--accent1);
 }
 
-.notesToggle[data-mode="source"] {
+.sectionToggle[data-active="true"] {
     color: var(--accent1);
 }
 
-.notesToggleShortcut {
+.sectionToggleShortcut {
     color: var(--fg4);
     font-size: 0.8rem;
 }
@@ -235,13 +237,24 @@
     font-weight: 700;
 }
 
-.bibEditorSlot {
+.metadataSection {
     flex: none;
+    min-height: 0;
+    max-height: 50%;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
-.bibEditorSlot :global(.cm-editor) {
+.metadataEditorSlot {
+    flex: 0 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.metadataEditorSlot :global(.cm-editor) {
     min-height: 7em;
-    max-height: 28em;
+    max-height: 18em;
 }
