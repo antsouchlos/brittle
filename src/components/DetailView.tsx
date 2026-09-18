@@ -1,7 +1,6 @@
-// import { useCallback, useEffect, useRef } from 'react';
-import { Fragment, useState, type MouseEvent } from 'react';
-// import { invoke } from '@tauri-apps/api/core';
-// import { listen } from '@tauri-apps/api/event';
+import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import Markdown from 'markdown-to-jsx';
 import { Eye, Pencil } from 'lucide-react';
 
@@ -9,10 +8,10 @@ import styles from './DetailView.module.css';
 import VimTextArea from './VimTextArea';
 // import { parseInlineMarkup } from './inlineMarkup.tsx';
 import { type Publication, type PublicationId } from '../app/LibraryModel';
-// import { type PublicationUpserted } from '../app/libraryUpdates';
-// import { logger } from '../app/logger';
-import { Action, keybindingForAction, useActionHandler } from '../app/actions';
-// import { useConfig } from '../app/config';
+import { type PublicationUpserted } from '../app/libraryUpdates';
+import { logger } from '../app/logger';
+import { Action, findKeybindingForAction, useActionHandler } from '../app/actions';
+import { useConfig } from '../app/config';
 import { useTabActive } from './TabView';
 
 const LINE_WRAPPING = true;
@@ -202,24 +201,90 @@ const LINE_WRAPPING = true;
 //     );
 // }
 
+const ORIGINS_THAT_REREAD_NOTES_FILE = ['disk', 'notes'];
+
+// Disk wins outright: an external change replaces the buffer, unwritten
+// keystrokes included.
+function useNotesSource(publicationId: PublicationId, notes: string) {
+    const [value, setValue] = useState(notes);
+    const { opts: { autosaveDebounceMs } } = useConfig();
+
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const unwrittenRef = useRef<string | null>(null);
+    const queueRef = useRef<Promise<void>>(Promise.resolve());
+
+    const cancelPendingWrite = useCallback(() => {
+        if (timerRef.current === null) return;
+
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+    }, []);
+
+    // Chained, so two autosaves never race over the same `notes.yml`.
+    const writeNotes = useCallback(() => {
+        const content = unwrittenRef.current;
+        if (content === null) return;
+        unwrittenRef.current = null;
+
+        queueRef.current = queueRef.current
+            .then(() => invoke('write_publication_notes', { publicationId, content }))
+            .then(() => undefined)
+            .catch(e => logger.error(String(e)));
+    }, [publicationId]);
+
+    const handleChange = useCallback((next: string) => {
+        setValue(next);
+        unwrittenRef.current = next;
+
+        cancelPendingWrite();
+        timerRef.current = setTimeout(() => {
+            timerRef.current = null;
+            writeNotes();
+        }, autosaveDebounceMs);
+    }, [autosaveDebounceMs, cancelPendingWrite, writeNotes]);
+
+    useEffect(() => {
+        const unlisten = listen<PublicationUpserted>('publication-upserted', event => {
+            if (event.payload.publicationId !== publicationId) return;
+            if (!ORIGINS_THAT_REREAD_NOTES_FILE.includes(event.payload.origin)) return;
+
+            cancelPendingWrite();
+            unwrittenRef.current = null;
+            setValue(event.payload.publication.notes ?? '');
+        });
+
+        return () => { unlisten.then(stop => stop()); };
+    }, [publicationId, cancelPendingWrite]);
+
+    // Selecting another publication unmounts this subtree mid-debounce.
+    useEffect(() => () => {
+        cancelPendingWrite();
+        writeNotes();
+    }, [cancelPendingWrite, writeNotes]);
+
+    return { value, onChange: handleChange };
+}
+
 type NotesMode = 'preview' | 'source';
 
 interface NotesSectionProps {
+    publicationId: PublicationId,
     notes: string,
 }
 
-function NotesSection({ notes }: NotesSectionProps) {
+function NotesSection({ publicationId, notes }: NotesSectionProps) {
     const [notesMode, setNotesMode] = useState<NotesMode>('preview');
-
-    // TODO: Persist notes edits
-    const [notesDraft, setNotesDraft] = useState(notes);
+    const { value: notesSource, onChange: handleNotesChange } = useNotesSource(
+        publicationId,
+        notes,
+    );
 
     const tabActive = useTabActive();
     const editing = notesMode === 'source';
 
     useActionHandler(Action.FocusNotesEditor, () => setNotesMode('source'), tabActive);
 
-    const toggleShortcut = editing ? 'Esc' : keybindingForAction(Action.FocusNotesEditor);
+    const toggleShortcut = editing ? 'Esc' : findKeybindingForAction(Action.FocusNotesEditor);
 
     const handleToggleClick = () => setNotesMode(editing ? 'preview' : 'source');
 
@@ -261,8 +326,8 @@ function NotesSection({ notes }: NotesSectionProps) {
             {editing ? (
                 <div className={styles.notesEditorSlot}>
                     <VimTextArea
-                        value={notesDraft}
-                        onChange={setNotesDraft}
+                        value={notesSource}
+                        onChange={handleNotesChange}
                         focused={true}
                         onFocusedChange={handleEditorFocusedChange}
                         lineWrapping={LINE_WRAPPING}
@@ -270,7 +335,7 @@ function NotesSection({ notes }: NotesSectionProps) {
                 </div>
             ) : (
                 <div className={styles.notesPreview}>
-                    <Markdown>{notesDraft}</Markdown>
+                    <Markdown>{notesSource}</Markdown>
                 </div>
             )}
         </section>
@@ -356,7 +421,7 @@ function DetailView(
 
             {publicationId && publication && (
                 <Fragment key={publicationId}>
-                    <NotesSection notes={publication.notes ?? ''} />
+                    <NotesSection publicationId={publicationId} notes={publication.notes ?? ''} />
                 </Fragment>
             )}
 

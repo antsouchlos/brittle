@@ -25,6 +25,7 @@ enum PublicationChangeOrigin {
     Disk,
     ReferencePreviewCompiler,
     Notes,
+    NotesEditor,
     Tags,
 }
 
@@ -63,6 +64,11 @@ pub enum Action {
         path: PathBuf,
     },
     WritePublicationSource {
+        publication_id: PublicationId,
+        content: String,
+        respond: mpsc::Sender<Result<(), String>>,
+    },
+    WritePublicationNotes {
         publication_id: PublicationId,
         content: String,
         respond: mpsc::Sender<Result<(), String>>,
@@ -172,6 +178,13 @@ impl Worker {
                 respond,
             } => {
                 let _ = respond.send(self.write_publication_source(publication_id, content));
+            }
+            Action::WritePublicationNotes {
+                publication_id,
+                content,
+                respond,
+            } => {
+                let _ = respond.send(self.write_publication_notes(publication_id, content));
             }
             Action::ExecuteCommand {
                 command,
@@ -297,7 +310,13 @@ impl Worker {
             return Ok(());
         };
 
-        let sections = match std::fs::read_to_string(dir.join(notes::NOTES_FILE_NAME)) {
+        let notes_path = dir.join(notes::NOTES_FILE_NAME);
+
+        if file_matches_last_written_source(&self.last_written_sources, &notes_path) {
+            return Ok(());
+        }
+
+        let sections = match std::fs::read_to_string(&notes_path) {
             Ok(source) => match notes::parse_notes(&source) {
                 Ok(sections) => sections,
                 Err(e) => {
@@ -667,6 +686,59 @@ impl Worker {
 
         std::fs::write(&path, content)
             .map_err(|e| format!("Failed to write {}: {}", path.display(), e))
+    }
+
+    fn write_publication_notes(
+        &mut self,
+        publication_id: PublicationId,
+        content: String,
+    ) -> Result<(), String> {
+        let publication = self
+            .store
+            .get_publication(publication_id.clone())
+            .map_err(|e| e.to_string())?;
+
+        let dir = publication
+            .path
+            .parent()
+            .ok_or_else(|| format!("'{}' has no parent directory", publication.path.display()))?
+            .to_path_buf();
+        let parent_collection_id = CollectionId::from_path(&dir);
+        let notes_path = dir.join(notes::NOTES_FILE_NAME);
+
+        // The trim mirrors what `parse_notes` does on the way back in, so the
+        // store, the file, and a reparse of it always agree.
+        let trimmed = content.trim_end();
+        let notes = (!trimmed.is_empty()).then(|| trimmed.to_string());
+
+        let previous = std::fs::read_to_string(&notes_path).unwrap_or_default();
+        let source = notes::write_note(&previous, &publication.name, notes.as_deref())
+            .map_err(|e| format!("Failed to write notes for '{}': {}", publication.name, e))?;
+
+        let updated = Publication {
+            notes,
+            ..publication
+        };
+
+        self.store
+            .update_publication(publication_id.clone(), updated.clone())
+            .map_err(|e| e.to_string())?;
+
+        self.emit(
+            "publication-upserted",
+            PublicationUpserted {
+                publication_id,
+                parent_collection_id,
+                publication: updated,
+                origin: PublicationChangeOrigin::NotesEditor,
+            },
+        );
+
+        self.last_written_sources
+            .insert(notes_path.clone(), source.clone());
+
+        std::fs::write(&notes_path, source)
+            .map_err(|e| format!("Failed to write {}: {}", notes_path.display(), e))
     }
 
     fn schedule_reference_preview(&self, publication_id: PublicationId) {

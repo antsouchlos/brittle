@@ -39,7 +39,7 @@ export const keymap: Array<[string, Action]> = [
 
 const LEADER_KEY_GLYPH = '\u2423';
 
-export function keybindingForAction(action: Action): string | null {
+export function findKeybindingForAction(action: Action): string | null {
     const keySequence = keymap.find(([, boundAction]) => boundAction === action)?.[0];
     if (keySequence === undefined) return null;
 

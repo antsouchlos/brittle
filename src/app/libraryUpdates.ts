@@ -11,6 +11,7 @@ export type PublicationChangeOrigin =
     | 'disk'
     | 'referencePreviewCompiler'
     | 'notes'
+    | 'notesEditor'
     | 'tags';
 
 export interface PublicationUpserted {
