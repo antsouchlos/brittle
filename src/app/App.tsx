@@ -38,7 +38,7 @@ import { UiStateProvider, useRestoredState } from './uiState.tsx';
 // };
 // const pdfStyle = { width: '100%', height: '100%' };
 
-const DEFAULT_LIBRARY_PANEL_WIDTHS = [0.25, 0.4];
+const DEFAULT_LIBRARY_PANEL_WIDTHS = [0.25, 0.35, 0.4];
 
 // Selects the first visible publication whenever the current selection is no
 // longer part of the collection shown in the publication list.

@@ -10,13 +10,9 @@
 }
 
 .panel {
-    flex: 0 0 auto;
+    flex: 0 1 0;
     min-width: 0;
     overflow: hidden;
-}
-
-.growingPanel {
-    flex: 1 0 0;
 }
 
 .hiddenPanel {

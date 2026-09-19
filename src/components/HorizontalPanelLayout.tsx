@@ -66,6 +66,59 @@ function computeNewWidths(
     return widths;
 }
 
+// The drag works in shown panels, so its result lands on the weights of the
+// shown panels and leaves a collapsed panel's weight where it was.
+function withDragWidths(
+    widths: Array<number>, dragWidths: Array<number>, visiblePanelIndices: Array<number>
+) {
+    const updated = [...widths];
+    visiblePanelIndices.forEach((panelIndex, visibleIndex) => {
+        updated[panelIndex] = dragWidths[visibleIndex];
+    });
+
+    return updated;
+}
+
+// How each shown panel takes part in the flex line.
+//
+// Reopening a panel takes space from the others, which can push one under the
+// minimum. Such a panel is pinned: it becomes rigid at its minimum share of the
+// container rather than a grow factor over the free space, so it holds the same
+// width whether or not a separator or a collapse band is on the line, and the
+// panels that still have room give up those pixels instead. The rest grow by
+// factors that sum to exactly 1, since factors summing to under 1 would leave
+// the rest of the line empty.
+function computePanelFlex(weights: Array<number>, minWidth: number) {
+    const shares = [...weights];
+    const pinned = shares.map(() => false);
+
+    const toFlex = () => {
+        const flexibleTotal = shares.reduce(
+            (total, share, i) => pinned[i] ? total : total + share, 0);
+
+        return shares.map((share, i) => pinned[i]
+            ? { flexGrow: 0, flexBasis: `${minWidth * 100}%` }
+            : { flexGrow: share / flexibleTotal, flexBasis: '0' });
+    };
+
+    // Each pass pins at most one panel, so there are no more passes than panels.
+    for (let pass = 0; pass < shares.length; pass += 1) {
+        const pinnedTotal = shares.reduce(
+            (total, share, i) => pinned[i] ? total + share : total, 0);
+        const flexibleTotal = shares.reduce(
+            (total, share, i) => pinned[i] ? total : total + share, 0);
+        const scale = (1 - pinnedTotal) / flexibleTotal;
+
+        const tooNarrow = shares.findIndex((share, i) => !pinned[i] && share * scale < minWidth);
+        if (tooNarrow === -1) break;
+
+        shares[tooNarrow] = minWidth;
+        pinned[tooNarrow] = true;
+    }
+
+    return toFlex();
+}
+
 // A drag can only close a panel that is an outer one and still shown, so a
 // separator next to an already collapsed panel arms nothing.
 function findArmableCollapseSides(
@@ -95,6 +148,7 @@ function usePanelResize(
     collapsePanel: (side: CollapseSide) => void,
 ) {
     const [dragData, setDragData] = useState<DragData | null>(null);
+    const [dragWidths, setDragWidths] = useState<Array<number> | null>(null);
     const [armedCollapseSide, setArmedCollapseSide] = useState<CollapseSide | null>(null);
 
     const armableCollapseSides = dragData
@@ -148,29 +202,26 @@ function usePanelResize(
             dragData.startWidths, dragDiffPercent, MIN_PANEL_WIDTH, dragData.separatorIdx
         );
 
-        // The last shown panel takes whatever is left over, so only the panels
-        // before it have a width of their own. A collapsed panel keeps the
-        // width it had, which is what a later reopen restores it to.
-        setWidths(previous => {
-            const widths = [...previous];
-            visiblePanelIndices.slice(0, -1).forEach((panelIndex, visibleIndex) => {
-                widths[panelIndex] = newWidths[visibleIndex];
-            });
-
-            return widths;
-        });
-
+        setDragWidths(newWidths);
         setArmedCollapseSide(findArmedCollapseSide(armableCollapseSides, layoutRect, e.clientX));
     };
 
     const onPointerUp = () => {
-        if (armedCollapseSide) collapsePanel(armedCollapseSide);
+        // Dragging into the edge band is a collapse, not a resize, so the widths
+        // the drag passed through on the way are dropped rather than kept.
+        if (armedCollapseSide) {
+            collapsePanel(armedCollapseSide);
+        } else if (dragWidths) {
+            setWidths(previous => withDragWidths(previous, dragWidths, visiblePanelIndices));
+        }
 
+        setDragWidths(null);
         setArmedCollapseSide(null);
         setDragData(null);
     };
 
     const onPointerCancel = () => {
+        setDragWidths(null);
         setArmedCollapseSide(null);
         setDragData(null);
     };
@@ -190,7 +241,7 @@ function usePanelResize(
         }
     };
 
-    return { getTriggerHandlers, isDragging, armableCollapseSides, armedCollapseSide };
+    return { getTriggerHandlers, isDragging, dragWidths, armableCollapseSides, armedCollapseSide };
 }
 
 // The edge band a drag has to end on to collapse the outer panel next to it.
@@ -239,8 +290,9 @@ interface PanelData {
 }
 
 interface HorizontalPanelLayoutProps {
-    // The last panel takes whatever the others leave, so `defaultWidths` holds
-    // one width per panel but the last.
+    // Relative weights, one per panel. A shown panel takes its weight's share of
+    // the space the shown panels have between them, so collapsing one hands its
+    // share to the rest and reopening it takes the share back.
     panelsData: Array<PanelData>,
     defaultWidths: Array<number>,
     // Key the dragged widths are restored from and saved under.
@@ -271,7 +323,7 @@ export default function HorizontalPanelLayout(
             : { ...previous, last: collapsed });
     };
 
-    const { getTriggerHandlers, isDragging, armableCollapseSides, armedCollapseSide }
+    const { getTriggerHandlers, isDragging, dragWidths, armableCollapseSides, armedCollapseSide }
         = usePanelResize(
             panelLayoutRef,
             visiblePanelIndices,
@@ -279,6 +331,9 @@ export default function HorizontalPanelLayout(
             setWidths,
             side => setPanelCollapsed(side, true),
         );
+
+    const shownWidths = dragWidths ?? visiblePanelIndices.map(index => widths[index]);
+    const shownFlex = computePanelFlex(shownWidths, MIN_PANEL_WIDTH);
 
     return (
         <div
@@ -298,7 +353,6 @@ export default function HorizontalPanelLayout(
                 const visibleIndex = visiblePanelIndices.indexOf(panelIndex);
                 const hidden = visibleIndex === -1;
                 const isLastShown = visibleIndex === visiblePanelIndices.length - 1;
-                const width = (widths[panelIndex] ?? defaultWidths[panelIndex]) * 100;
 
                 if (hidden && panelData.collapsedBehaviour !== 'hide') return null;
 
@@ -306,9 +360,8 @@ export default function HorizontalPanelLayout(
                     <Fragment key={panelIndex}>
                         <div
                             className={`${styles.panel}
-                                ${hidden ? styles.hiddenPanel : ''}
-                                ${isLastShown ? styles.growingPanel : ''}`}
-                            style={hidden || isLastShown ? undefined : { width: `${width}%` }}
+                                ${hidden ? styles.hiddenPanel : ''}`}
+                            style={hidden ? undefined : shownFlex[visibleIndex]}
                         >
                             {panelData.renderContent()}
                         </div>
