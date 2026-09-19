@@ -204,7 +204,7 @@ function Workspace() {
             renderContent: () => (
                 <HorizontalPanelLayout
                     defaultWidths={DEFAULT_LIBRARY_PANEL_WIDTHS}
-                    persistKey="panels.library.widths"
+                    widthsPersistKey="panels.library.widths"
                     collapsePersistKey="panels.library.collapsed"
                     panelsData={[
                         {
