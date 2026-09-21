@@ -1,4 +1,4 @@
-import { Fragment, type MouseEvent } from 'react';
+import { Fragment, useEffect, useState, type FocusEvent, type MouseEvent } from 'react';
 import Markdown from 'markdown-to-jsx';
 import { ChevronDown, ChevronUp, Eye, LogOut, Pencil } from 'lucide-react';
 
@@ -31,6 +31,37 @@ function preventToggleFocus(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
 }
 
+// 
+// Tracks whether an editor session is open independently of text area focus.
+// Vim's command and search prompts take focus without ending that session.
+// 
+function useEditorSession(tabActive: boolean) {
+    const focusTarget = useFocusTarget({ available: tabActive });
+    const [editing, setEditing] = useState(false);
+
+    useEffect(() => {
+        if (!tabActive) setEditing(false);
+    }, [tabActive]);
+
+    const openEditor = () => {
+        setEditing(true);
+        focusTarget.requestFocus();
+    };
+    const closeEditor = () => {
+        setEditing(false);
+        focusTarget.releaseFocus();
+    };
+    const handleEditorFocus = () => setEditing(true);
+    const handleEditorBlur = (event: FocusEvent<HTMLDivElement>) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && event.currentTarget.contains(next)) return;
+
+        setEditing(false);
+    };
+
+    return { focusTarget, editing, openEditor, closeEditor, handleEditorFocus, handleEditorBlur };
+}
+
 interface NotesSectionProps {
     notes: string;
     onChange: (text: string) => void;
@@ -38,15 +69,15 @@ interface NotesSectionProps {
 }
 
 function NotesSection({ notes, onChange, tabActive }: NotesSectionProps) {
-    const focusTarget = useFocusTarget({ available: tabActive });
-    const editing = focusTarget.focused;
+    const editor = useEditorSession(tabActive);
+    const { editing } = editor;
     const editShortcut = editing ? 'Esc' : findKeybindingForAction(Action.FocusNotesEditor);
 
-    useActionHandler(Action.FocusNotesEditor, focusTarget.requestFocus, tabActive);
+    useActionHandler(Action.FocusNotesEditor, editor.openEditor, tabActive);
 
     const toggleEditing = () => {
-        if (editing) focusTarget.releaseFocus();
-        else focusTarget.requestFocus();
+        if (editing) editor.closeEditor();
+        else editor.openEditor();
     };
 
     return (
@@ -73,11 +104,15 @@ function NotesSection({ notes, onChange, tabActive }: NotesSectionProps) {
             </header>
 
             {editing ? (
-                <div className={styles.notesEditorSlot}>
+                <div
+                    className={styles.notesEditorSlot}
+                    onFocus={editor.handleEditorFocus}
+                    onBlur={editor.handleEditorBlur}
+                >
                     <VimTextArea
                         value={notes}
                         onChange={onChange}
-                        focusTarget={focusTarget}
+                        focusTarget={editor.focusTarget}
                         lineWrapping={true}
                     />
                 </div>
@@ -122,22 +157,22 @@ function MetadataSection({
     onExpandedChange,
     tabActive,
 }: MetadataSectionProps) {
-    const focusTarget = useFocusTarget({ available: tabActive });
-    const editing = focusTarget.focused;
+    const editor = useEditorSession(tabActive);
+    const { editing } = editor;
     const visible = expanded || editing;
     const editShortcut = editing ? 'Esc' : findKeybindingForAction(Action.FocusMetadataEditor);
     const toggleShortcut = findKeybindingForAction(Action.ToggleMetadataEditor);
 
     const toggleEditing = () => {
-        if (editing) focusTarget.releaseFocus();
-        else focusTarget.requestFocus();
+        if (editing) editor.closeEditor();
+        else editor.openEditor();
     };
     const toggleExpanded = () => {
         onExpandedChange(!visible);
-        focusTarget.releaseFocus();
+        editor.closeEditor();
     };
 
-    useActionHandler(Action.FocusMetadataEditor, focusTarget.requestFocus, tabActive);
+    useActionHandler(Action.FocusMetadataEditor, editor.openEditor, tabActive);
     useActionHandler(Action.ToggleMetadataEditor, toggleExpanded, tabActive);
 
     return (
@@ -181,11 +216,15 @@ function MetadataSection({
 
             {visible && (
                 <Fragment>
-                    <div className={styles.metadataEditorSlot}>
+                    <div
+                        className={styles.metadataEditorSlot}
+                        onFocus={editor.handleEditorFocus}
+                        onBlur={editor.handleEditorBlur}
+                    >
                         <VimTextArea
                             value={source}
                             onChange={onChange}
-                            focusTarget={focusTarget}
+                            focusTarget={editor.focusTarget}
                             lineWrapping={true}
                         />
                     </div>
