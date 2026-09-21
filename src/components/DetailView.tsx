@@ -1,9 +1,9 @@
-import { Fragment, useEffect, useState, type FocusEvent, type MouseEvent } from 'react';
+import { Fragment, useEffect, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import Markdown from 'markdown-to-jsx';
 import { ChevronDown, ChevronUp, Eye, LogOut, Pencil } from 'lucide-react';
 
 import styles from './DetailView.module.css';
-import VimTextArea from './VimTextArea.tsx';
+import TextEditor, { type EditorMode } from './TextEditor.tsx';
 import { parseInlineMarkup } from './inlineMarkup.tsx';
 import { useFocusTarget } from '../app/focus.tsx';
 import { Action, findKeybindingForAction, useActionHandler } from '../app/actions.tsx';
@@ -25,10 +25,18 @@ export interface DetailViewProps {
     document: DetailDocument | null;
     onNotesChange: (text: string) => void;
     onMetadataSourceChange: (text: string) => void;
+    editorMode: EditorMode;
+    onEditorModeChange: (mode: EditorMode) => void;
 }
 
 function preventToggleFocus(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
+}
+
+function handleEditorKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    event.stopPropagation();
+
+    if (event.key === 'Tab') event.preventDefault();
 }
 
 // 
@@ -65,10 +73,12 @@ function useEditorSession(tabActive: boolean) {
 interface NotesSectionProps {
     notes: string;
     onChange: (text: string) => void;
+    editorMode: EditorMode;
+    onEditorModeChange: (mode: EditorMode) => void;
     tabActive: boolean;
 }
 
-function NotesSection({ notes, onChange, tabActive }: NotesSectionProps) {
+function NotesSection({ notes, onChange, editorMode, onEditorModeChange, tabActive }: NotesSectionProps) {
     const editor = useEditorSession(tabActive);
     const { editing } = editor;
     const editShortcut = editing ? 'Esc' : findKeybindingForAction(Action.FocusNotesEditor);
@@ -108,11 +118,15 @@ function NotesSection({ notes, onChange, tabActive }: NotesSectionProps) {
                     className={styles.notesEditorSlot}
                     onFocus={editor.handleEditorFocus}
                     onBlur={editor.handleEditorBlur}
+                    onKeyDown={handleEditorKeyDown}
                 >
-                    <VimTextArea
+                    <TextEditor
                         value={notes}
                         onChange={onChange}
-                        focusTarget={editor.focusTarget}
+                        mode={editorMode}
+                        onModeChange={onEditorModeChange}
+                        editorElementRef={editor.focusTarget.ref}
+                        onLeaveRequest={editor.focusTarget.releaseFocus}
                         lineWrapping={true}
                     />
                 </div>
@@ -144,6 +158,8 @@ interface MetadataSectionProps {
     source: string;
     referencePreview: string | null;
     onChange: (text: string) => void;
+    editorMode: EditorMode;
+    onEditorModeChange: (mode: EditorMode) => void;
     expanded: boolean;
     onExpandedChange: (expanded: boolean) => void;
     tabActive: boolean;
@@ -153,6 +169,8 @@ function MetadataSection({
     source,
     referencePreview,
     onChange,
+    editorMode,
+    onEditorModeChange,
     expanded,
     onExpandedChange,
     tabActive,
@@ -220,11 +238,15 @@ function MetadataSection({
                         className={styles.metadataEditorSlot}
                         onFocus={editor.handleEditorFocus}
                         onBlur={editor.handleEditorBlur}
+                        onKeyDown={handleEditorKeyDown}
                     >
-                        <VimTextArea
+                        <TextEditor
                             value={source}
                             onChange={onChange}
-                            focusTarget={editor.focusTarget}
+                            mode={editorMode}
+                            onModeChange={onEditorModeChange}
+                            editorElementRef={editor.focusTarget.ref}
+                            onLeaveRequest={editor.focusTarget.releaseFocus}
                             lineWrapping={true}
                         />
                     </div>
@@ -236,7 +258,13 @@ function MetadataSection({
     );
 }
 
-function DetailView({ document, onNotesChange, onMetadataSourceChange }: DetailViewProps) {
+function DetailView({
+    document,
+    onNotesChange,
+    onMetadataSourceChange,
+    editorMode,
+    onEditorModeChange,
+}: DetailViewProps) {
     // TODO: Reexamine how to move active-tab management out of DetailView.
 
     const tabActive = useTabActive();
@@ -252,12 +280,16 @@ function DetailView({ document, onNotesChange, onMetadataSourceChange }: DetailV
                     <NotesSection
                         notes={document.notes}
                         onChange={onNotesChange}
+                        editorMode={editorMode}
+                        onEditorModeChange={onEditorModeChange}
                         tabActive={tabActive}
                     />
                     <MetadataSection
                         source={document.metadataSource}
                         referencePreview={document.referencePreview}
                         onChange={onMetadataSourceChange}
+                        editorMode={editorMode}
+                        onEditorModeChange={onEditorModeChange}
                         expanded={metadataExpanded}
                         onExpandedChange={setMetadataExpanded}
                         tabActive={tabActive}

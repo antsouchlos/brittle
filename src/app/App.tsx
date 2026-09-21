@@ -22,6 +22,7 @@ import TreeView from '../components/TreeView.tsx';
 // import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 import PublicationList from '../components/PublicationList.tsx';
 import DetailViewWrapper from './DetailViewWrapper.tsx';
+import { type EditorMode } from '../components/TextEditor.tsx';
 
 import { KeymapStateMachine, normalizeKeyEvent } from './KeymapStateMachine.ts'
 import { invoke } from '@tauri-apps/api/core';
@@ -142,6 +143,7 @@ function Workspace() {
         useRestoredState<CollectionId | null>('selection.collection', null);
     const [selectedPublicationId, setSelectedPublicationId] =
         useRestoredState<PublicationId | null>('selection.publication', null);
+    const [editorMode, setEditorMode] = useRestoredState<EditorMode>('editor.mode', 'vim');
 
     // A restored or previously selected collection can disappear when the
     // library is rescanned.
@@ -247,6 +249,8 @@ function Workspace() {
                                             publicationId={selectedPublicationId}
                                             publication={selectedPublication}
                                             libraryReloadCount={libraryReloadCount}
+                                            editorMode={editorMode}
+                                            onEditorModeChange={setEditorMode}
                                         />
                                     )}
                                 </div>

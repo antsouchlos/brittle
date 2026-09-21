@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 import DetailView, { type DetailDocument } from '../components/DetailView.tsx';
+import { type EditorMode } from '../components/TextEditor.tsx';
 import { type Publication, type PublicationId } from './LibraryModel.tsx';
 import { type PublicationChangeOrigin, type PublicationUpserted } from './libraryUpdates.ts';
 import { useConfig } from './config.tsx';
@@ -91,12 +92,16 @@ interface DetailViewWrapperProps {
     publicationId: PublicationId;
     publication: Publication;
     libraryReloadCount: number;
+    editorMode: EditorMode;
+    onEditorModeChange: (mode: EditorMode) => void;
 }
 
 export default function DetailViewWrapper({
     publicationId,
     publication,
     libraryReloadCount,
+    editorMode,
+    onEditorModeChange,
 }: DetailViewWrapperProps) {
     const notes = useAutosavedPublicationText(
         publicationId,
@@ -128,6 +133,8 @@ export default function DetailViewWrapper({
             document={document}
             onNotesChange={notes.onChange}
             onMetadataSourceChange={metadataSource.onChange}
+            editorMode={editorMode}
+            onEditorModeChange={onEditorModeChange}
         />
     );
 }
