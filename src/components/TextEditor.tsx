@@ -37,7 +37,7 @@ import {
     standardKeymap,
 } from '@codemirror/commands';
 import { bracketMatching } from '@codemirror/language';
-import { getCM, Vim, vim } from '@replit/codemirror-vim';
+import { getCM, Vim, vim, type CodeMirrorV } from '@replit/codemirror-vim';
 
 import { WRAP_MARKERS } from './wrapMarkers.ts';
 
@@ -110,6 +110,20 @@ export default function TextEditor({
         ...(mode === 'vim' ? VIM_EDITOR_EXTENSIONS : STANDARD_EDITOR_EXTENSIONS),
         EditorView.domEventHandlers({
             keydown(event, editorView) {
+                if (mode === 'vim' && event.ctrlKey && !event.altKey && !event.metaKey
+                    && !event.shiftKey && event.key.toLowerCase() === 'l') {
+                    const cm = getCM(editorView);
+                    const vimState = cm?.state.vim;
+
+                    if (cm && vimState && !vimState.insertMode && !vimState.visualMode) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        Vim.handleEx(cm as CodeMirrorV, 'nohlsearch');
+
+                        return true;
+                    }
+                }
+
                 if (mode === 'vim' && event.altKey
                     && event.key !== 'Alt' && event.key !== 'Control' && event.key !== 'Shift') {
                     const cm = getCM(editorView);

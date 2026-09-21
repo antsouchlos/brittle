@@ -50,6 +50,10 @@
     background: var(--bg3) !important;
 }
 
+.editor :global(.cm-searchMatch) {
+    background-color: color-mix(in srgb, var(--accent1) 35%, transparent) !important;
+}
+
 .editor :global(.cm-panels-bottom) {
     border-top: 1px solid var(--bg3);
     background: var(--bg1);
