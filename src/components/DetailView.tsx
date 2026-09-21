@@ -1,6 +1,6 @@
 import { Fragment, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import Markdown from 'markdown-to-jsx';
-import { ChevronDown, ChevronUp, Eye, LogOut, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, Pencil, X } from 'lucide-react';
 
 import styles from './DetailView.module.css';
 import TextEditor, { type EditorMode } from './TextEditor.tsx';
@@ -201,7 +201,7 @@ function MetadataSection({
                     aria-label={editing ? 'Leave metadata editor' : 'Edit metadata source'}
                 >
                     {editing
-                        ? <LogOut aria-hidden="true" />
+                        ? <X aria-hidden="true" />
                         : <Pencil aria-hidden="true" />}
                     {editShortcut && (
                         <span className={styles.sectionToggleShortcut}>{editShortcut}</span>

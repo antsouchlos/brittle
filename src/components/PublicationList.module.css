@@ -4,67 +4,7 @@
     flex-direction: column;
 }
 
-.listHeader {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 8px 4px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--bg2);
-}
-
-.listHeaderLabel {
-    min-width: 0;
-    margin: 0;
-    overflow: hidden;
-    color: var(--fg2);
-    font-size: 0.85rem;
-    font-weight: normal;
-    text-transform: uppercase;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-}
-
-.searchButton {
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-left: auto;
-    padding: 2px 4px;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--fg2);
-    font-family: inherit;
-    font-size: 0.85rem;
-    cursor: pointer;
-}
-
-.searchButton svg {
-    display: block;
-    width: 1em;
-    height: 1em;
-    flex-shrink: 0;
-    transform: translateY(calc(-0.5 * var(--optical-lift)));
-}
-
-.searchButton:hover {
-    background: var(--bg1);
-    color: var(--fg0);
-}
-
-.searchButton:focus-visible {
-    outline: none;
-    border-color: var(--accent1);
-}
-
-.searchButton[data-active="true"] {
-    color: var(--accent1);
-}
-
-.searchShortcut {
+.closeSearchShortcut {
     color: var(--fg4);
     font-size: 0.8rem;
 }
@@ -230,8 +170,47 @@
     align-items: center;
     background: var(--bg1);
     border-bottom: 1px solid var(--bg3);
-    padding: 0.3em 0.8em;
+    padding: 0.2em 4px 0.2em 0.8em;
     font-family: var(--font-family);
+}
+
+.fuzzyField {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+.closeSearchButton {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--accent1);
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.closeSearchButton svg {
+    display: block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    transform: translateY(calc(-0.5 * var(--optical-lift)));
+}
+
+.closeSearchButton:hover {
+    background: color-mix(in srgb, var(--bg2) 50%, var(--bg1));
+}
+
+.closeSearchButton:focus-visible {
+    outline: none;
+    border-color: var(--accent1);
 }
 
 .fuzzyPrompt {
@@ -242,6 +221,7 @@
 
 .fuzzyInput {
     flex: 1;
+    min-width: 0;
     border: none;
     outline: none;
     background: transparent;
