@@ -4,6 +4,7 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
+    container-type: inline-size;
 }
 
 .editor {
@@ -47,6 +48,51 @@
 
 .editor :global(.cm-selectionBackground) {
     background: var(--bg3) !important;
+}
+
+.editor :global(.cm-panels-bottom) {
+    border-top: 1px solid var(--bg3);
+    background: var(--bg1);
+    color: var(--fg1);
+}
+
+.editor :global(.cm-vim-panel) {
+    min-height: 28px;
+    align-items: center;
+    padding: 3px 10px;
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    line-height: var(--line-height);
+}
+
+.editor :global(.cm-vim-panel > div > div) {
+    min-width: 0;
+    align-items: center;
+}
+
+.editor :global(.cm-vim-panel > div > div > span:first-child) {
+    min-width: 0;
+    color: var(--accent1);
+}
+
+.editor :global(.cm-vim-panel input) {
+    min-width: 0;
+    color: var(--fg1);
+    font: inherit;
+    caret-color: var(--accent1);
+}
+
+.editor :global(.cm-vim-panel > div > div > span:last-child:not(:first-child)) {
+    flex-shrink: 0;
+    margin-left: 8px;
+    color: var(--fg4) !important;
+    white-space: nowrap;
+}
+
+@container (max-width: 480px) {
+    .editor :global(.cm-vim-panel > div > div > span:last-child:not(:first-child)) {
+        display: none;
+    }
 }
 
 .modeToggle {
