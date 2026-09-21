@@ -21,7 +21,7 @@ import TreeView from '../components/TreeView.tsx';
 
 // import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 import PublicationList from '../components/PublicationList.tsx';
-import DetailView, { type DetailDocument } from '../components/DetailView.tsx';
+import DetailViewWrapper from './DetailViewWrapper.tsx';
 
 import { KeymapStateMachine, normalizeKeyEvent } from './KeymapStateMachine.ts'
 import { invoke } from '@tauri-apps/api/core';
@@ -92,11 +92,13 @@ function useGlobalKeymap() {
 }
 
 // Loads the library and keeps it in sync with the backend.
-function useLibrary(): LibraryModel | null {
+function useLibrary(): { lib: LibraryModel | null; libraryReloadCount: number } {
     const [state, setState] = useState<LibraryState | null>(null);
+    const [libraryReloadCount, setLibraryReloadCount] = useState(0);
 
     const loadLibraryData = useCallback(async () => {
         setState(await invoke<LibraryState>('get_library_state'));
+        setLibraryReloadCount(count => count + 1);
     }, []);
 
     useEffect(() => {
@@ -128,13 +130,13 @@ function useLibrary(): LibraryModel | null {
 
     const lib = useMemo(() => (state ? new LibraryModel(state) : null), [state]);
 
-    return lib;
+    return { lib, libraryReloadCount };
 }
 
 function Workspace() {
     useGlobalKeymap();
 
-    const lib = useLibrary();
+    const { lib, libraryReloadCount } = useLibrary();
 
     const [selectedCollectionId, setSelectedCollectionId] =
         useRestoredState<CollectionId | null>('selection.collection', null);
@@ -185,17 +187,6 @@ function Workspace() {
     const selectedPublication: Publication | null = selectedPublicationId && lib
         ? lib.publications[selectedPublicationId] ?? null
         : null;
-    const detailDocument: DetailDocument | null = selectedPublicationId && selectedPublication
-        ? {
-            id: selectedPublicationId,
-            title: selectedPublication.metadata?.title ?? null,
-            authors: selectedPublication.metadata?.authors ?? null,
-            notes: selectedPublication.notes ?? '',
-            metadataSource: selectedPublication.metadataSource,
-            referencePreview: selectedPublication.referencePreview,
-        }
-        : null;
-
     const selectedCollectionName = selectedCollectionId && lib
         ? lib.getCollection(selectedCollectionId)?.name ?? ''
         : '';
@@ -250,11 +241,14 @@ function Workspace() {
                                 <div
                                     className={styles.panelContainer}
                                 >
-                                    <DetailView
-                                        document={detailDocument}
-                                        onNotesChange={() => {}}
-                                        onMetadataSourceChange={() => {}}
-                                    />
+                                    {selectedPublicationId && selectedPublication && (
+                                        <DetailViewWrapper
+                                            key={selectedPublicationId}
+                                            publicationId={selectedPublicationId}
+                                            publication={selectedPublication}
+                                            libraryReloadCount={libraryReloadCount}
+                                        />
+                                    )}
                                 </div>
                             ),
                         },

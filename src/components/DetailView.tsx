@@ -1,4 +1,4 @@
-import { Fragment, useState, type MouseEvent } from 'react';
+import { Fragment, type MouseEvent } from 'react';
 import Markdown from 'markdown-to-jsx';
 import { ChevronDown, ChevronUp, Eye, LogOut, Pencil } from 'lucide-react';
 
@@ -8,6 +8,9 @@ import { parseInlineMarkup } from './inlineMarkup.tsx';
 import { useFocusTarget } from '../app/focus.tsx';
 import { Action, findKeybindingForAction, useActionHandler } from '../app/actions.tsx';
 import { useTabActive } from './TabView.tsx';
+import { useRestoredState } from '../app/uiState.tsx';
+
+const METADATA_EDITOR_PINNED_KEY = 'detail.metadataEditor.pinned';
 
 export interface DetailDocument {
     id: string;
@@ -30,10 +33,11 @@ function preventToggleFocus(event: MouseEvent<HTMLButtonElement>) {
 
 interface NotesSectionProps {
     notes: string;
+    onChange: (text: string) => void;
     tabActive: boolean;
 }
 
-function NotesSection({ notes, tabActive }: NotesSectionProps) {
+function NotesSection({ notes, onChange, tabActive }: NotesSectionProps) {
     const focusTarget = useFocusTarget({ available: tabActive });
     const editing = focusTarget.focused;
     const editShortcut = editing ? 'Esc' : findKeybindingForAction(Action.FocusNotesEditor);
@@ -72,7 +76,7 @@ function NotesSection({ notes, tabActive }: NotesSectionProps) {
                 <div className={styles.notesEditorSlot}>
                     <VimTextArea
                         value={notes}
-                        onChange={() => {}}
+                        onChange={onChange}
                         focusTarget={focusTarget}
                         lineWrapping={true}
                     />
@@ -104,11 +108,20 @@ function ReferencePreview({ markup }: ReferencePreviewProps) {
 interface MetadataSectionProps {
     source: string;
     referencePreview: string | null;
+    onChange: (text: string) => void;
+    expanded: boolean;
+    onExpandedChange: (expanded: boolean) => void;
     tabActive: boolean;
 }
 
-function MetadataSection({ source, referencePreview, tabActive }: MetadataSectionProps) {
-    const [expanded, setExpanded] = useState(false);
+function MetadataSection({
+    source,
+    referencePreview,
+    onChange,
+    expanded,
+    onExpandedChange,
+    tabActive,
+}: MetadataSectionProps) {
     const focusTarget = useFocusTarget({ available: tabActive });
     const editing = focusTarget.focused;
     const visible = expanded || editing;
@@ -120,7 +133,7 @@ function MetadataSection({ source, referencePreview, tabActive }: MetadataSectio
         else focusTarget.requestFocus();
     };
     const toggleExpanded = () => {
-        setExpanded(!visible);
+        onExpandedChange(!visible);
         focusTarget.releaseFocus();
     };
 
@@ -171,7 +184,7 @@ function MetadataSection({ source, referencePreview, tabActive }: MetadataSectio
                     <div className={styles.metadataEditorSlot}>
                         <VimTextArea
                             value={source}
-                            onChange={() => {}}
+                            onChange={onChange}
                             focusTarget={focusTarget}
                             lineWrapping={true}
                         />
@@ -184,19 +197,30 @@ function MetadataSection({ source, referencePreview, tabActive }: MetadataSectio
     );
 }
 
-function DetailView({ document }: DetailViewProps) {
+function DetailView({ document, onNotesChange, onMetadataSourceChange }: DetailViewProps) {
     // TODO: Reexamine how to move active-tab management out of DetailView.
 
     const tabActive = useTabActive();
+    const [metadataExpanded, setMetadataExpanded] = useRestoredState<boolean>(
+        METADATA_EDITOR_PINNED_KEY,
+        false,
+    );
 
     return (
         <div className={styles.detailPane}>
             {document && (
                 <Fragment key={document.id}>
-                    <NotesSection notes={document.notes} tabActive={tabActive} />
+                    <NotesSection
+                        notes={document.notes}
+                        onChange={onNotesChange}
+                        tabActive={tabActive}
+                    />
                     <MetadataSection
                         source={document.metadataSource}
                         referencePreview={document.referencePreview}
+                        onChange={onMetadataSourceChange}
+                        expanded={metadataExpanded}
+                        onExpandedChange={setMetadataExpanded}
                         tabActive={tabActive}
                     />
                 </Fragment>
