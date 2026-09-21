@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
 import CodeMirror from '@uiw/react-codemirror';
 import { drawSelection, KeyBinding, keymap } from '@codemirror/view';
@@ -18,23 +18,11 @@ import {
     insertNewlineAndIndent,
 } from "@codemirror/commands";
 
+import { type FocusTarget } from '../app/focus.tsx';
+
 import { WRAP_MARKERS } from './wrapMarkers';
 
 import styles from './VimTextArea.module.css';
-
-// This hook mirrors a caller-owned `focused` state with CodeMirror's own
-// focus state.
-function useCodeMirrorFocusSync(view: EditorView | null, focused: boolean) {
-    useEffect(() => {
-        if (!view) return;
-
-        if (focused) {
-            view.contentDOM.focus();
-        } else {
-            view.contentDOM.blur();
-        }
-    }, [focused, view]);
-}
 
 // Selection of key bindings required for the proper function of the text area.
 // This is a subset of the `standardKeymap` defined by the code mirror library.
@@ -101,8 +89,7 @@ const EDITOR_KEY_EXTENSIONS: Extension[] = [
 interface VimTextAreaProps {
     value: string;
     onChange: (value: string) => void;
-    focused: boolean;
-    onFocusedChange: (value: boolean) => void;
+    focusTarget: FocusTarget;
     extraExtensions?: readonly Extension[];
     lineWrapping: boolean;
 }
@@ -112,16 +99,20 @@ interface VimTextAreaProps {
 // TODO: Make vim mode configurable
 // TODO: Make history work as expected
 export default function VimTextArea(
-    { value, onChange, focused, onFocusedChange, extraExtensions = [], lineWrapping }: VimTextAreaProps
+    { value, onChange, focusTarget, extraExtensions = [], lineWrapping }: VimTextAreaProps
 ) {
     const [view, setView] = useState<EditorView | null>(null);
-    useCodeMirrorFocusSync(view, focused);
+    const { ref: registerElement, releaseFocus } = focusTarget;
 
-    // The handler extensions read the current callback through a ref, so the
-    // extension array keeps its identity across re-renders and CodeMirror only
-    // reconfigures when an option below actually changes.
-    const onFocusedChangeRef = useRef(onFocusedChange);
-    onFocusedChangeRef.current = onFocusedChange;
+    useLayoutEffect(() => {
+        if (!view) return;
+        registerElement(view.contentDOM);
+
+        return () => registerElement(null);
+    }, [view, registerElement]);
+
+    const releaseFocusRef = useRef(releaseFocus);
+    releaseFocusRef.current = releaseFocus;
 
     // CodeMirror's own keymap handles keys like Tab (its bundled indentWithTab
     // binding) but never stops their propagation, so they bubble past our
@@ -139,20 +130,6 @@ export default function VimTextArea(
         ...EDITOR_BASE_EXTENSIONS,
         ...(lineWrapping ? [EditorView.lineWrapping, WRAP_MARKERS] : []),
         ...extraExtensions,
-        EditorView.domEventHandlers({
-            focus(_event, _view) {
-                onFocusedChangeRef.current(true);
-            },
-            blur(_event, view) {
-                // Use requestAnimationFrame to avoid race conditions
-                requestAnimationFrame(() => {
-                    // Check if focus moved outside the editor
-                    if (!view.contentDOM.contains(document.activeElement)) {
-                        onFocusedChangeRef.current(false);
-                    }
-                });
-            },
-        }),
         ...EDITOR_KEY_EXTENSIONS,
         EditorView.domEventHandlers({
             // TODO: Only use in vim mode
@@ -180,7 +157,7 @@ export default function VimTextArea(
                         if (vimState && !vimState.insertMode && !vimState.visualMode) {
                             event.stopPropagation();
 
-                            onFocusedChangeRef.current(false);
+                            releaseFocusRef.current();
                             return true;
                         }
                     }

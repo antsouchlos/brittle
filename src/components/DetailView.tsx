@@ -14,6 +14,7 @@ import { Action, findKeybindingForAction, useActionHandler } from '../app/action
 import { useConfig } from '../app/config';
 import { useRestoredState } from '../app/uiState';
 import { useTabActive } from './TabView';
+import { useFocusTarget, type FocusTarget } from '../app/focus.tsx';
 
 const LINE_WRAPPING = true;
 
@@ -123,15 +124,12 @@ function preventToggleFocus(event: MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
 }
 
-type NotesMode = 'preview' | 'source';
-
 interface NotesSectionProps {
     publicationId: PublicationId,
     notes: string,
 }
 
 function NotesSection({ publicationId, notes }: NotesSectionProps) {
-    const [notesMode, setNotesMode] = useState<NotesMode>('preview');
     const { value: notesSource, onChange: handleNotesChange } = useAutosavedPublicationText(
         publicationId,
         notes,
@@ -139,18 +137,16 @@ function NotesSection({ publicationId, notes }: NotesSectionProps) {
     );
 
     const tabActive = useTabActive();
-    const editing = notesMode === 'source';
+    const focusTarget = useFocusTarget({ available: tabActive });
+    const editing = focusTarget.focused;
 
-    useActionHandler(Action.FocusNotesEditor, () => setNotesMode('source'), tabActive);
+    useActionHandler(Action.FocusNotesEditor, focusTarget.requestFocus, tabActive);
 
     const toggleShortcut = editing ? 'Esc' : findKeybindingForAction(Action.FocusNotesEditor);
 
-    const handleToggleClick = () => setNotesMode(editing ? 'preview' : 'source');
-
-    // Escape is not in the keymap; `VimTextArea` releases focus on it in normal
-    // mode, and that is what closes the editor.
-    const handleEditorFocusedChange = (focused: boolean) => {
-        if (!focused) setNotesMode('preview');
+    const handleToggleClick = () => {
+        if (editing) focusTarget.releaseFocus();
+        else focusTarget.requestFocus();
     };
 
     return (
@@ -182,8 +178,7 @@ function NotesSection({ publicationId, notes }: NotesSectionProps) {
                     <VimTextArea
                         value={notesSource}
                         onChange={handleNotesChange}
-                        focused={true}
-                        onFocusedChange={handleEditorFocusedChange}
+                        focusTarget={focusTarget}
                         lineWrapping={LINE_WRAPPING}
                     />
                 </div>
@@ -217,8 +212,7 @@ interface MetadataSectionProps {
     referencePreview: string | null,
     visible: boolean,
     onToggle: () => void,
-    focused: boolean,
-    onFocusedChange: (focused: boolean) => void,
+    focusTarget: FocusTarget,
 }
 
 function MetadataSection({
@@ -227,8 +221,7 @@ function MetadataSection({
     referencePreview,
     visible,
     onToggle,
-    focused,
-    onFocusedChange,
+    focusTarget,
 }: MetadataSectionProps) {
     const { value, onChange } = useAutosavedPublicationText(
         publicationId,
@@ -236,10 +229,14 @@ function MetadataSection({
         METADATA_SOURCE_FILE,
     );
 
+    const focused = focusTarget.focused;
     const toggleShortcut = findKeybindingForAction(Action.ToggleMetadataEditor);
     const focusShortcut = focused ? 'Esc' : findKeybindingForAction(Action.FocusMetadataEditor);
 
-    const handleFocusClick = () => onFocusedChange(!focused);
+    const handleFocusClick = () => {
+        if (focused) focusTarget.releaseFocus();
+        else focusTarget.requestFocus();
+    };
 
     return (
         <section className={styles.metadataSection}>
@@ -287,8 +284,7 @@ function MetadataSection({
                         <VimTextArea
                             value={value}
                             onChange={onChange}
-                            focused={focused}
-                            onFocusedChange={onFocusedChange}
+                            focusTarget={focusTarget}
                             lineWrapping={LINE_WRAPPING}
                         />
                     </div>
@@ -313,8 +309,13 @@ function DetailView(
 ) {
     const [metadataEditorPinned, setMetadataEditorPinned] =
         useRestoredState<boolean>(METADATA_EDITOR_PINNED_KEY, false);
-    const [metadataEditorFocused, setMetadataEditorFocused] = useState(false);
     const tabActive = useTabActive();
+    const metadataFocusTarget = useFocusTarget({
+        available: tabActive && publicationId !== null && publication !== null,
+        identity: publicationId,
+    });
+    const metadataEditorFocused = metadataFocusTarget.focused;
+    const { releaseFocus: releaseMetadataFocus } = metadataFocusTarget;
 
     useRequestReferencePreview(publicationId, libraryReloadCount);
 
@@ -324,43 +325,19 @@ function DetailView(
 
     const toggleMetadataEditor = useCallback(() => {
         setMetadataEditorPinned(!metadataEditorVisible);
-        setMetadataEditorFocused(false);
-    }, [metadataEditorVisible, setMetadataEditorPinned]);
+        releaseMetadataFocus();
+    }, [metadataEditorVisible, setMetadataEditorPinned, releaseMetadataFocus]);
 
     useActionHandler(
         Action.FocusMetadataEditor,
-        () => setMetadataEditorFocused(true),
+        metadataFocusTarget.requestFocus,
         tabActive,
     );
 
     useActionHandler(Action.ToggleMetadataEditor, toggleMetadataEditor, tabActive);
 
-    // const metadata = publication?.metadata ?? null;
-    // const publisher = metadata?.publisher ?? '';
-    // const title = metadata?.title ?? '';
-    // const author = metadata?.authors ?? '';
-    // const date = metadata?.year ? String(metadata.year) : '';
-    // const collection = collectionName;
-    // const filename = publication?.name ?? '';
-
     return (
         <div className={styles.detailPane}>
-            {/* <div className={styles.detailBadgeRow}> */}
-            {/*     <span className={styles.detailBadge}>{publisher}</span> */}
-            {/* </div> */}
-            {/**/}
-            {/* <dl className={styles.detailGrid}> */}
-            {/*     <dt>Title</dt> */}
-            {/*     <dd>{title}</dd> */}
-            {/*     <dt>Author</dt> */}
-            {/*     <dd>{author}</dd> */}
-            {/*     <dt>Published</dt> */}
-            {/*     <dd>{date}</dd> */}
-            {/*     <dt>Collection</dt> */}
-            {/*     <dd>{collection}</dd> */}
-            {/*     <dt>Filename</dt> */}
-            {/*     <dd>{filename}</dd> */}
-            {/* </dl> */}
 
             {publicationId && publication && (
                 <Fragment key={publicationId}>
@@ -372,8 +349,7 @@ function DetailView(
                         referencePreview={publication.referencePreview}
                         visible={metadataEditorVisible}
                         onToggle={toggleMetadataEditor}
-                        focused={metadataEditorFocused}
-                        onFocusedChange={setMetadataEditorFocused}
+                        focusTarget={metadataFocusTarget}
                     />
                 </Fragment>
             )}

@@ -30,6 +30,7 @@ import CmdLine from '../components/CmdLine.tsx';
 import { ToastProvider, ToastContainer } from '../components/Toast';
 import { Action, ActionProvider, keymap, useActionDispatch } from './actions.tsx';
 import { ConfigProvider } from './config.tsx';
+import { FocusProvider } from './focus.tsx';
 import { UiStateProvider, useRestoredState } from './uiState.tsx';
 
 // const samplePdfConfig = {
@@ -298,7 +299,9 @@ function App() {
             <ConfigProvider>
                 <UiStateProvider>
                     <ActionProvider>
-                        <Workspace />
+                        <FocusProvider>
+                            <Workspace />
+                        </FocusProvider>
                     </ActionProvider>
                 </UiStateProvider>
             </ConfigProvider>

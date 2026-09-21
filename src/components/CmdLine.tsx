@@ -4,6 +4,7 @@ import styles from './CmdLine.module.css';
 import { logger } from '../app/logger';
 import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
 import { useConfigChanged } from '../app/config';
+import { useFocusTarget } from '../app/focus.tsx';
 
 function useCmdHistory(commandHistory: string[], buffer: string) {
     const [historyPosition, setHistoryPosition] = useState(-1);
@@ -81,18 +82,6 @@ function useCmdSuggestions(suggestions: string[], buffer: string) {
     };
 }
 
-function useCmdFocus(onCancel: () => void) {
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    const focusInput = useCallback(() => {
-        requestAnimationFrame(() => inputRef.current?.focus());
-    }, []);
-
-    const handleBlur = useCallback(() => { onCancel(); }, [onCancel]);
-
-    return { inputRef, focusInput, handleBlur };
-}
-
 // Loads the available commands and the persisted history, and writes the
 // history back as it grows.
 function useCommandData() {
@@ -143,12 +132,15 @@ function useCommandData() {
 export default function CmdLine() {
     const [visible, setVisible] = useState(false);
     const [buffer, setBuffer] = useState('');
+    const focusTarget = useFocusTarget();
+    const { releaseFocus } = focusTarget;
     const { suggestions, commandHistory, rememberCommand } = useCommandData();
 
     const close = useCallback(() => {
+        releaseFocus();
         setVisible(false);
         setBuffer('');
-    }, []);
+    }, [releaseFocus]);
 
     const { historyNavigate, resetHistoryPosition } = useCmdHistory(commandHistory, buffer);
     const {
@@ -162,14 +154,10 @@ export default function CmdLine() {
         resetSuggestionDropdown,
     } = useCmdSuggestions(suggestions, buffer);
 
-    const { inputRef, focusInput, handleBlur } = useCmdFocus(close);
-
-    // Auto-focus the input whenever the cmdline becomes visible.
     useEffect(() => {
         if (visible) {
             setSuggestionPrefix('');
             resetHistoryPosition();
-            focusInput();
         }
     }, [visible]);
 
@@ -203,7 +191,10 @@ export default function CmdLine() {
         }
     };
 
-    useActionHandler(Action.OpenCmdLine, () => setVisible(true));
+    useActionHandler(Action.OpenCmdLine, () => {
+        setVisible(true);
+        focusTarget.requestFocus();
+    });
 
     useActionHandler(Action.Submit, execute, visible);
     useActionHandler(Action.Cancel, close, visible);
@@ -234,12 +225,12 @@ export default function CmdLine() {
         <div className={styles.cmdLine}>
             <span className={styles.prompt}>:</span>
             <input
-                ref={inputRef}
+                ref={focusTarget.ref}
                 className={styles.input}
                 value={buffer}
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
-                onBlur={handleBlur}
+                onBlur={close}
                 spellCheck={false}
                 autoComplete="off"
             />

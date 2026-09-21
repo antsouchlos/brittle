@@ -15,6 +15,7 @@ import styles from './PublicationList.module.css';
 import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
 import { logger } from '../app/logger';
 import { useTabActive } from './TabView';
+import { useFocusTarget } from '../app/focus.tsx';
 import { useConfig, type TagColors } from '../app/config';
 
 interface PublicationListItem {
@@ -151,53 +152,26 @@ function TagChips({ tags, tagColors }: { tags: string[]; tagColors: Record<strin
 function useFuzzyInputFocus(
     fuzzyFindVisible: boolean,
     isActive: boolean,
-): {
-    inputRef: RefObject<HTMLInputElement | null>;
-    onContainerMouseDown: (e: React.MouseEvent) => void;
-} {
+) {
     const inputRef = useRef<HTMLInputElement>(null);
+    const focusTarget = useFocusTarget({ available: fuzzyFindVisible && isActive });
+    const { ref: registerElement, requestFocus } = focusTarget;
 
-    useEffect(() => {
-        if (!fuzzyFindVisible || !inputRef.current) return;
-        if (isActive) {
-            inputRef.current.focus();
-        } else {
-            inputRef.current.blur();
-        }
-    }, [isActive, fuzzyFindVisible]);
+    useLayoutEffect(() => {
+        registerElement(inputRef.current);
 
-    // The fuzzy bar is the default key owner while it is open: whenever DOM
-    // focus lands outside it and outside another editable surface (the bib
-    // editor, the command line), pull focus back into the input. This covers
-    // releases the other hook cannot see, like the bib editor blurring after
-    // 'Escape' or a pointer click on a collection or list card.
-    useEffect(() => {
+        return () => registerElement(null);
+    }, [registerElement, fuzzyFindVisible]);
+
+    useLayoutEffect(() => {
         if (!fuzzyFindVisible || !isActive) return;
+        const activeElement = document.activeElement;
+        if (activeElement instanceof HTMLInputElement
+            || activeElement instanceof HTMLTextAreaElement
+            || (activeElement instanceof HTMLElement && activeElement.isContentEditable)) return;
 
-        const refocusIfUnclaimed = (event: FocusEvent) => {
-            const input = inputRef.current;
-            if (!input || !input.isConnected || input.offsetParent === null) return;
-
-            const nextTarget = event.relatedTarget as HTMLElement | null;
-            const focusOnOtherTextArea = nextTarget instanceof HTMLElement
-                && nextTarget !== input
-                && (nextTarget instanceof HTMLInputElement
-                    || nextTarget instanceof HTMLTextAreaElement
-                    || nextTarget.isContentEditable);
-            if (focusOnOtherTextArea) return;
-
-            // Defer a frame so the refocus never fights the click or a tab
-            // switch that blurred the input in the first place.
-            requestAnimationFrame(() => {
-                if (input.isConnected && document.activeElement !== input) {
-                    input.focus();
-                }
-            });
-        };
-
-        document.addEventListener('focusout', refocusIfUnclaimed);
-        return () => document.removeEventListener('focusout', refocusIfUnclaimed);
-    }, [fuzzyFindVisible, isActive]);
+        requestFocus();
+    }, [fuzzyFindVisible, isActive, requestFocus]);
 
     const onContainerMouseDown = (e: React.MouseEvent) => {
         if (fuzzyFindVisible && inputRef.current) {
