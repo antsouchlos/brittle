@@ -338,13 +338,13 @@ function PublicationList({
             .catch(e => logger.error(String(e)));
     };
 
-    useActionHandler(Action.SelectNext, () => selectAdjacentPublication(1), tabActive);
-    useActionHandler(Action.SelectPrev, () => selectAdjacentPublication(-1), tabActive);
-    useActionHandler(Action.Submit, openSelectedPublication, tabActive);
-    useActionHandler(Action.OpenFuzzyFind, () => setFuzzyFindVisible(true), tabActive);
+    useActionHandler(Action.SelectNext, () => selectAdjacentPublication(1));
+    useActionHandler(Action.SelectPrev, () => selectAdjacentPublication(-1));
+    useActionHandler(Action.Submit, openSelectedPublication);
+    useActionHandler(Action.OpenFuzzyFind, () => setFuzzyFindVisible(true));
     // Escape is only claimed while the bar is actually open, so it stays free
     // for anything else when it is not.
-    useActionHandler(Action.Cancel, () => setFuzzyFindVisible(false), tabActive && fuzzyFindVisible);
+    useActionHandler(Action.Cancel, () => setFuzzyFindVisible(false), fuzzyFindVisible);
 
     return (
         <div

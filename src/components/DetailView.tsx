@@ -83,7 +83,7 @@ function NotesSection({ notes, onChange, editorMode, onEditorModeChange, tabActi
     const { editing } = editor;
     const editShortcut = editing ? 'Esc' : findKeybindingForAction(Action.FocusNotesEditor);
 
-    useActionHandler(Action.FocusNotesEditor, editor.openEditor, tabActive);
+    useActionHandler(Action.FocusNotesEditor, editor.openEditor);
 
     const toggleEditing = () => {
         if (editing) editor.closeEditor();
@@ -190,8 +190,8 @@ function MetadataSection({
         editor.closeEditor();
     };
 
-    useActionHandler(Action.FocusMetadataEditor, editor.openEditor, tabActive);
-    useActionHandler(Action.ToggleMetadataEditor, toggleExpanded, tabActive);
+    useActionHandler(Action.FocusMetadataEditor, editor.openEditor);
+    useActionHandler(Action.ToggleMetadataEditor, toggleExpanded);
 
     return (
         <section className={styles.metadataSection}>
@@ -265,8 +265,6 @@ function DetailView({
     editorMode,
     onEditorModeChange,
 }: DetailViewProps) {
-    // TODO: Reexamine how to move active-tab management out of DetailView.
-
     const tabActive = useTabActive();
     const [metadataExpanded, setMetadataExpanded] = useRestoredState<boolean>(
         METADATA_EDITOR_PINNED_KEY,
