@@ -4,6 +4,71 @@
     flex-direction: column;
 }
 
+.listHeader {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 8px 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--bg2);
+}
+
+.listHeaderLabel {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--fg2);
+    font-size: 0.85rem;
+    font-weight: normal;
+    text-transform: uppercase;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.searchButton {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    padding: 2px 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg2);
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.searchButton svg {
+    display: block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    transform: translateY(calc(-0.5 * var(--optical-lift)));
+}
+
+.searchButton:hover {
+    background: var(--bg1);
+    color: var(--fg0);
+}
+
+.searchButton:focus-visible {
+    outline: none;
+    border-color: var(--accent1);
+}
+
+.searchButton[data-active="true"] {
+    color: var(--accent1);
+}
+
+.searchShortcut {
+    color: var(--fg4);
+    font-size: 0.8rem;
+}
+
 .listContainer {
     flex: 1;
     min-height: 0;

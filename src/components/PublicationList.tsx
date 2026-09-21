@@ -9,10 +9,10 @@ import {
 } from 'react';
 import { Fzf, extendedMatch } from 'fzf';
 import { FaFilePdf } from 'react-icons/fa';
-import { Globe } from 'lucide-react';
+import { Globe, Search, X } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import styles from './PublicationList.module.css';
-import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
+import { Action, findKeybindingForAction, isTextProducingKey, useActionHandler } from '../app/actions';
 import { logger } from '../app/logger';
 import { useFocusTarget } from '../app/focus.tsx';
 import { useConfig, type TagColors } from '../app/config';
@@ -313,6 +313,9 @@ function PublicationList({
         );
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
         useFuzzyInputFocus(fuzzyFindVisible);
+    const searchShortcut = fuzzyFindVisible
+        ? 'Esc'
+        : findKeybindingForAction(Action.OpenFuzzyFind);
 
     // While the fuzzy bar is open the highlight moves within the filtered
     // view. Otherwise the selection moves through the full list.
@@ -344,18 +347,34 @@ function PublicationList({
     useActionHandler(Action.Cancel, () => setFuzzyFindVisible(false), fuzzyFindVisible);
 
     return (
-        <div
-            className={styles.publicationList}
-            onMouseDown={onContainerMouseDown}
-        >
+        <div className={styles.publicationList}>
+            <header className={styles.listHeader}>
+                <h2 className={styles.listHeaderLabel}>Publications</h2>
+                <button
+                    type="button"
+                    className={styles.searchButton}
+                    data-active={fuzzyFindVisible}
+                    onClick={() => setFuzzyFindVisible(visible => !visible)}
+                    aria-label={fuzzyFindVisible ? 'Close publication search' : 'Search publications'}
+                    aria-expanded={fuzzyFindVisible}
+                >
+                    {fuzzyFindVisible
+                        ? <X aria-hidden="true" />
+                        : <Search aria-hidden="true" />}
+                    {searchShortcut && (
+                        <span className={styles.searchShortcut}>{searchShortcut}</span>
+                    )}
+                </button>
+            </header>
             {fuzzyFindVisible && (
-                <div className={styles.fuzzyBar}>
+                <div className={styles.fuzzyBar} onMouseDown={onContainerMouseDown}>
                     <span className={styles.fuzzyPrompt}>&gt;</span>
                     <input
                         ref={fuzzyInputRef}
                         className={styles.fuzzyInput}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
+                        aria-label="Search publications"
                         placeholder="publisher · title · author · year"
                         onKeyDown={(e) => {
                             if (isTextProducingKey(e.nativeEvent)) e.stopPropagation();
@@ -365,7 +384,7 @@ function PublicationList({
                     />
                 </div>
             )}
-            <div className={styles.listContainer} ref={listRef}>
+            <div className={styles.listContainer} ref={listRef} onMouseDown={onContainerMouseDown}>
                 <div className={styles.list}>
                     {displayItems.map(({ pub, titlePositions, authorPositions, publisherPositions: publisherPositions, datePositions, filenamePositions }, idx) => (
                         <div
