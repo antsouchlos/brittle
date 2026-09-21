@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react';
+import { Fragment, useState, type FocusEvent, type KeyboardEvent, type MouseEvent } from 'react';
 import Markdown from 'markdown-to-jsx';
 import { ChevronDown, ChevronUp, Eye, LogOut, Pencil } from 'lucide-react';
 
@@ -7,7 +7,6 @@ import TextEditor, { type EditorMode } from './TextEditor.tsx';
 import { parseInlineMarkup } from './inlineMarkup.tsx';
 import { useFocusTarget } from '../app/focus.tsx';
 import { Action, findKeybindingForAction, useActionHandler } from '../app/actions.tsx';
-import { useTabActive } from './TabView.tsx';
 import { useRestoredState } from '../app/uiState.tsx';
 
 const METADATA_EDITOR_PINNED_KEY = 'detail.metadataEditor.pinned';
@@ -43,13 +42,10 @@ function handleEditorKeyDown(event: KeyboardEvent<HTMLDivElement>) {
 // Tracks whether an editor session is open independently of text area focus.
 // Vim's command and search prompts take focus without ending that session.
 // 
-function useEditorSession(tabActive: boolean) {
-    const focusTarget = useFocusTarget({ available: tabActive });
+// TODO: Preserve and restore editor focus across tab switches; returning currently leaves the editor unfocused.
+function useEditorSession() {
+    const focusTarget = useFocusTarget();
     const [editing, setEditing] = useState(false);
-
-    useEffect(() => {
-        if (!tabActive) setEditing(false);
-    }, [tabActive]);
 
     const openEditor = () => {
         setEditing(true);
@@ -75,11 +71,10 @@ interface NotesSectionProps {
     onChange: (text: string) => void;
     editorMode: EditorMode;
     onEditorModeChange: (mode: EditorMode) => void;
-    tabActive: boolean;
 }
 
-function NotesSection({ notes, onChange, editorMode, onEditorModeChange, tabActive }: NotesSectionProps) {
-    const editor = useEditorSession(tabActive);
+function NotesSection({ notes, onChange, editorMode, onEditorModeChange }: NotesSectionProps) {
+    const editor = useEditorSession();
     const { editing } = editor;
     const editShortcut = editing ? 'Esc' : findKeybindingForAction(Action.FocusNotesEditor);
 
@@ -162,7 +157,6 @@ interface MetadataSectionProps {
     onEditorModeChange: (mode: EditorMode) => void;
     expanded: boolean;
     onExpandedChange: (expanded: boolean) => void;
-    tabActive: boolean;
 }
 
 function MetadataSection({
@@ -173,9 +167,8 @@ function MetadataSection({
     onEditorModeChange,
     expanded,
     onExpandedChange,
-    tabActive,
 }: MetadataSectionProps) {
-    const editor = useEditorSession(tabActive);
+    const editor = useEditorSession();
     const { editing } = editor;
     const visible = expanded || editing;
     const editShortcut = editing ? 'Esc' : findKeybindingForAction(Action.FocusMetadataEditor);
@@ -265,7 +258,6 @@ function DetailView({
     editorMode,
     onEditorModeChange,
 }: DetailViewProps) {
-    const tabActive = useTabActive();
     const [metadataExpanded, setMetadataExpanded] = useRestoredState<boolean>(
         METADATA_EDITOR_PINNED_KEY,
         false,
@@ -280,7 +272,6 @@ function DetailView({
                         onChange={onNotesChange}
                         editorMode={editorMode}
                         onEditorModeChange={onEditorModeChange}
-                        tabActive={tabActive}
                     />
                     <MetadataSection
                         source={document.metadataSource}
@@ -290,7 +281,6 @@ function DetailView({
                         onEditorModeChange={onEditorModeChange}
                         expanded={metadataExpanded}
                         onExpandedChange={setMetadataExpanded}
-                        tabActive={tabActive}
                     />
                 </Fragment>
             )}

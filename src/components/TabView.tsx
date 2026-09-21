@@ -1,13 +1,8 @@
-import { createContext, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject, useCallback, useContext, useRef, useState, useEffect } from 'react';
+import { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject, useCallback, useRef, useState, useEffect } from 'react';
 import styles from './TabView.module.css';
 import { logger } from '../app/logger';
 import { Action, ActionScope, useActionHandler } from '../app/actions';
-
-const TabActiveContext = createContext(true);
-
-export function useTabActive(): boolean {
-    return useContext(TabActiveContext);
-}
+import { FocusScope } from '../app/focus.tsx';
 
 export interface TabData {
     id: string;
@@ -342,11 +337,11 @@ export default function TabView({
                             className={styles.tabContent}
                             data-state={id == selectedTabId ? "active" : "inactive"}
                         >
-                            <ActionScope active={id === selectedTabId}>
-                                <TabActiveContext.Provider value={id === selectedTabId}>
+                            <FocusScope active={id === selectedTabId}>
+                                <ActionScope active={id === selectedTabId}>
                                     {tab.renderContent()}
-                                </TabActiveContext.Provider>
-                            </ActionScope>
+                                </ActionScope>
+                            </FocusScope>
                         </div>
                     );
                 })

@@ -13,6 +13,15 @@ import {
 import { FocusController, type FocusAdapter } from './FocusController.ts';
 
 const FocusContext = createContext<FocusController | null>(null);
+const FocusScopeContext = createContext(true);
+
+export function FocusScope({ active, children }: { active: boolean; children: ReactNode }) {
+    return (
+        <FocusScopeContext.Provider value={active}>
+            {children}
+        </FocusScopeContext.Provider>
+    );
+}
 
 function hasTextFocus() {
     const element = document.activeElement;
@@ -71,6 +80,8 @@ export function useFocusTarget({
 }: FocusTargetOptions = {}): FocusTarget {
     const controller = useContext(FocusContext);
     if (!controller) throw new Error('useFocusTarget used outside a FocusProvider');
+    const scopeActive = useContext(FocusScopeContext);
+    const targetAvailable = available && scopeActive;
 
     const target = useMemo(() => Symbol('focusTarget'), [identity]);
     const elementRef = useRef<HTMLElement | null>(null);
@@ -86,10 +97,10 @@ export function useFocusTarget({
     }), []);
 
     useLayoutEffect(() => {
-        if (!available) return;
+        if (!targetAvailable) return;
 
         return controller.register(target, adapter);
-    }, [controller, target, adapter, available]);
+    }, [controller, target, adapter, targetAvailable]);
 
     const ref = useCallback((element: HTMLElement | null) => {
         elementRef.current = element;

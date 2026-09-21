@@ -14,7 +14,6 @@ import { invoke } from '@tauri-apps/api/core';
 import styles from './PublicationList.module.css';
 import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
 import { logger } from '../app/logger';
-import { useTabActive } from './TabView';
 import { useFocusTarget } from '../app/focus.tsx';
 import { useConfig, type TagColors } from '../app/config';
 
@@ -151,10 +150,9 @@ function TagChips({ tags, tagColors }: { tags: string[]; tagColors: Record<strin
 
 function useFuzzyInputFocus(
     fuzzyFindVisible: boolean,
-    isActive: boolean,
 ) {
     const inputRef = useRef<HTMLInputElement>(null);
-    const focusTarget = useFocusTarget({ available: fuzzyFindVisible && isActive });
+    const focusTarget = useFocusTarget({ available: fuzzyFindVisible });
     const { ref: registerElement, requestFocus } = focusTarget;
 
     useLayoutEffect(() => {
@@ -164,14 +162,14 @@ function useFuzzyInputFocus(
     }, [registerElement, fuzzyFindVisible]);
 
     useLayoutEffect(() => {
-        if (!fuzzyFindVisible || !isActive) return;
+        if (!fuzzyFindVisible) return;
         const activeElement = document.activeElement;
         if (activeElement instanceof HTMLInputElement
             || activeElement instanceof HTMLTextAreaElement
             || (activeElement instanceof HTMLElement && activeElement.isContentEditable)) return;
 
         requestFocus();
-    }, [fuzzyFindVisible, isActive, requestFocus]);
+    }, [fuzzyFindVisible, requestFocus]);
 
     const onContainerMouseDown = (e: React.MouseEvent) => {
         if (fuzzyFindVisible && inputRef.current) {
@@ -302,7 +300,6 @@ function PublicationList({
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
-    const tabActive = useTabActive();
     const { opts: { tagColors } } = useConfig();
 
     useScrollToSelected(listRef, selectedPublicationId, publications);
@@ -315,7 +312,7 @@ function PublicationList({
             listRef,
         );
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
-        useFuzzyInputFocus(fuzzyFindVisible, tabActive);
+        useFuzzyInputFocus(fuzzyFindVisible);
 
     // While the fuzzy bar is open the highlight moves within the filtered
     // view. Otherwise the selection moves through the full list.
