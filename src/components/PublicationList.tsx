@@ -23,6 +23,7 @@ import { logger } from '../app/logger';
 import { useFocusTarget } from '../app/focus.tsx';
 import { useConfig, type TagColors } from '../app/config';
 import TextEditor, { type EditorMode } from './TextEditor.tsx';
+import { useAutosavedPublicationText, type PublicationTextFile } from '../app/useAutosavedPublicationText.ts';
 
 interface PublicationListItem {
     id: string;
@@ -167,22 +168,41 @@ interface PublicationTagsProps {
 }
 
 interface FloatingTagEditorProps {
-    tagEditorText: string;
+    publicationId: string;
+    tags: string[];
     editorMode: EditorMode;
     onEditorModeChange: (mode: EditorMode) => void;
     editorElementRef: (element: HTMLElement | null) => void;
     onClose: () => void;
-    onTagEditorTextChange: (source: string) => void;
 }
 
+function isValidTagText(text: string): boolean {
+    try {
+        const tags: unknown = JSON.parse(text);
+
+        return Array.isArray(tags) && tags.every(tag => typeof tag === 'string');
+    } catch {
+        return false;
+    }
+}
+
+const TAGS_FILE: PublicationTextFile = {
+    writeCommand: 'write_publication_tags',
+    originsThatRereadFile: ['disk', 'tags'],
+    readText: publication => JSON.stringify(publication.tags),
+    isValid: isValidTagText,
+};
+
 function FloatingTagEditor({
-    tagEditorText,
+    publicationId,
+    tags,
     editorMode,
     onEditorModeChange,
     editorElementRef,
     onClose,
-    onTagEditorTextChange,
 }: FloatingTagEditorProps) {
+    const tagText = useAutosavedPublicationText(publicationId, JSON.stringify(tags), TAGS_FILE);
+
     return (
         <div
             className={styles.floatingTagEditor}
@@ -192,8 +212,8 @@ function FloatingTagEditor({
             onKeyDown={event => event.stopPropagation()}
         >
             <TextEditor
-                value={tagEditorText}
-                onChange={onTagEditorTextChange}
+                value={tagText.value}
+                onChange={tagText.onChange}
                 mode={editorMode}
                 onModeChange={onEditorModeChange}
                 onLeaveRequest={onClose}
@@ -265,7 +285,6 @@ function useTagEditor(
         releaseFocus,
     } = useFocusTarget();
     const [editingPublicationId, setEditingPublicationId] = useState<string | null>(null);
-    const [tagEditorText, setTagEditorText] = useState('');
     const visibleEditingPublicationId = editingPublicationId !== null
         && editingPublicationId === selectedPublicationId
         && visiblePublicationIds.includes(editingPublicationId)
@@ -287,7 +306,6 @@ function useTagEditor(
             return;
         }
 
-        setTagEditorText(JSON.stringify(publication.tags));
         setEditingPublicationId(publicationId);
         requestFocus();
     };
@@ -307,8 +325,6 @@ function useTagEditor(
     return {
         registerEditorElement,
         editingPublicationId: visibleEditingPublicationId,
-        tagEditorText,
-        setTagEditorText,
         open,
         close,
     };
@@ -581,12 +597,12 @@ function PublicationList({
                                     </span>
                                     {tagEditor.editingPublicationId === pub.id && (
                                         <FloatingTagEditor
-                                            tagEditorText={tagEditor.tagEditorText}
+                                            publicationId={pub.id}
+                                            tags={pub.tags}
                                             editorMode={editorMode}
                                             onEditorModeChange={onEditorModeChange}
                                             editorElementRef={tagEditor.registerEditorElement}
                                             onClose={tagEditor.close}
-                                            onTagEditorTextChange={tagEditor.setTagEditorText}
                                         />
                                     )}
                                 </div>

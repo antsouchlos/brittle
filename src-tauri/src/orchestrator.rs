@@ -27,6 +27,7 @@ enum PublicationChangeOrigin {
     Notes,
     NotesEditor,
     Tags,
+    TagsEditor,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -69,6 +70,11 @@ pub enum Action {
         respond: mpsc::Sender<Result<(), String>>,
     },
     WritePublicationNotes {
+        publication_id: PublicationId,
+        content: String,
+        respond: mpsc::Sender<Result<(), String>>,
+    },
+    WritePublicationTags {
         publication_id: PublicationId,
         content: String,
         respond: mpsc::Sender<Result<(), String>>,
@@ -193,6 +199,13 @@ impl Worker {
             } => {
                 let result = self.config.read().unwrap().execute_command(&command, &args);
                 let _ = respond.send(result);
+            }
+            Action::WritePublicationTags {
+                publication_id,
+                content,
+                respond,
+            } => {
+                let _ = respond.send(self.write_publication_tags(publication_id, content));
             }
             Action::SaveUiState { ui_state } => self.save_ui_state(ui_state),
             Action::CompileReferencePreview { publication_id } => {
@@ -368,8 +381,13 @@ impl Worker {
             return Ok(());
         };
 
-        let tags_by_stem = match std::fs::read_to_string(dir.join(tags::TAGS_FILE_NAME)) {
-            Ok(source) => match tags::parse_tags(&source) {
+        let tags_path = dir.join(tags::TAGS_FILE_NAME);
+        if file_matches_last_written_source(&self.last_written_sources, &tags_path) {
+            return Ok(());
+        }
+
+        let tags_by_stem = match std::fs::read_to_string(&tags_path) {
+            Ok(source) => match tags::parse_file_tag_source(&source) {
                 Ok(tags_by_stem) => tags_by_stem,
                 Err(e) => {
                     warn!("Failed to parse tags in '{}': {}", dir.display(), e);
@@ -739,6 +757,59 @@ impl Worker {
 
         std::fs::write(&notes_path, source)
             .map_err(|e| format!("Failed to write {}: {}", notes_path.display(), e))
+    }
+
+    fn write_publication_tags(
+        &mut self,
+        publication_id: PublicationId,
+        content: String,
+    ) -> Result<(), String> {
+        let tags = tags::parse_ui_tag_source(&content).map_err(|e| e.to_string())?;
+
+        let publication = self
+            .store
+            .get_publication(publication_id.clone())
+            .map_err(|e| e.to_string())?;
+
+        let dir = publication
+            .path
+            .parent()
+            .ok_or_else(|| format!("'{}' has no parent directory", publication.path.display()))?;
+        let parent_collection_id = CollectionId::from_path(dir);
+        let tags_path = dir.join(tags::TAGS_FILE_NAME);
+
+        let previous = match std::fs::read_to_string(&tags_path) {
+            Ok(source) => source,
+
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+
+            Err(error) => return Err(format!("Failed to read {}: {}", tags_path.display(), error)),
+        };
+
+        let source = tags::update_tags_source(&previous, &publication.name, &tags)
+            .map_err(|e| format!("Failed to write tags for '{}': {}", publication.name, e))?;
+
+        std::fs::write(&tags_path, &source)
+            .map_err(|e| format!("Failed to write {}: {}", tags_path.display(), e))?;
+        self.last_written_sources.insert(tags_path, source);
+
+        let updated = Publication { tags, ..publication };
+
+        self.store
+            .update_publication(publication_id.clone(), updated.clone())
+            .map_err(|e| e.to_string())?;
+
+        self.emit(
+            "publication-upserted",
+            PublicationUpserted {
+                publication_id,
+                parent_collection_id,
+                publication: updated,
+                origin: PublicationChangeOrigin::TagsEditor,
+            },
+        );
+
+        Ok(())
     }
 
     fn schedule_reference_preview(&self, publication_id: PublicationId) {

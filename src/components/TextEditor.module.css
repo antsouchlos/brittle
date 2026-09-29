@@ -67,6 +67,7 @@
 
 .editor :global(.cm-content) {
     padding: 4px 4px 32px;
+    cursor: text;
     font-size: 0.9rem;
 }
 
