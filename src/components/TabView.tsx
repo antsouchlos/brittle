@@ -1,16 +1,8 @@
-import { createContext, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject, useCallback, useContext, useRef, useState, useEffect } from 'react';
+import { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode, RefObject, useCallback, useRef, useState, useEffect } from 'react';
 import styles from './TabView.module.css';
 import { logger } from '../app/logger';
-import { Action, useActionHandler } from '../app/actions';
-
-// Whether the tab a component is rendered into is the one in front. Components
-// use this to gate their action handlers, so nothing needs to be told which tab
-// is selected. Defaults to true for anything rendered outside a TabView.
-const TabActiveContext = createContext(true);
-
-export function useTabActive(): boolean {
-    return useContext(TabActiveContext);
-}
+import { Action, ActionScope, useActionHandler } from '../app/actions';
+import { FocusScope } from '../app/focus.tsx';
 
 export interface TabData {
     id: string;
@@ -345,9 +337,11 @@ export default function TabView({
                             className={styles.tabContent}
                             data-state={id == selectedTabId ? "active" : "inactive"}
                         >
-                            <TabActiveContext.Provider value={id === selectedTabId}>
-                                {tab.renderContent()}
-                            </TabActiveContext.Provider>
+                            <FocusScope active={id === selectedTabId}>
+                                <ActionScope active={id === selectedTabId}>
+                                    {tab.renderContent()}
+                                </ActionScope>
+                            </FocusScope>
                         </div>
                     );
                 })

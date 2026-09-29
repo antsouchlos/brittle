@@ -6,9 +6,11 @@ use std::path::PathBuf;
 
 use ignore::gitignore::Gitignore;
 
+use crate::notes;
 use crate::store::{
     Collection, CollectionId, LibraryState, ParsedMetadata, Publication, PublicationId,
 };
+use crate::tags;
 
 //
 //
@@ -332,6 +334,34 @@ fn find_duplicate_metadata_stems<'a>(
     conflicted
 }
 
+fn read_tags(dir: &Path) -> HashMap<String, Vec<String>> {
+    let Ok(source) = fs::read_to_string(dir.join(tags::TAGS_FILE_NAME)) else {
+        return HashMap::new();
+    };
+
+    match tags::parse_tags(&source) {
+        Ok(tags_by_stem) => tags_by_stem,
+        Err(e) => {
+            log::warn!("Failed to parse tags in '{}': {}", dir.display(), e);
+            HashMap::new()
+        }
+    }
+}
+
+fn read_notes(dir: &Path) -> HashMap<String, String> {
+    let Ok(source) = fs::read_to_string(dir.join(notes::NOTES_FILE_NAME)) else {
+        return HashMap::new();
+    };
+
+    match notes::parse_notes(&source) {
+        Ok(notes_by_stem) => notes_by_stem,
+        Err(e) => {
+            log::warn!("Failed to parse notes in '{}': {}", dir.display(), e);
+            HashMap::new()
+        }
+    }
+}
+
 fn build_publications(
     metadata_files: &[ClassifiedFile],
     content_files: &[ClassifiedFile],
@@ -340,6 +370,10 @@ fn build_publications(
     parse_metadata: ParseMetadata,
 ) -> Vec<PublicationId> {
     let conflicted_stems = find_duplicate_metadata_stems(metadata_files, dir);
+
+    // A directory without a notes file is the normal case, not a problem.
+    let notes_by_stem = read_notes(dir);
+    let tags_by_stem = read_tags(dir);
 
     let mut publication_ids: Vec<PublicationId> = Vec::new();
     let mut publication_ids_by_stem: HashMap<&str, PublicationId> = HashMap::new();
@@ -376,6 +410,8 @@ fn build_publications(
                 metadata,
                 reference_preview: None,
                 available_content_file_extensions: vec![],
+                notes: notes_by_stem.get(&f.stem).cloned(),
+                tags: tags_by_stem.get(&f.stem).cloned().unwrap_or_default(),
             },
         );
 
@@ -699,6 +735,73 @@ mod tests {
         for publication in state.publications.values() {
             assert_eq!(publication.metadata_file_extension, "bib".to_string());
         }
+    }
+
+    #[test]
+    fn notes_attach_by_stem_and_do_not_cross_directories() {
+        let (_dir, root_path, _root_name) =
+            create_literature_env(&["noted.bib", "plain.bib", "sub/noted.bib"]);
+        fs::write(
+            root_path.join("notes.yml"),
+            "noted: |\n    - a remark\n\nmissing: |\n    - orphan\n",
+        )
+        .unwrap();
+
+        let state = read_test_library(&root_path, &empty_gitignore(), &["bib"], &["pdf"]).unwrap();
+
+        let noted = find_publication(&state, &state.root_child_publication_ids, "noted");
+        assert_eq!(noted.notes, Some("- a remark".to_string()));
+
+        let plain = find_publication(&state, &state.root_child_publication_ids, "plain");
+        assert!(plain.notes.is_none());
+
+        let sub = &state.collections[&state.root_child_collection_ids[0]];
+        let nested = find_publication(&state, &sub.child_publication_ids, "noted");
+        assert!(nested.notes.is_none());
+    }
+
+    #[test]
+    fn tags_attach_by_stem_and_do_not_cross_directories() {
+        let (_dir, root_path, _root_name) =
+            create_literature_env(&["tagged.bib", "plain.bib", "sub/tagged.bib"]);
+        fs::write(
+            root_path.join("tags.yml"),
+            "tagged: [S1, BRD]\nmissing: [OTH]\n",
+        )
+        .unwrap();
+
+        let state = read_test_library(&root_path, &empty_gitignore(), &["bib"], &["pdf"]).unwrap();
+
+        let tagged = find_publication(&state, &state.root_child_publication_ids, "tagged");
+        assert_eq!(tagged.tags, vec!["S1", "BRD"]);
+
+        let plain = find_publication(&state, &state.root_child_publication_ids, "plain");
+        assert!(plain.tags.is_empty());
+
+        let sub = &state.collections[&state.root_child_collection_ids[0]];
+        let nested = find_publication(&state, &sub.child_publication_ids, "tagged");
+        assert!(nested.tags.is_empty());
+    }
+
+    #[test]
+    fn a_malformed_tags_file_leaves_the_collection_untagged() {
+        let (_dir, root_path, _root_name) = create_literature_env(&["tagged.bib"]);
+        fs::write(root_path.join("tags.yml"), "tagged: [S1\n").unwrap();
+
+        let state = read_test_library(&root_path, &empty_gitignore(), &["bib"], &["pdf"]).unwrap();
+
+        let tagged = find_publication(&state, &state.root_child_publication_ids, "tagged");
+        assert!(tagged.tags.is_empty());
+    }
+
+    #[test]
+    fn a_tags_file_does_not_become_a_publication() {
+        let (_dir, root_path, _root_name) = create_literature_env(&["tagged.bib"]);
+        fs::write(root_path.join("tags.yml"), "tagged: [S1]\n").unwrap();
+
+        let state = read_test_library(&root_path, &empty_gitignore(), &["bib"], &["pdf"]).unwrap();
+
+        assert_eq!(state.publications.len(), 1);
     }
 
     #[test]

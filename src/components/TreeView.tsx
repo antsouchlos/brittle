@@ -3,7 +3,6 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import styles from './TreeView.module.css';
 import { Action, useActionHandler } from '../app/actions';
 import { useRestoredState } from '../app/uiState';
-import { useTabActive } from './TabView';
 
 interface TreeNodeData {
     id: string,
@@ -127,7 +126,6 @@ export default function TreeView(
     { root, selectedNodeId, onSelectNode, persistKey }: TreeViewProps
 ) {
     const [expandedNodeIds, setExpandedNodeIds] = useRestoredState<string[]>(persistKey, [root.id]);
-    const tabActive = useTabActive();
 
     const isExpanded = (id: string) => expandedNodeIds.includes(id);
     const isSelected = (id: string) => selectedNodeId === id;
@@ -149,8 +147,8 @@ export default function TreeView(
         onSelectNode(visibleIds[nextIdx]);
     };
 
-    useActionHandler(Action.CycleNext, () => cycleSelection(1), tabActive);
-    useActionHandler(Action.CyclePrev, () => cycleSelection(-1), tabActive);
+    useActionHandler(Action.CycleNext, () => cycleSelection(1));
+    useActionHandler(Action.CyclePrev, () => cycleSelection(-1));
 
     useDropRemovedIds(root, setExpandedNodeIds);
 

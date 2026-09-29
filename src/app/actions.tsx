@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useRef } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { logger } from './logger';
 
 export enum Action {
@@ -14,7 +14,9 @@ export enum Action {
     Cancel,
     OpenCmdLine,
     OpenFuzzyFind,
-    FocusBibEditor,
+    FocusMetadataEditor,
+    ToggleMetadataEditor,
+    FocusNotesEditor,
 }
 
 export const keymap: Array<[string, Action]> = [
@@ -29,11 +31,22 @@ export const keymap: Array<[string, Action]> = [
     ["gt", Action.NextTab],
     ["gT", Action.PrevTab],
     ["Enter", Action.Submit],
-    ["Ctrl+e", Action.FocusBibEditor],
+    ["Ctrl+e", Action.FocusNotesEditor],
+    ["Ctrl+m", Action.FocusMetadataEditor],
+    ["Ctrl+t", Action.ToggleMetadataEditor],
     [":", Action.OpenCmdLine],
     [" ff", Action.OpenFuzzyFind],
     ["Escape", Action.Cancel],
 ];
+
+const LEADER_KEY_GLYPH = '\u2423';
+
+export function findKeybindingForAction(action: Action): string | null {
+    const keySequence = keymap.find(([, boundAction]) => boundAction === action)?.[0];
+    if (keySequence === undefined) return null;
+
+    return keySequence.replace(/^ /, LEADER_KEY_GLYPH);
+}
 
 // Whether a key press belongs to the focused text surface rather than to the
 // global keymap. A text surface stops propagation for these and lets the rest
@@ -51,36 +64,56 @@ export function isTextProducingKey(event: KeyboardEvent): boolean {
 
 type ActionHandler = () => void;
 
-interface ActionBusContextValue {
+interface ActionRegistry {
     register: (action: Action, handler: ActionHandler) => () => void;
+    getHandler: (action: Action) => ActionHandler | undefined;
+}
+
+function createActionRegistry(): ActionRegistry {
+    const handlers = new Map<Action, ActionHandler[]>();
+
+    return {
+        register: (action, handler) => {
+            const stack = handlers.get(action) ?? [];
+            handlers.set(action, [...stack, handler]);
+
+            return () => {
+                const current = handlers.get(action) ?? [];
+                handlers.set(action, current.filter(registered => registered !== handler));
+            };
+        },
+        getHandler: action => {
+            const stack = handlers.get(action);
+
+            return stack?.[stack.length - 1];
+        },
+    };
+}
+
+interface ActionBusContextValue {
+    globalRegistry: ActionRegistry;
+    activateScope: (scope: ActionRegistry) => () => void;
     dispatch: (action: Action) => boolean;
 }
 
-// The action bus is a lookup table from an action to the function that
-// performs it.
-//
-// A component keeps its own `useState` and registers a closure over its own
-// setters; `App` keeps the single global `keydown` listener and only knows
-// that *some* handler claimed the action. This allows the keymap to be global
-// without necessitating lifting all relevant state.
 const ActionBusContext = createContext<ActionBusContextValue | null>(null);
+const ActionScopeContext = createContext<ActionRegistry | null>(null);
 
 export function ActionProvider({ children }: { children: ReactNode }) {
-    const handlersRef = useRef(new Map<Action, ActionHandler[]>());
+    const [globalRegistry] = useState(createActionRegistry);
+    const activeScopeRef = useRef<ActionRegistry | null>(null);
 
-    const register = useCallback((action: Action, handler: ActionHandler) => {
-        const stack = handlersRef.current.get(action) ?? [];
-        handlersRef.current.set(action, [...stack, handler]);
+    const activateScope = useCallback((scope: ActionRegistry) => {
+        activeScopeRef.current = scope;
 
         return () => {
-            const current = handlersRef.current.get(action) ?? [];
-            handlersRef.current.set(action, current.filter(h => h !== handler));
+            if (activeScopeRef.current === scope) activeScopeRef.current = null;
         };
     }, []);
 
     const dispatch = useCallback((action: Action) => {
-        const stack = handlersRef.current.get(action) ?? [];
-        const handler = stack[stack.length - 1];
+        const handler = globalRegistry.getHandler(action)
+            ?? activeScopeRef.current?.getHandler(action);
         if (!handler) {
             logger.debug(`No handler registered for action ${Action[action]}`);
             return false;
@@ -88,12 +121,31 @@ export function ActionProvider({ children }: { children: ReactNode }) {
 
         handler();
         return true;
-    }, []);
+    }, [globalRegistry]);
 
     return (
-        <ActionBusContext.Provider value={{ register, dispatch }}>
+        <ActionBusContext.Provider value={{ globalRegistry, activateScope, dispatch }}>
             {children}
         </ActionBusContext.Provider>
+    );
+}
+
+export function ActionScope({ active, children }: { active: boolean; children: ReactNode }) {
+    const context = useContext(ActionBusContext);
+    if (!context) throw new Error('ActionScope used outside an ActionProvider');
+
+    const [registry] = useState(createActionRegistry);
+    const { activateScope } = context;
+
+    useLayoutEffect(() => {
+        if (!active) return;
+        return activateScope(registry);
+    }, [active, registry, activateScope]);
+
+    return (
+        <ActionScopeContext.Provider value={registry}>
+            {children}
+        </ActionScopeContext.Provider>
     );
 }
 
@@ -101,7 +153,8 @@ export function ActionProvider({ children }: { children: ReactNode }) {
 export function useActionHandler(action: Action, handler: ActionHandler, enabled = true) {
     const context = useContext(ActionBusContext);
     if (!context) throw new Error('useActionHandler used outside an ActionProvider');
-    const { register } = context;
+    const scope = useContext(ActionScopeContext);
+    const register = (scope ?? context.globalRegistry).register;
 
     const latestRef = useRef(handler);
     latestRef.current = handler;

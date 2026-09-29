@@ -9,9 +9,11 @@ use std::time::Duration;
 
 use crate::config::Config;
 use crate::library;
+use crate::notes;
 use crate::store::{
     CollectionId, LibraryState, LibraryStore, Publication, PublicationId,
 };
+use crate::tags;
 use crate::watcher::{WatchRegistry, WatcherCommand};
 
 const CONTENT_FILE_EXTENSIONS: [&str; 2] = ["pdf", "html"];
@@ -22,6 +24,9 @@ enum PublicationChangeOrigin {
     MetadataEditor,
     Disk,
     ReferencePreviewCompiler,
+    Notes,
+    NotesEditor,
+    Tags,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -59,6 +64,11 @@ pub enum Action {
         path: PathBuf,
     },
     WritePublicationSource {
+        publication_id: PublicationId,
+        content: String,
+        respond: mpsc::Sender<Result<(), String>>,
+    },
+    WritePublicationNotes {
         publication_id: PublicationId,
         content: String,
         respond: mpsc::Sender<Result<(), String>>,
@@ -169,6 +179,13 @@ impl Worker {
             } => {
                 let _ = respond.send(self.write_publication_source(publication_id, content));
             }
+            Action::WritePublicationNotes {
+                publication_id,
+                content,
+                respond,
+            } => {
+                let _ = respond.send(self.write_publication_notes(publication_id, content));
+            }
             Action::ExecuteCommand {
                 command,
                 args,
@@ -255,6 +272,28 @@ impl Worker {
             );
         }
 
+        if path
+            .file_name()
+            .is_some_and(|name| name == notes::NOTES_FILE_NAME)
+        {
+            let dir = path
+                .parent()
+                .ok_or_else(|| format!("'{}' has no parent directory", path.display()))?;
+
+            return self.rescan_collection_notes(dir);
+        }
+
+        if path
+            .file_name()
+            .is_some_and(|name| name == tags::TAGS_FILE_NAME)
+        {
+            let dir = path
+                .parent()
+                .ok_or_else(|| format!("'{}' has no parent directory", path.display()))?;
+
+            return self.rescan_collection_tags(dir);
+        }
+
         self.rescan_publication(
             path,
             &library_root,
@@ -262,6 +301,116 @@ impl Worker {
             &content_extensions,
             &parse_metadata,
         )
+    }
+
+    fn rescan_collection_notes(&self, dir: &Path) -> Result<(), String> {
+        let collection_id = CollectionId::from_path(dir);
+
+        let Ok(collection) = self.store.get_collection(collection_id.clone()) else {
+            return Ok(());
+        };
+
+        let notes_path = dir.join(notes::NOTES_FILE_NAME);
+
+        if file_matches_last_written_source(&self.last_written_sources, &notes_path) {
+            return Ok(());
+        }
+
+        let sections = match std::fs::read_to_string(&notes_path) {
+            Ok(source) => match notes::parse_notes(&source) {
+                Ok(sections) => sections,
+                Err(e) => {
+                    warn!("Failed to parse notes in '{}': {}", dir.display(), e);
+                    return Ok(());
+                }
+            },
+            Err(_) => HashMap::new(),
+        };
+
+        let publications: Vec<(PublicationId, Publication)> = collection
+            .child_publication_ids
+            .iter()
+            .filter_map(|id| {
+                self.store
+                    .get_publication(id.clone())
+                    .ok()
+                    .map(|publication| (id.clone(), publication))
+            })
+            .collect();
+
+        for (publication_id, updated) in changed_notes(publications, &sections) {
+            if let Err(e) = self
+                .store
+                .update_publication(publication_id.clone(), updated.clone())
+            {
+                error!("Failed to store notes: {}", e);
+                continue;
+            }
+
+            self.emit(
+                "publication-upserted",
+                PublicationUpserted {
+                    publication_id,
+                    parent_collection_id: collection_id.clone(),
+                    publication: updated,
+                    origin: PublicationChangeOrigin::Notes,
+                },
+            );
+        }
+
+        Ok(())
+    }
+
+    fn rescan_collection_tags(&self, dir: &Path) -> Result<(), String> {
+        let collection_id = CollectionId::from_path(dir);
+
+        let Ok(collection) = self.store.get_collection(collection_id.clone()) else {
+            return Ok(());
+        };
+
+        let tags_by_stem = match std::fs::read_to_string(dir.join(tags::TAGS_FILE_NAME)) {
+            Ok(source) => match tags::parse_tags(&source) {
+                Ok(tags_by_stem) => tags_by_stem,
+                Err(e) => {
+                    warn!("Failed to parse tags in '{}': {}", dir.display(), e);
+                    return Ok(());
+                }
+            },
+            Err(_) => HashMap::new(),
+        };
+
+        let publications: Vec<(PublicationId, Publication)> = collection
+            .child_publication_ids
+            .iter()
+            .filter_map(|id| {
+                self.store
+                    .get_publication(id.clone())
+                    .ok()
+                    .map(|publication| (id.clone(), publication))
+            })
+            .collect();
+
+        for (publication_id, updated) in changed_tags(publications, &tags_by_stem) {
+            if let Err(e) = self
+                .store
+                .update_publication(publication_id.clone(), updated.clone())
+            {
+                error!("Failed to store tags: {}", e);
+                continue;
+            }
+
+            self.emit(
+                "publication-upserted",
+                PublicationUpserted {
+                    publication_id,
+                    parent_collection_id: collection_id.clone(),
+                    publication: updated,
+                    origin: PublicationChangeOrigin::Tags,
+                },
+            );
+        }
+
+        Ok(())
     }
 
     fn rescan_collection(
@@ -539,6 +688,59 @@ impl Worker {
             .map_err(|e| format!("Failed to write {}: {}", path.display(), e))
     }
 
+    fn write_publication_notes(
+        &mut self,
+        publication_id: PublicationId,
+        content: String,
+    ) -> Result<(), String> {
+        let publication = self
+            .store
+            .get_publication(publication_id.clone())
+            .map_err(|e| e.to_string())?;
+
+        let dir = publication
+            .path
+            .parent()
+            .ok_or_else(|| format!("'{}' has no parent directory", publication.path.display()))?
+            .to_path_buf();
+        let parent_collection_id = CollectionId::from_path(&dir);
+        let notes_path = dir.join(notes::NOTES_FILE_NAME);
+
+        // The trim mirrors what `parse_notes` does on the way back in, so the
+        // store, the file, and a reparse of it always agree.
+        let trimmed = content.trim_end();
+        let notes = (!trimmed.is_empty()).then(|| trimmed.to_string());
+
+        let previous = std::fs::read_to_string(&notes_path).unwrap_or_default();
+        let source = notes::write_note(&previous, &publication.name, notes.as_deref())
+            .map_err(|e| format!("Failed to write notes for '{}': {}", publication.name, e))?;
+
+        let updated = Publication {
+            notes,
+            ..publication
+        };
+
+        self.store
+            .update_publication(publication_id.clone(), updated.clone())
+            .map_err(|e| e.to_string())?;
+
+        self.emit(
+            "publication-upserted",
+            PublicationUpserted {
+                publication_id,
+                parent_collection_id,
+                publication: updated,
+                origin: PublicationChangeOrigin::NotesEditor,
+            },
+        );
+
+        self.last_written_sources
+            .insert(notes_path.clone(), source.clone());
+
+        std::fs::write(&notes_path, source)
+            .map_err(|e| format!("Failed to write {}: {}", notes_path.display(), e))
+    }
+
     fn schedule_reference_preview(&self, publication_id: PublicationId) {
         let delay = Duration::from_millis(
             self.config
@@ -686,6 +888,57 @@ pub fn ui_state_path(config: &Config) -> PathBuf {
     PathBuf::from(config.opts.data_path.clone()).join("ui_state.json")
 }
 
+fn changed_notes(
+    publications: Vec<(PublicationId, Publication)>,
+    sections: &HashMap<String, String>,
+) -> Vec<(PublicationId, Publication)> {
+    publications
+        .into_iter()
+        .filter_map(|(publication_id, publication)| {
+            let notes = sections.get(&publication.name).cloned();
+
+            if notes == publication.notes {
+                return None;
+            }
+
+            Some((
+                publication_id,
+                Publication {
+                    notes,
+                    ..publication
+                },
+            ))
+        })
+        .collect()
+}
+
+fn changed_tags(
+    publications: Vec<(PublicationId, Publication)>,
+    tags_by_stem: &HashMap<String, Vec<String>>,
+) -> Vec<(PublicationId, Publication)> {
+    publications
+        .into_iter()
+        .filter_map(|(publication_id, publication)| {
+            let tags = tags_by_stem
+                .get(&publication.name)
+                .cloned()
+                .unwrap_or_default();
+
+            if tags == publication.tags {
+                return None;
+            }
+
+            Some((
+                publication_id,
+                Publication {
+                    tags,
+                    ..publication
+                },
+            ))
+        })
+        .collect()
+}
+
 fn file_matches_last_written_source(
     last_written_sources: &HashMap<PathBuf, String>,
     path: &Path,
@@ -708,6 +961,170 @@ mod tests {
 
     fn publication_id(path: &str) -> PublicationId {
         PublicationId::from_path(Path::new(path))
+    }
+
+    fn publication_with_notes(name: &str, notes: Option<&str>) -> Publication {
+        Publication {
+            name: name.to_string(),
+            notes: notes.map(|n| n.to_string()),
+            ..Publication::default()
+        }
+    }
+
+    fn sections(entries: &[(&str, &str)]) -> HashMap<String, String> {
+        entries
+            .iter()
+            .map(|(key, body)| (key.to_string(), body.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn a_publication_gaining_a_section_is_reported() {
+        let publication = publication_with_notes("a", None);
+        let id = publication_id("a.bib");
+
+        let changed = changed_notes(vec![(id.clone(), publication)], &sections(&[("a", "body")]));
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].0, id);
+        assert_eq!(changed[0].1.notes, Some("body".to_string()));
+    }
+
+    #[test]
+    fn a_publication_losing_its_section_is_reported_as_cleared() {
+        let publication = publication_with_notes("a", Some("body"));
+        let id = publication_id("a.bib");
+
+        let changed = changed_notes(vec![(id.clone(), publication)], &sections(&[]));
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].0, id);
+        assert_eq!(changed[0].1.notes, None);
+    }
+
+    #[test]
+    fn an_edited_body_is_reported() {
+        let publication = publication_with_notes("a", Some("old"));
+        let id = publication_id("a.bib");
+
+        let changed = changed_notes(vec![(id.clone(), publication)], &sections(&[("a", "new")]));
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].0, id);
+        assert_eq!(changed[0].1.notes, Some("new".to_string()));
+    }
+
+    #[test]
+    fn an_unchanged_note_is_left_alone() {
+        let publication = publication_with_notes("a", Some("body"));
+        let id = publication_id("a.bib");
+
+        let changed = changed_notes(vec![(id, publication)], &sections(&[("a", "body")]));
+
+        assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn a_section_matching_no_publication_changes_nothing() {
+        let publication = publication_with_notes("a", Some("body"));
+        let id = publication_id("a.bib");
+
+        let changed = changed_notes(
+            vec![(id, publication)],
+            &sections(&[("a", "body"), ("orphan", "dropped")]),
+        );
+
+        assert!(changed.is_empty());
+    }
+
+    #[test]
+    fn only_the_publications_whose_notes_moved_are_reported() {
+        let unchanged = publication_with_notes("a", Some("body"));
+        let edited = publication_with_notes("b", Some("old"));
+        let unchanged_id = publication_id("a.bib");
+        let edited_id = publication_id("b.bib");
+
+        let changed = changed_notes(
+            vec![(unchanged_id, unchanged), (edited_id.clone(), edited)],
+            &sections(&[("a", "body"), ("b", "new")]),
+        );
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].0, edited_id);
+        assert_eq!(changed[0].1.notes, Some("new".to_string()));
+    }
+
+    fn publication_with_tags(name: &str, tags: &[&str]) -> Publication {
+        Publication {
+            name: name.to_string(),
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            ..Publication::default()
+        }
+    }
+
+    fn tag_entries(entries: &[(&str, &[&str])]) -> HashMap<String, Vec<String>> {
+        entries
+            .iter()
+            .map(|(key, tags)| {
+                (
+                    key.to_string(),
+                    tags.iter().map(|t| t.to_string()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_publication_gaining_tags_is_reported() {
+        let publication = publication_with_tags("a", &[]);
+        let id = publication_id("a.bib");
+
+        let changed = changed_tags(
+            vec![(id.clone(), publication)],
+            &tag_entries(&[("a", &["S1", "BRD"])]),
+        );
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].0, id);
+        assert_eq!(changed[0].1.tags, vec!["S1", "BRD"]);
+    }
+
+    #[test]
+    fn a_publication_losing_its_entry_is_cleared() {
+        let publication = publication_with_tags("a", &["S1"]);
+        let id = publication_id("a.bib");
+
+        let changed = changed_tags(vec![(id.clone(), publication)], &tag_entries(&[]));
+
+        assert_eq!(changed.len(), 1);
+        assert!(changed[0].1.tags.is_empty());
+    }
+
+    #[test]
+    fn an_edited_tag_list_is_reported() {
+        let publication = publication_with_tags("a", &["S1", "BRD"]);
+        let id = publication_id("a.bib");
+
+        let changed = changed_tags(
+            vec![(id.clone(), publication)],
+            &tag_entries(&[("a", &["S1", "CTX"])]),
+        );
+
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].1.tags, vec!["S1", "CTX"]);
+    }
+
+    #[test]
+    fn an_unchanged_tag_list_is_not_reported() {
+        let publication = publication_with_tags("a", &["S1", "BRD"]);
+        let id = publication_id("a.bib");
+
+        let changed = changed_tags(
+            vec![(id, publication)],
+            &tag_entries(&[("a", &["S1", "BRD"])]),
+        );
+
+        assert!(changed.is_empty());
     }
 
     #[test]

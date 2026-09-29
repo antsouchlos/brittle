@@ -21,7 +21,8 @@ import TreeView from '../components/TreeView.tsx';
 
 // import { PDFViewer } from '@embedpdf/react-pdf-viewer';
 import PublicationList from '../components/PublicationList.tsx';
-import DetailView from '../components/DetailView.tsx';
+import DetailViewWrapper from './DetailViewWrapper.tsx';
+import { type EditorMode } from '../components/TextEditor.tsx';
 
 import { KeymapStateMachine, normalizeKeyEvent } from './KeymapStateMachine.ts'
 import { invoke } from '@tauri-apps/api/core';
@@ -30,6 +31,7 @@ import CmdLine from '../components/CmdLine.tsx';
 import { ToastProvider, ToastContainer } from '../components/Toast';
 import { Action, ActionProvider, keymap, useActionDispatch } from './actions.tsx';
 import { ConfigProvider } from './config.tsx';
+import { FocusProvider } from './focus.tsx';
 import { UiStateProvider, useRestoredState } from './uiState.tsx';
 
 // const samplePdfConfig = {
@@ -38,7 +40,7 @@ import { UiStateProvider, useRestoredState } from './uiState.tsx';
 // };
 // const pdfStyle = { width: '100%', height: '100%' };
 
-const DEFAULT_LIBRARY_PANEL_WIDTHS = [0.25, 0.4];
+const DEFAULT_LIBRARY_PANEL_WIDTHS = [0.25, 0.35, 0.4];
 
 // Selects the first visible publication whenever the current selection is no
 // longer part of the collection shown in the publication list.
@@ -91,13 +93,13 @@ function useGlobalKeymap() {
 }
 
 // Loads the library and keeps it in sync with the backend.
-function useLibrary(): { lib: LibraryModel | null; reloadCount: number } {
+function useLibrary(): { lib: LibraryModel | null; libraryReloadCount: number } {
     const [state, setState] = useState<LibraryState | null>(null);
-    const [reloadCount, setReloadCount] = useState(0);
+    const [libraryReloadCount, setLibraryReloadCount] = useState(0);
 
     const loadLibraryData = useCallback(async () => {
         setState(await invoke<LibraryState>('get_library_state'));
-        setReloadCount(count => count + 1);
+        setLibraryReloadCount(count => count + 1);
     }, []);
 
     useEffect(() => {
@@ -129,18 +131,19 @@ function useLibrary(): { lib: LibraryModel | null; reloadCount: number } {
 
     const lib = useMemo(() => (state ? new LibraryModel(state) : null), [state]);
 
-    return { lib, reloadCount };
+    return { lib, libraryReloadCount };
 }
 
 function Workspace() {
     useGlobalKeymap();
 
-    const { lib, reloadCount: libraryReloadCount } = useLibrary();
+    const { lib, libraryReloadCount } = useLibrary();
 
     const [selectedCollectionId, setSelectedCollectionId] =
         useRestoredState<CollectionId | null>('selection.collection', null);
     const [selectedPublicationId, setSelectedPublicationId] =
         useRestoredState<PublicationId | null>('selection.publication', null);
+    const [editorMode, setEditorMode] = useRestoredState<EditorMode>('editor.mode', 'vim');
 
     // A restored or previously selected collection can disappear when the
     // library is rescanned.
@@ -179,15 +182,19 @@ function Workspace() {
                 date: String(publication.metadata!.year),
                 filename: publication.name,
                 contentFiles: publication.availableContentFileExtensions,
+                tags: publication.tags,
             }));
     }, [visiblePublicationIds, lib]);
 
     const selectedPublication: Publication | null = selectedPublicationId && lib
         ? lib.publications[selectedPublicationId] ?? null
         : null;
-    const selectedPublicationCollectionName = selectedPublicationId && lib
-        ? lib.getCollection(lib.publicationParents[selectedPublicationId])?.name ?? ''
+    const selectedCollectionName = selectedCollectionId && lib
+        ? lib.getCollection(selectedCollectionId)?.name ?? ''
         : '';
+    const libraryPanelLabel = selectedCollectionId && selectedCollectionId !== lib?.rootId
+        ? `LIBRARY - ${selectedCollectionName}`
+        : 'LIBRARY';
 
     const fixedTabs: TabData[] = [
         {
@@ -196,9 +203,14 @@ function Workspace() {
             renderContent: () => (
                 <HorizontalPanelLayout
                     defaultWidths={DEFAULT_LIBRARY_PANEL_WIDTHS}
-                    persistKey="panels.library.widths"
-                    firstPanelsData={[
+                    widthsPersistKey="panels.library.widths"
+                    collapsePersistKey="panels.library.collapsed"
+                    panelsData={[
                         {
+                            // The tree keeps claiming the cycle actions while
+                            // it is collapsed.
+                            collapsedBehaviour: 'hide',
+                            collapsedLabel: libraryPanelLabel,
                             renderContent: () => (
                                 <div className={styles.panelContainer}>
                                     {treeRoot && selectedCollectionId && (
@@ -224,20 +236,27 @@ function Workspace() {
                                     />
                                 </div>
                             ),
-                        }
+                        },
+                        {
+                            collapsedLabel: 'METADATA | NOTES',
+                            renderContent: () => (
+                                <div
+                                    className={styles.panelContainer}
+                                >
+                                    {selectedPublicationId && selectedPublication && (
+                                        <DetailViewWrapper
+                                            key={selectedPublicationId}
+                                            publicationId={selectedPublicationId}
+                                            publication={selectedPublication}
+                                            libraryReloadCount={libraryReloadCount}
+                                            editorMode={editorMode}
+                                            onEditorModeChange={setEditorMode}
+                                        />
+                                    )}
+                                </div>
+                            ),
+                        },
                     ]}
-                    renderLastPanelContent={() => (
-                        <div
-                            className={styles.panelContainer}
-                        >
-                            <DetailView
-                                publicationId={selectedPublicationId}
-                                publication={selectedPublication}
-                                collectionName={selectedPublicationCollectionName}
-                                libraryReloadCount={libraryReloadCount}
-                            />
-                        </div>
-                    )}
                 />
             ),
         },
@@ -282,7 +301,9 @@ function App() {
             <ConfigProvider>
                 <UiStateProvider>
                     <ActionProvider>
-                        <Workspace />
+                        <FocusProvider>
+                            <Workspace />
+                        </FocusProvider>
                     </ActionProvider>
                 </UiStateProvider>
             </ConfigProvider>

@@ -19,8 +19,10 @@ use crate::watcher::{spawn_watcher, WatchRegistry, WatcherCommand};
 
 mod config;
 mod library;
+mod notes;
 mod orchestrator;
 mod store;
+mod tags;
 mod watcher;
 
 pub fn get_emmy_lua() -> &'static str {
@@ -267,6 +269,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_library_state,
             write_publication_source,
+            write_publication_notes,
             get_config,
             load_ui_state,
             save_ui_state,
@@ -302,6 +305,25 @@ async fn write_publication_source(
 
     tauri::async_runtime::spawn_blocking(move || {
         orchestrator.enqueue_with_response(|respond| Action::WritePublicationSource {
+            publication_id,
+            content,
+            respond,
+        })
+    })
+    .await
+    .map_err(|e| format!("Orchestrator request failed: {}", e))??
+}
+
+#[tauri::command]
+async fn write_publication_notes(
+    publication_id: PublicationId,
+    content: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let orchestrator = state.orchestrator.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        orchestrator.enqueue_with_response(|respond| Action::WritePublicationNotes {
             publication_id,
             content,
             respond,

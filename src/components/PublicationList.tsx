@@ -1,12 +1,21 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type CSSProperties,
+    type RefObject,
+} from 'react';
 import { Fzf, extendedMatch } from 'fzf';
 import { FaFilePdf } from 'react-icons/fa';
-import { Globe } from 'lucide-react';
+import { Globe, X } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import styles from './PublicationList.module.css';
 import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
 import { logger } from '../app/logger';
-import { useTabActive } from './TabView';
+import { useFocusTarget } from '../app/focus.tsx';
+import { useConfig, type TagColors } from '../app/config';
 
 interface PublicationListItem {
     id: string;
@@ -16,6 +25,7 @@ interface PublicationListItem {
     date: string;
     filename: string;
     contentFiles: string[];
+    tags: string[];
 }
 
 interface PublicationListProps {
@@ -112,56 +122,54 @@ function ContentIndicators({ contentFiles }: { contentFiles: string[] }) {
     );
 }
 
+function tagChipStyle(colors: TagColors | undefined): CSSProperties | undefined {
+    if (!colors) return undefined;
+
+    return {
+        color: colors.foreground ?? undefined,
+        backgroundColor: colors.background ?? undefined,
+    };
+}
+
+function TagChips({ tags, tagColors }: { tags: string[]; tagColors: Record<string, TagColors> }) {
+    if (tags.length === 0) return null;
+
+    return (
+        <span className={styles.tagChips}>
+            {tags.map(tag => (
+                <span
+                    className={styles.tag}
+                    key={tag}
+                    title={tag}
+                    style={tagChipStyle(tagColors[tag])}
+                >{tag}</span>
+            ))}
+        </span>
+    );
+}
+
 function useFuzzyInputFocus(
     fuzzyFindVisible: boolean,
-    isActive: boolean,
-): {
-    inputRef: RefObject<HTMLInputElement | null>;
-    onContainerMouseDown: (e: React.MouseEvent) => void;
-} {
+) {
     const inputRef = useRef<HTMLInputElement>(null);
+    const focusTarget = useFocusTarget({ available: fuzzyFindVisible });
+    const { ref: registerElement, requestFocus } = focusTarget;
 
-    useEffect(() => {
-        if (!fuzzyFindVisible || !inputRef.current) return;
-        if (isActive) {
-            inputRef.current.focus();
-        } else {
-            inputRef.current.blur();
-        }
-    }, [isActive, fuzzyFindVisible]);
+    useLayoutEffect(() => {
+        registerElement(inputRef.current);
 
-    // The fuzzy bar is the default key owner while it is open: whenever DOM
-    // focus lands outside it and outside another editable surface (the bib
-    // editor, the command line), pull focus back into the input. This covers
-    // releases the other hook cannot see, like the bib editor blurring after
-    // 'Escape' or a pointer click on a collection or list card.
-    useEffect(() => {
-        if (!fuzzyFindVisible || !isActive) return;
+        return () => registerElement(null);
+    }, [registerElement, fuzzyFindVisible]);
 
-        const refocusIfUnclaimed = (event: FocusEvent) => {
-            const input = inputRef.current;
-            if (!input || !input.isConnected || input.offsetParent === null) return;
+    useLayoutEffect(() => {
+        if (!fuzzyFindVisible) return;
+        const activeElement = document.activeElement;
+        if (activeElement instanceof HTMLInputElement
+            || activeElement instanceof HTMLTextAreaElement
+            || (activeElement instanceof HTMLElement && activeElement.isContentEditable)) return;
 
-            const nextTarget = event.relatedTarget as HTMLElement | null;
-            const focusOnOtherTextArea = nextTarget instanceof HTMLElement
-                && nextTarget !== input
-                && (nextTarget instanceof HTMLInputElement
-                    || nextTarget instanceof HTMLTextAreaElement
-                    || nextTarget.isContentEditable);
-            if (focusOnOtherTextArea) return;
-
-            // Defer a frame so the refocus never fights the click or a tab
-            // switch that blurred the input in the first place.
-            requestAnimationFrame(() => {
-                if (input.isConnected && document.activeElement !== input) {
-                    input.focus();
-                }
-            });
-        };
-
-        document.addEventListener('focusout', refocusIfUnclaimed);
-        return () => document.removeEventListener('focusout', refocusIfUnclaimed);
-    }, [fuzzyFindVisible, isActive]);
+        requestFocus();
+    }, [fuzzyFindVisible, requestFocus]);
 
     const onContainerMouseDown = (e: React.MouseEvent) => {
         if (fuzzyFindVisible && inputRef.current) {
@@ -292,7 +300,7 @@ function PublicationList({
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
-    const tabActive = useTabActive();
+    const { opts: { tagColors } } = useConfig();
 
     useScrollToSelected(listRef, selectedPublicationId, publications);
 
@@ -304,7 +312,7 @@ function PublicationList({
             listRef,
         );
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
-        useFuzzyInputFocus(fuzzyFindVisible, tabActive);
+        useFuzzyInputFocus(fuzzyFindVisible);
 
     // While the fuzzy bar is open the highlight moves within the filtered
     // view. Otherwise the selection moves through the full list.
@@ -327,36 +335,47 @@ function PublicationList({
             .catch(e => logger.error(String(e)));
     };
 
-    useActionHandler(Action.SelectNext, () => selectAdjacentPublication(1), tabActive);
-    useActionHandler(Action.SelectPrev, () => selectAdjacentPublication(-1), tabActive);
-    useActionHandler(Action.Submit, openSelectedPublication, tabActive);
-    useActionHandler(Action.OpenFuzzyFind, () => setFuzzyFindVisible(true), tabActive);
+    useActionHandler(Action.SelectNext, () => selectAdjacentPublication(1));
+    useActionHandler(Action.SelectPrev, () => selectAdjacentPublication(-1));
+    useActionHandler(Action.Submit, openSelectedPublication);
+    useActionHandler(Action.OpenFuzzyFind, () => setFuzzyFindVisible(true));
     // Escape is only claimed while the bar is actually open, so it stays free
     // for anything else when it is not.
-    useActionHandler(Action.Cancel, () => setFuzzyFindVisible(false), tabActive && fuzzyFindVisible);
+    useActionHandler(Action.Cancel, () => setFuzzyFindVisible(false), fuzzyFindVisible);
 
     return (
-        <div className={styles.publicationList}
-            onMouseDown={onContainerMouseDown}
-        >
+        <div className={styles.publicationList}>
             {fuzzyFindVisible && (
                 <div className={styles.fuzzyBar}>
-                    <span className={styles.fuzzyPrompt}>&gt;</span>
-                    <input
-                        ref={fuzzyInputRef}
-                        className={styles.fuzzyInput}
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="publisher · title · author · year"
-                        onKeyDown={(e) => {
-                            if (isTextProducingKey(e.nativeEvent)) e.stopPropagation();
-                        }}
-                        spellCheck={false}
-                        autoComplete="off"
-                    />
+                    <div className={styles.fuzzyField} onMouseDown={onContainerMouseDown}>
+                        <span className={styles.fuzzyPrompt}>&gt;</span>
+                        <input
+                            ref={fuzzyInputRef}
+                            className={styles.fuzzyInput}
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            aria-label="Search publications"
+                            placeholder="publisher · title · author · year"
+                            onKeyDown={(e) => {
+                                if (isTextProducingKey(e.nativeEvent)) e.stopPropagation();
+                            }}
+                            spellCheck={false}
+                            autoComplete="off"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        className={styles.closeSearchButton}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setFuzzyFindVisible(false)}
+                        aria-label="Close publication search"
+                    >
+                        <X aria-hidden="true" />
+                        <span className={styles.closeSearchShortcut}>Esc</span>
+                    </button>
                 </div>
             )}
-            <div className={styles.listContainer} ref={listRef}>
+            <div className={styles.listContainer} ref={listRef} onMouseDown={onContainerMouseDown}>
                 <div className={styles.list}>
                     {displayItems.map(({ pub, titlePositions, authorPositions, publisherPositions: publisherPositions, datePositions, filenamePositions }, idx) => (
                         <div
@@ -369,25 +388,30 @@ function PublicationList({
                             }
                             onClick={() => selectByClick(idx, pub.id)}
                         >
-                            <div className={styles.cardTopRow}>
-                                <span className={styles.publisher}>
-                                    <HighlightedText text={pub.publisher} matchPositions={publisherPositions} />
+                            <div className={styles.cardBody}>
+                                <div className={styles.cardTopRow}>
+                                    <span className={styles.publisher}>
+                                        <HighlightedText text={pub.publisher} matchPositions={publisherPositions} />
+                                    </span>
+                                    <span className={styles.dateBadge}>
+                                        <TagChips tags={pub.tags} tagColors={tagColors} />
+                                        <span className={styles.year}>
+                                            <HighlightedText text={pub.date} matchPositions={datePositions} />
+                                        </span>
+                                    </span>
+                                </div>
+                                <span className={styles.cardTitle}>
+                                    <HighlightedText text={pub.title} matchPositions={titlePositions} />
                                 </span>
-                                <span className={styles.dateBadge}>
-                                    <ContentIndicators contentFiles={pub.contentFiles} />
-                                    <HighlightedText text={pub.date} matchPositions={datePositions} />
-                                </span>
-                            </div>
-                            <span className={styles.cardTitle}>
-                                <HighlightedText text={pub.title} matchPositions={titlePositions} />
-                            </span>
-                            <div className={styles.cardBottomRow}>
-                                <span className={styles.author}>
-                                    <HighlightedText text={pub.author} matchPositions={authorPositions} />
-                                </span>
-                                <span className={styles.filenameBadge}>
-                                    <HighlightedText text={pub.filename} matchPositions={filenamePositions} />
-                                </span>
+                                <div className={styles.cardBottomRow}>
+                                    <span className={styles.author}>
+                                        <HighlightedText text={pub.author} matchPositions={authorPositions} />
+                                    </span>
+                                    <span className={styles.filenameBadge}>
+                                        <ContentIndicators contentFiles={pub.contentFiles} />
+                                        <HighlightedText text={pub.filename} matchPositions={filenamePositions} />
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     ))}

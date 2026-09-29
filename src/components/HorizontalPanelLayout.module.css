@@ -1,20 +1,21 @@
 .horizontalPanelLayout {
+    position: relative;
     display: flex;
     height: 100%;
 }
 
-.isDragging {
+.isDragging,
+.isDragging * {
     cursor: col-resize !important;
 }
 
 .panel {
-    flex: 0 0 auto;
     min-width: 0;
     overflow: hidden;
 }
 
-.panel:last-child {
-    flex: 1 0 0;
+.hiddenPanel {
+    display: none;
 }
 
 .separator {
@@ -41,4 +42,64 @@
 
 .activeSeparator::before {
     background: var(--accent1) !important;
+}
+
+.collapseBand {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: var(--bg1);
+    color: var(--fg3);
+}
+
+.collapseDropZone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: transparent;
+}
+
+.leftEdge {
+    left: 0;
+}
+
+.rightEdge {
+    right: 0;
+}
+
+.armedDropZone {
+    background: var(--accent1);
+    color: var(--bg0);
+}
+
+.collapsedPanelHandle {
+    position: relative;
+    padding: 0;
+    border: none;
+    font: inherit;
+    cursor: pointer;
+}
+
+.collapsedPanelHandle:hover {
+    background: var(--bg2);
+    color: var(--fg1);
+}
+
+.collapsedPanelLabel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    max-height: calc(50% - 12px);
+    padding-bottom: 6px;
+    overflow: hidden;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }

@@ -1,0 +1,146 @@
+.editorHost {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    container-type: inline-size;
+}
+
+.editor {
+    flex: 1;
+    min-height: 0;
+}
+
+.editor :global(.cm-editor) {
+    border-radius: 4px;
+    border: 1px solid var(--bg3);
+    background: var(--bg1);
+}
+
+.editor :global(.cm-editor.cm-focused) {
+    outline: none;
+    border: 1px solid var(--accent1);
+}
+
+.editor :global(.cm-line) {
+    padding-left: 0 !important;
+}
+
+.editor :global(.cm-content) {
+    padding: 4px 4px 32px;
+    font-size: 0.9rem;
+}
+
+.editor :global(.cm-cursor) {
+    border-left: 1px solid var(--fg0);
+}
+
+.editor :global(.cm-fat-cursor) {
+    outline: none !important;
+    background: var(--fg3) !important;
+    color: var(--bg1) !important;
+}
+
+.editor :global(.cm-editor:not(.cm-focused)) :global(.cm-fat-cursor) {
+    display: none;
+}
+
+.editor :global(.cm-selectionBackground) {
+    background: var(--bg3) !important;
+}
+
+.editor :global(.cm-searchMatch) {
+    background-color: color-mix(in srgb, var(--accent1) 35%, transparent) !important;
+}
+
+.editor :global(.cm-panels-bottom) {
+    border-top: 1px solid var(--bg3);
+    background: var(--bg1);
+    color: var(--fg1);
+}
+
+.editor :global(.cm-vim-panel) {
+    min-height: 28px;
+    align-items: center;
+    padding: 3px 10px;
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    line-height: var(--line-height);
+}
+
+.editor :global(.cm-vim-panel > div > div) {
+    min-width: 0;
+    align-items: center;
+}
+
+.editor :global(.cm-vim-panel > div > div > span:first-child) {
+    min-width: 0;
+    color: var(--accent1);
+}
+
+.editor :global(.cm-vim-panel input) {
+    min-width: 0;
+    color: var(--fg1);
+    font: inherit;
+    caret-color: var(--accent1);
+}
+
+.editor :global(.cm-vim-panel > div > div > span:last-child:not(:first-child)) {
+    flex-shrink: 0;
+    margin-left: 8px;
+    color: var(--fg4) !important;
+    white-space: nowrap;
+}
+
+@container (max-width: 480px) {
+    .editor :global(.cm-vim-panel > div > div > span:last-child:not(:first-child)) {
+        display: none;
+    }
+}
+
+.modeToggle {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px;
+    border: 0;
+    border-radius: 3px;
+    background: var(--bg1);
+    color: inherit;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.modeToggleTrack {
+    position: relative;
+    width: 30px;
+    height: 16px;
+    border-radius: 8px;
+    background: var(--bg3);
+    transition: background 150ms ease;
+}
+
+.modeToggleThumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--fg0);
+    transition: transform 150ms ease;
+}
+
+.modeToggle[aria-checked='true'] .modeToggleTrack {
+    background: var(--accent1);
+}
+
+.modeToggle[aria-checked='true'] .modeToggleThumb {
+    transform: translateX(14px);
+}
