@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -9,13 +10,20 @@ import {
 } from 'react';
 import { Fzf, extendedMatch } from 'fzf';
 import { FaFilePdf } from 'react-icons/fa';
-import { Globe, X } from 'lucide-react';
+import { Globe, Pencil, X } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import styles from './PublicationList.module.css';
-import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
+import {
+    Action,
+    findKeybindingForAction,
+    isTextProducingKey,
+    useActionHandler,
+} from '../app/actions';
 import { logger } from '../app/logger';
 import { useFocusTarget } from '../app/focus.tsx';
 import { useConfig, type TagColors } from '../app/config';
+import TextEditor, { type EditorMode } from './TextEditor.tsx';
+import { useAutosavedPublicationText, type PublicationTextFile } from '../app/useAutosavedPublicationText.ts';
 
 interface PublicationListItem {
     id: string;
@@ -32,6 +40,8 @@ interface PublicationListProps {
     publications: Array<PublicationListItem>
     selectedPublicationId: string;
     onSelectPublication: (publicationId: string) => void;
+    editorMode: EditorMode;
+    onEditorModeChange: (mode: EditorMode) => void;
 }
 
 interface HighlightPart {
@@ -146,6 +156,178 @@ function TagChips({ tags, tagColors }: { tags: string[]; tagColors: Record<strin
             ))}
         </span>
     );
+}
+
+interface PublicationTagsProps {
+    publicationId: string;
+    selected: boolean;
+    editing: boolean;
+    tags: string[];
+    tagColors: Record<string, TagColors>;
+    onOpen: (publicationId: string) => void;
+}
+
+interface FloatingTagEditorProps {
+    publicationId: string;
+    tags: string[];
+    editorMode: EditorMode;
+    onEditorModeChange: (mode: EditorMode) => void;
+    editorElementRef: (element: HTMLElement | null) => void;
+    onClose: () => void;
+}
+
+function isValidTagText(text: string): boolean {
+    try {
+        const tags: unknown = JSON.parse(text);
+
+        return Array.isArray(tags) && tags.every(tag => typeof tag === 'string');
+    } catch {
+        return false;
+    }
+}
+
+const TAGS_FILE: PublicationTextFile = {
+    writeCommand: 'write_publication_tags',
+    originsThatRereadFile: ['disk', 'tags'],
+    readText: publication => JSON.stringify(publication.tags),
+    isValid: isValidTagText,
+};
+
+function FloatingTagEditor({
+    publicationId,
+    tags,
+    editorMode,
+    onEditorModeChange,
+    editorElementRef,
+    onClose,
+}: FloatingTagEditorProps) {
+    const tagText = useAutosavedPublicationText(publicationId, JSON.stringify(tags), TAGS_FILE);
+
+    return (
+        <div
+            className={styles.floatingTagEditor}
+            onMouseDown={event => event.stopPropagation()}
+            onClick={event => event.stopPropagation()}
+            onBlur={onClose}
+            onKeyDown={event => event.stopPropagation()}
+        >
+            <TextEditor
+                value={tagText.value}
+                onChange={tagText.onChange}
+                mode={editorMode}
+                onModeChange={onEditorModeChange}
+                onLeaveRequest={onClose}
+                editorElementRef={editorElementRef}
+                singleLine={true}
+            />
+            <button
+                type="button"
+                className={styles.closeTagEditorButton}
+                onMouseDown={event => event.preventDefault()}
+                onClick={onClose}
+            >
+                <X />
+                <span className={styles.closeTagEditorShortcut}>Esc</span>
+            </button>
+        </div>
+    );
+}
+
+function PublicationTags({
+    publicationId,
+    selected,
+    editing,
+    tags,
+    tagColors,
+    onOpen,
+}: PublicationTagsProps) {
+    const shortcut = findKeybindingForAction(Action.FocusTagsEditor);
+
+    const openEditor = (event: React.MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        onOpen(publicationId);
+    };
+
+    return (
+        <div
+            className={styles.publicationTags}
+            data-editing={editing}
+            data-selected={selected}
+        >
+            <div className={styles.publicationTagsPlaceholder}>
+                <button
+                    type="button"
+                    className={styles.tagEditButton}
+                    onMouseDown={event => event.preventDefault()}
+                    onClick={openEditor}
+                >
+                    <span className={styles.tagEditIcon}>
+                        <Pencil />
+                    </span>
+                    <span className={styles.tagEditShortcut}>{shortcut}</span>
+                </button>
+                <TagChips tags={tags} tagColors={tagColors} />
+            </div>
+        </div>
+    );
+}
+
+// Coordinates a single floating tag editor shared by all publication rows.
+function useTagEditor(
+    publications: PublicationListItem[],
+    visiblePublicationIds: string[],
+    selectedPublicationId: string,
+    onSelectPublication: (publicationId: string) => void,
+) {
+    const {
+        ref: registerEditorElement,
+        requestFocus,
+        releaseFocus,
+    } = useFocusTarget();
+    const [editingPublicationId, setEditingPublicationId] = useState<string | null>(null);
+    const visibleEditingPublicationId = editingPublicationId !== null
+        && editingPublicationId === selectedPublicationId
+        && visiblePublicationIds.includes(editingPublicationId)
+        ? editingPublicationId
+        : null;
+
+    const close = useCallback(() => {
+        setEditingPublicationId(null);
+        releaseFocus();
+    }, [releaseFocus]);
+
+    const open = (publicationId: string) => {
+        const publication = publications.find(candidate => candidate.id === publicationId);
+        if (!publication || !visiblePublicationIds.includes(publicationId)) return;
+
+        onSelectPublication(publicationId);
+        if (editingPublicationId === publicationId) {
+            requestFocus();
+            return;
+        }
+
+        setEditingPublicationId(publicationId);
+        requestFocus();
+    };
+
+    useEffect(() => {
+        if (editingPublicationId === null || visibleEditingPublicationId !== null) return;
+
+        close();
+    }, [editingPublicationId, visibleEditingPublicationId, close]);
+
+    useActionHandler(
+        Action.FocusTagsEditor,
+        () => open(selectedPublicationId),
+        selectedPublicationId !== '',
+    );
+
+    return {
+        registerEditorElement,
+        editingPublicationId: visibleEditingPublicationId,
+        open,
+        close,
+    };
 }
 
 function useFuzzyInputFocus(
@@ -297,6 +479,8 @@ function PublicationList({
     publications,
     selectedPublicationId,
     onSelectPublication,
+    editorMode,
+    onEditorModeChange,
 }: PublicationListProps) {
     const listRef = useRef<HTMLDivElement>(null);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
@@ -311,6 +495,13 @@ function PublicationList({
             onSelectPublication,
             listRef,
         );
+    const visiblePublicationIds = displayItems.map(({ pub }) => pub.id);
+    const tagEditor = useTagEditor(
+        publications,
+        visiblePublicationIds,
+        selectedPublicationId,
+        onSelectPublication,
+    );
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
         useFuzzyInputFocus(fuzzyFindVisible);
 
@@ -393,12 +584,27 @@ function PublicationList({
                                     <span className={styles.publisher}>
                                         <HighlightedText text={pub.publisher} matchPositions={publisherPositions} />
                                     </span>
-                                    <span className={styles.dateBadge}>
-                                        <TagChips tags={pub.tags} tagColors={tagColors} />
-                                        <span className={styles.year}>
-                                            <HighlightedText text={pub.date} matchPositions={datePositions} />
-                                        </span>
+                                    <PublicationTags
+                                        publicationId={pub.id}
+                                        selected={selectedPublicationId === pub.id}
+                                        editing={tagEditor.editingPublicationId === pub.id}
+                                        tags={pub.tags}
+                                        tagColors={tagColors}
+                                        onOpen={tagEditor.open}
+                                    />
+                                    <span className={styles.year}>
+                                        <HighlightedText text={pub.date} matchPositions={datePositions} />
                                     </span>
+                                    {tagEditor.editingPublicationId === pub.id && (
+                                        <FloatingTagEditor
+                                            publicationId={pub.id}
+                                            tags={pub.tags}
+                                            editorMode={editorMode}
+                                            onEditorModeChange={onEditorModeChange}
+                                            editorElementRef={tagEditor.registerEditorElement}
+                                            onClose={tagEditor.close}
+                                        />
+                                    )}
                                 </div>
                                 <span className={styles.cardTitle}>
                                     <HighlightedText text={pub.title} matchPositions={titlePositions} />

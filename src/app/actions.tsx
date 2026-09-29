@@ -17,6 +17,7 @@ export enum Action {
     FocusMetadataEditor,
     ToggleMetadataEditor,
     FocusNotesEditor,
+    FocusTagsEditor,
 }
 
 export const keymap: Array<[string, Action]> = [
@@ -32,6 +33,7 @@ export const keymap: Array<[string, Action]> = [
     ["gT", Action.PrevTab],
     ["Enter", Action.Submit],
     ["Ctrl+e", Action.FocusNotesEditor],
+    ['Ctrl+g', Action.FocusTagsEditor],
     ["Ctrl+m", Action.FocusMetadataEditor],
     ["Ctrl+t", Action.ToggleMetadataEditor],
     [":", Action.OpenCmdLine],

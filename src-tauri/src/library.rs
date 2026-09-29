@@ -339,7 +339,7 @@ fn read_tags(dir: &Path) -> HashMap<String, Vec<String>> {
         return HashMap::new();
     };
 
-    match tags::parse_tags(&source) {
+    match tags::parse_file_tag_source(&source) {
         Ok(tags_by_stem) => tags_by_stem,
         Err(e) => {
             log::warn!("Failed to parse tags in '{}': {}", dir.display(), e);

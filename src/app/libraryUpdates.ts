@@ -12,7 +12,8 @@ export type PublicationChangeOrigin =
     | 'referencePreviewCompiler'
     | 'notes'
     | 'notesEditor'
-    | 'tags';
+    | 'tags'
+    | 'tagsEditor';
 
 export interface PublicationUpserted {
     publicationId: PublicationId;

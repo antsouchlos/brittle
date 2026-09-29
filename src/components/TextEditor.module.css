@@ -12,6 +12,44 @@
     min-height: 0;
 }
 
+.singleLineEditorHost {
+    width: 100%;
+    height: 100%;
+}
+
+.singleLineEditorHost .editor,
+.singleLineEditorHost .editor :global(.cm-editor),
+.singleLineEditorHost .editor :global(.cm-scroller) {
+    height: 100%;
+}
+
+.singleLineEditorHost .editor :global(.cm-editor) {
+    box-sizing: border-box;
+    border-radius: 2px;
+    background: var(--bg0);
+}
+
+.singleLineEditorHost .editor :global(.cm-scroller) {
+    overflow: hidden;
+    font-family: inherit;
+}
+
+.singleLineEditorHost .editor :global(.cm-content) {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 100%;
+    min-height: 0;
+    padding: 0 var(--single-line-editor-end-padding, 4px) 0 4px;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.singleLineEditorHost .editor :global(.cm-line) {
+    padding: 0 !important;
+}
+
 .editor :global(.cm-editor) {
     border-radius: 4px;
     border: 1px solid var(--bg3);
@@ -29,6 +67,7 @@
 
 .editor :global(.cm-content) {
     padding: 4px 4px 32px;
+    cursor: text;
     font-size: 0.9rem;
 }
 
@@ -117,6 +156,15 @@
     cursor: pointer;
 }
 
+.singleLineEditorHost .modeToggle {
+    top: 50%;
+    right: 3.6rem;
+    bottom: auto;
+    transform: translateY(-50%);
+    padding: 1px 3px;
+    background: var(--bg0);
+}
+
 .modeToggleTrack {
     position: relative;
     width: 30px;
@@ -137,10 +185,10 @@
     transition: transform 150ms ease;
 }
 
-.modeToggle[aria-checked='true'] .modeToggleTrack {
+.modeToggle[data-vim='true'] .modeToggleTrack {
     background: var(--accent1);
 }
 
-.modeToggle[aria-checked='true'] .modeToggleThumb {
+.modeToggle[data-vim='true'] .modeToggleThumb {
     transform: translateX(14px);
 }

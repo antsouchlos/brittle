@@ -270,6 +270,7 @@ pub fn run() {
             get_library_state,
             write_publication_source,
             write_publication_notes,
+            write_publication_tags,
             get_config,
             load_ui_state,
             save_ui_state,
@@ -324,6 +325,25 @@ async fn write_publication_notes(
 
     tauri::async_runtime::spawn_blocking(move || {
         orchestrator.enqueue_with_response(|respond| Action::WritePublicationNotes {
+            publication_id,
+            content,
+            respond,
+        })
+    })
+    .await
+    .map_err(|e| format!("Orchestrator request failed: {}", e))??
+}
+
+#[tauri::command]
+async fn write_publication_tags(
+    publication_id: PublicationId,
+    content: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let orchestrator = state.orchestrator.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        orchestrator.enqueue_with_response(|respond| Action::WritePublicationTags {
             publication_id,
             content,
             respond,

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import CodeMirror from '@uiw/react-codemirror';
-import { EditorState, type Extension } from '@codemirror/state';
+import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { drawSelection, EditorView, keymap, type KeyBinding } from '@codemirror/view';
 import {
     cursorCharLeft,
@@ -53,6 +53,7 @@ export interface TextEditorProps {
     onLeaveRequest?: () => void;
     editorElementRef?: (element: HTMLElement | null) => void;
     lineWrapping?: boolean;
+    singleLine?: boolean;
 }
 
 const WRAPPED_VISUAL_EXTENSIONS: Extension[] = [EditorView.lineWrapping, WRAP_MARKERS];
@@ -83,6 +84,22 @@ const MINIMUM_VIM_KEYMAP: readonly KeyBinding[] = [
 ];
 const VIM_EDITOR_EXTENSIONS: Extension[] = [keymap.of(MINIMUM_VIM_KEYMAP), vim()];
 const STANDARD_EDITOR_EXTENSIONS: Extension[] = [keymap.of([...standardKeymap, ...historyKeymap])];
+const SINGLE_LINE_EXTENSIONS: Extension[] = [
+    EditorState.changeFilter.of(transaction => transaction.newDoc.lines === 1),
+    Prec.highest(EditorView.domEventHandlers({
+        keydown(event, editorView) {
+            if (event.key !== ':' && event.key !== '/' && event.key !== '?') return false;
+
+            const vimState = getCM(editorView)?.state.vim;
+            if (!vimState || vimState.insertMode) return false;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            return true;
+        },
+    })),
+];
 
 export default function TextEditor({
     value,
@@ -92,6 +109,7 @@ export default function TextEditor({
     onLeaveRequest,
     editorElementRef,
     lineWrapping = true,
+    singleLine = false,
 }: TextEditorProps) {
     const [view, setView] = useState<EditorView | null>(null);
     const leaveRequestRef = useRef(onLeaveRequest);
@@ -106,10 +124,19 @@ export default function TextEditor({
 
     const extensions = useMemo(() => [
         ...SHARED_EDITOR_EXTENSIONS,
-        ...(lineWrapping ? WRAPPED_VISUAL_EXTENSIONS : UNWRAPPED_VISUAL_EXTENSIONS),
+        ...(lineWrapping && !singleLine ? WRAPPED_VISUAL_EXTENSIONS : UNWRAPPED_VISUAL_EXTENSIONS),
+        ...(singleLine ? SINGLE_LINE_EXTENSIONS : []),
         ...(mode === 'vim' ? VIM_EDITOR_EXTENSIONS : STANDARD_EDITOR_EXTENSIONS),
         EditorView.domEventHandlers({
             keydown(event, editorView) {
+                if (singleLine && event.key === 'Enter') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (mode === 'standard') leaveRequestRef.current?.();
+
+                    return true;
+                }
+
                 if (mode === 'vim' && event.ctrlKey && !event.altKey && !event.metaKey
                     && !event.shiftKey && event.key.toLowerCase() === 'l') {
                     const cm = getCM(editorView);
@@ -151,10 +178,10 @@ export default function TextEditor({
                 return true;
             },
         }),
-    ], [mode, lineWrapping]);
+    ], [mode, lineWrapping, singleLine]);
 
     return (
-        <div className={styles.editorHost}>
+        <div className={`${styles.editorHost} ${singleLine ? styles.singleLineEditorHost : ''}`}>
             <CodeMirror
                 onCreateEditor={setView}
                 value={value}
@@ -166,10 +193,8 @@ export default function TextEditor({
             <button
                 type="button"
                 className={styles.modeToggle}
+                data-vim={mode === 'vim'}
                 tabIndex={-1}
-                role="switch"
-                aria-checked={mode === 'vim'}
-                aria-label="Vim mode"
                 onMouseDown={event => event.preventDefault()}
                 onClick={() => onModeChange(mode === 'vim' ? 'standard' : 'vim')}
             >
