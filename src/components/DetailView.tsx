@@ -5,7 +5,7 @@ import { ChevronDown, ChevronUp, Eye, Pencil, X } from 'lucide-react';
 import styles from './DetailView.module.css';
 import TextEditor, { type EditorMode } from './TextEditor.tsx';
 import { parseInlineMarkup } from './inlineMarkup.tsx';
-import { useFocusTarget } from '../app/focus.tsx';
+import { useFocusTarget, type FocusTarget } from '../app/focus.tsx';
 import { Action, findKeybindingForAction, useActionHandler } from '../app/actions.tsx';
 import { useRestoredState } from '../app/uiState.tsx';
 
@@ -136,13 +136,32 @@ function NotesSection({ notes, onChange, editorMode, onEditorModeChange }: Notes
 
 interface ReferencePreviewProps {
     markup: string | null;
+    focusTarget: FocusTarget;
+    onLeave: () => void;
 }
 
-function ReferencePreview({ markup }: ReferencePreviewProps) {
+function ReferencePreview({ markup, focusTarget, onLeave }: ReferencePreviewProps) {
     if (markup === null || markup.trim() === '') return null;
 
     return (
-        <div className={styles.referencePreview}>
+        <div
+            className={styles.referencePreview}
+            ref={focusTarget.ref}
+            tabIndex={-1}
+            onPointerDown={event => {
+                if (event.button === 0) event.currentTarget.focus();
+            }}
+            onKeyDown={event => {
+                if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+                    event.stopPropagation();
+                }
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onLeave();
+                }
+            }}
+        >
             <hr />
             <p className={styles.referencePreviewBody}>{parseInlineMarkup(markup)}</p>
         </div>
@@ -155,8 +174,8 @@ interface MetadataSectionProps {
     onChange: (text: string) => void;
     editorMode: EditorMode;
     onEditorModeChange: (mode: EditorMode) => void;
-    expanded: boolean;
-    onExpandedChange: (expanded: boolean) => void;
+    pinned: boolean;
+    onPinnedChange: (pinned: boolean) => void;
 }
 
 function MetadataSection({
@@ -165,42 +184,80 @@ function MetadataSection({
     onChange,
     editorMode,
     onEditorModeChange,
-    expanded,
-    onExpandedChange,
+    pinned,
+    onPinnedChange,
 }: MetadataSectionProps) {
-    const editor = useEditorSession();
-    const { editing } = editor;
-    const visible = expanded || editing;
-    const editShortcut = editing ? 'Esc' : findKeybindingForAction(Action.FocusMetadataEditor);
+    const editorFocusTarget = useFocusTarget();
+    const previewFocusTarget = useFocusTarget();
+    // A session keeps the section open while the user is working in it. Pinning
+    // keeps it open between sessions. It is visible when either condition holds.
+    // editorFocused separately marks that the editor itself owns focus.
+    const [sectionActive, setSectionActive] = useState(false);
+    const [editorFocused, setEditorFocused] = useState(false);
+    const visible = pinned || sectionActive;
+    const editShortcut = editorFocused ? 'Esc' : findKeybindingForAction(Action.FocusMetadataEditor);
     const toggleShortcut = findKeybindingForAction(Action.ToggleMetadataEditor);
 
-    const toggleEditing = () => {
-        if (editing) editor.closeEditor();
-        else editor.openEditor();
+    const openEditor = () => {
+        // Mount the editor before the focus controller fulfills the request.
+        setSectionActive(true);
+        editorFocusTarget.requestFocus();
     };
-    const toggleExpanded = () => {
-        onExpandedChange(!visible);
-        editor.closeEditor();
+    const closeSession = () => {
+        setSectionActive(false);
+        setEditorFocused(false);
+        editorFocusTarget.releaseFocus();
+        previewFocusTarget.releaseFocus();
+    };
+    const handleSectionBlur = (event: FocusEvent<HTMLElement>) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && event.currentTarget.contains(next)) return;
+
+        // A pinned editor stays mounted, so blur must also relinquish focus ownership.
+        closeSession();
+    };
+    const handleEditorFocus = () => {
+        previewFocusTarget.releaseFocus();
+        setEditorFocused(true);
+    };
+    const handleEditorBlur = (event: FocusEvent<HTMLDivElement>) => {
+        const next = event.relatedTarget;
+        if (next instanceof Node && event.currentTarget.contains(next)) return;
+
+        setEditorFocused(false);
+        editorFocusTarget.releaseFocus();
+    };
+    const toggleEditing = () => {
+        if (editorFocused) closeSession();
+        else openEditor();
+    };
+    const togglePinned = () => {
+        onPinnedChange(!visible);
+        closeSession();
     };
 
-    useActionHandler(Action.FocusMetadataEditor, editor.openEditor);
-    useActionHandler(Action.ToggleMetadataEditor, toggleExpanded);
+    useActionHandler(Action.FocusMetadataEditor, openEditor);
+    useActionHandler(Action.ToggleMetadataEditor, togglePinned);
 
     return (
-        <section className={styles.metadataSection}>
+        <section
+            className={styles.metadataSection}
+            onFocus={() => setSectionActive(true)}
+            onBlur={handleSectionBlur}
+        >
             <header className={styles.sectionHeader}>
-                <h2 className={editing ? styles.editingMarker : styles.sectionLabel}>
-                    {editing ? '\u25cf Editing' : 'Metadata'}
+                <h2 className={editorFocused ? styles.editingMarker : styles.sectionLabel}>
+                    {editorFocused ? '\u25cf Editing' : 'Metadata'}
                 </h2>
                 <button
                     type="button"
                     className={styles.sectionToggle}
-                    data-active={editing}
+                    data-active={editorFocused}
                     onMouseDown={preventToggleFocus}
                     onClick={toggleEditing}
-                    aria-label={editing ? 'Leave metadata editor' : 'Edit metadata source'}
+                    aria-label={editorFocused ? 'Leave metadata editor' : 'Edit metadata source'}
                 >
-                    {editing
+                    {editorFocused
                         ? <X aria-hidden="true" />
                         : <Pencil aria-hidden="true" />}
                     {editShortcut && (
@@ -210,9 +267,9 @@ function MetadataSection({
                 <button
                     type="button"
                     className={styles.sectionToggle}
-                    data-active={editing}
+                    data-active={editorFocused}
                     onMouseDown={preventToggleFocus}
-                    onClick={toggleExpanded}
+                    onClick={togglePinned}
                     aria-label={visible ? 'Hide metadata editor' : 'Show metadata editor'}
                     aria-expanded={visible}
                 >
@@ -229,8 +286,8 @@ function MetadataSection({
                 <Fragment>
                     <div
                         className={styles.metadataEditorSlot}
-                        onFocus={editor.handleEditorFocus}
-                        onBlur={editor.handleEditorBlur}
+                        onFocus={handleEditorFocus}
+                        onBlur={handleEditorBlur}
                         onKeyDown={handleEditorKeyDown}
                     >
                         <TextEditor
@@ -238,13 +295,17 @@ function MetadataSection({
                             onChange={onChange}
                             mode={editorMode}
                             onModeChange={onEditorModeChange}
-                            editorElementRef={editor.focusTarget.ref}
-                            onLeaveRequest={editor.focusTarget.releaseFocus}
+                            editorElementRef={editorFocusTarget.ref}
+                            onLeaveRequest={closeSession}
                             lineWrapping={true}
                         />
                     </div>
 
-                    <ReferencePreview markup={referencePreview} />
+                    <ReferencePreview
+                        markup={referencePreview}
+                        focusTarget={previewFocusTarget}
+                        onLeave={closeSession}
+                    />
                 </Fragment>
             )}
         </section>
@@ -258,7 +319,7 @@ function DetailView({
     editorMode,
     onEditorModeChange,
 }: DetailViewProps) {
-    const [metadataExpanded, setMetadataExpanded] = useRestoredState<boolean>(
+    const [metadataPinned, setMetadataPinned] = useRestoredState<boolean>(
         METADATA_EDITOR_PINNED_KEY,
         false,
     );
@@ -279,8 +340,8 @@ function DetailView({
                         onChange={onMetadataSourceChange}
                         editorMode={editorMode}
                         onEditorModeChange={onEditorModeChange}
-                        expanded={metadataExpanded}
-                        onExpandedChange={setMetadataExpanded}
+                        pinned={metadataPinned}
+                        onPinnedChange={setMetadataPinned}
                     />
                 </Fragment>
             )}
