@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -7,15 +8,22 @@ import {
     type CSSProperties,
     type RefObject,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { Fzf, extendedMatch } from 'fzf';
 import { FaFilePdf } from 'react-icons/fa';
-import { Globe, X } from 'lucide-react';
+import { Globe, Pencil, X } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import styles from './PublicationList.module.css';
-import { Action, isTextProducingKey, useActionHandler } from '../app/actions';
+import {
+    Action,
+    findKeybindingForAction,
+    isTextProducingKey,
+    useActionHandler,
+} from '../app/actions';
 import { logger } from '../app/logger';
 import { useFocusTarget } from '../app/focus.tsx';
 import { useConfig, type TagColors } from '../app/config';
+import TextEditor, { type EditorMode } from './TextEditor.tsx';
 
 interface PublicationListItem {
     id: string;
@@ -32,6 +40,8 @@ interface PublicationListProps {
     publications: Array<PublicationListItem>
     selectedPublicationId: string;
     onSelectPublication: (publicationId: string) => void;
+    editorMode: EditorMode;
+    onEditorModeChange: (mode: EditorMode) => void;
 }
 
 interface HighlightPart {
@@ -146,6 +156,274 @@ function TagChips({ tags, tagColors }: { tags: string[]; tagColors: Record<strin
             ))}
         </span>
     );
+}
+
+interface PublicationTagsProps {
+    publicationId: string;
+    selected: boolean;
+    editing: boolean;
+    tags: string[];
+    tagColors: Record<string, TagColors>;
+    onAnchorChange: (publicationId: string, element: HTMLDivElement | null) => void;
+    onOpen: (publicationId: string) => void;
+}
+
+interface TagEditorTarget {
+    publicationId: string;
+    anchor: HTMLDivElement;
+}
+
+interface TagEditorPosition {
+    left: number;
+    top: number;
+}
+
+interface FloatingTagEditorProps {
+    anchor: HTMLDivElement;
+    overlayContainer: HTMLDivElement;
+    scrollContainer: HTMLDivElement;
+    tagEditorText: string;
+    editorMode: EditorMode;
+    onEditorModeChange: (mode: EditorMode) => void;
+    editorElementRef: (element: HTMLElement | null) => void;
+    onClose: () => void;
+    onTagEditorTextChange: (source: string) => void;
+}
+
+function useFloatingTagEditorPosition(
+    anchor: HTMLDivElement,
+    editorRef: RefObject<HTMLDivElement | null>,
+    overlayContainer: HTMLDivElement,
+    scrollContainer: HTMLDivElement,
+) {
+    const [position, setPosition] = useState<TagEditorPosition | null>(null);
+
+    useLayoutEffect(() => {
+        const editor = editorRef.current;
+        if (!editor) return;
+
+        const updatePosition = () => {
+            const anchorRect = anchor.getBoundingClientRect();
+            const containerRect = overlayContainer.getBoundingClientRect();
+            const horizontalInset = 8;
+            const minimumLeft = horizontalInset;
+            const maximumLeft = overlayContainer.clientWidth - editor.offsetWidth - horizontalInset;
+            const alignedLeft = anchorRect.right - containerRect.left
+                - editor.offsetWidth;
+            const left = Math.max(minimumLeft, Math.min(alignedLeft, maximumLeft));
+            const top = anchorRect.top - containerRect.top
+                + (anchorRect.height - editor.offsetHeight) / 2;
+
+            setPosition(current => current?.left === left && current.top === top
+                ? current
+                : { left, top });
+        };
+
+        updatePosition();
+        const resizeObserver = new ResizeObserver(updatePosition);
+        resizeObserver.observe(anchor);
+        resizeObserver.observe(editor);
+        resizeObserver.observe(overlayContainer);
+        resizeObserver.observe(scrollContainer);
+        scrollContainer.addEventListener('scroll', updatePosition, { passive: true });
+        window.addEventListener('resize', updatePosition);
+
+        return () => {
+            resizeObserver.disconnect();
+            scrollContainer.removeEventListener('scroll', updatePosition);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [anchor, editorRef, overlayContainer, scrollContainer]);
+
+    return position;
+}
+
+function scrollContainerByWheelEvent(
+    scrollContainer: HTMLDivElement,
+    event: React.WheelEvent<HTMLDivElement>,
+) {
+    const deltaScale = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? 22
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? scrollContainer.clientHeight
+            : 1;
+
+    event.preventDefault();
+    scrollContainer.scrollBy({
+        left: event.deltaX * deltaScale,
+        top: event.deltaY * deltaScale,
+    });
+}
+
+function FloatingTagEditor({
+    anchor,
+    overlayContainer,
+    scrollContainer,
+    tagEditorText,
+    editorMode,
+    onEditorModeChange,
+    editorElementRef,
+    onClose,
+    onTagEditorTextChange,
+}: FloatingTagEditorProps) {
+    const editorRef = useRef<HTMLDivElement>(null);
+    const position = useFloatingTagEditorPosition(
+        anchor,
+        editorRef,
+        overlayContainer,
+        scrollContainer,
+    );
+
+    return createPortal(
+        <div
+            ref={editorRef}
+            className={styles.floatingTagEditor}
+            data-positioned={position !== null}
+            style={{ left: position?.left ?? 0, top: position?.top ?? 0 }}
+            onMouseDown={event => event.stopPropagation()}
+            onClick={event => event.stopPropagation()}
+            onBlur={onClose}
+            onKeyDown={event => event.stopPropagation()}
+            onWheel={event => scrollContainerByWheelEvent(scrollContainer, event)}
+        >
+            <TextEditor
+                value={tagEditorText}
+                onChange={onTagEditorTextChange}
+                mode={editorMode}
+                onModeChange={onEditorModeChange}
+                onLeaveRequest={onClose}
+                editorElementRef={editorElementRef}
+                singleLine={true}
+            />
+            <button
+                type="button"
+                className={styles.closeTagEditorButton}
+                onMouseDown={event => event.preventDefault()}
+                onClick={onClose}
+            >
+                <X />
+                <span className={styles.closeTagEditorShortcut}>Esc</span>
+            </button>
+        </div>,
+        overlayContainer,
+    );
+}
+
+function PublicationTags({
+    publicationId,
+    selected,
+    editing,
+    tags,
+    tagColors,
+    onAnchorChange,
+    onOpen,
+}: PublicationTagsProps) {
+    const shortcut = findKeybindingForAction(Action.FocusTagsEditor);
+    const registerAnchor = useCallback(
+        (element: HTMLDivElement | null) => onAnchorChange(publicationId, element),
+        [publicationId, onAnchorChange],
+    );
+
+    const openEditor = (event: React.MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        onOpen(publicationId);
+    };
+
+    return (
+        <div
+            className={styles.publicationTags}
+            data-editing={editing}
+            data-selected={selected}
+        >
+            <div ref={registerAnchor} className={styles.publicationTagsPlaceholder}>
+                <button
+                    type="button"
+                    className={styles.tagEditButton}
+                    onMouseDown={event => event.preventDefault()}
+                    onClick={openEditor}
+                >
+                    <span className={styles.tagEditIcon}>
+                        <Pencil />
+                    </span>
+                    <span className={styles.tagEditShortcut}>{shortcut}</span>
+                </button>
+                <TagChips tags={tags} tagColors={tagColors} />
+            </div>
+        </div>
+    );
+}
+
+// Coordinates a single floating tag editor shared by all publication rows.
+function useTagEditor(
+    publications: PublicationListItem[],
+    visiblePublicationIds: string[],
+    selectedPublicationId: string,
+    onSelectPublication: (publicationId: string) => void,
+) {
+    const {
+        ref: registerEditorElement,
+        requestFocus,
+        releaseFocus,
+    } = useFocusTarget();
+    const anchors = useRef(new Map<string, HTMLDivElement>());
+    const [tagEditorTarget, setTagEditorTarget] = useState<TagEditorTarget | null>(null);
+    const [tagEditorText, setTagEditorText] = useState('');
+    const visibleTagEditorTarget = tagEditorTarget
+        && tagEditorTarget.publicationId === selectedPublicationId
+        && visiblePublicationIds.includes(tagEditorTarget.publicationId)
+        ? tagEditorTarget
+        : null;
+
+    const registerAnchor = useCallback((publicationId: string, element: HTMLDivElement | null) => {
+        if (element) {
+            anchors.current.set(publicationId, element);
+        } else {
+            anchors.current.delete(publicationId);
+        }
+    }, []);
+
+    const close = useCallback(() => {
+        setTagEditorTarget(null);
+        releaseFocus();
+    }, [releaseFocus]);
+
+    const open = (publicationId: string) => {
+        const publication = publications.find(candidate => candidate.id === publicationId);
+        const anchor = anchors.current.get(publicationId);
+        if (!publication || !anchor) return;
+
+        onSelectPublication(publicationId);
+        if (tagEditorTarget?.publicationId === publicationId) {
+            requestFocus();
+            return;
+        }
+
+        setTagEditorText(JSON.stringify(publication.tags));
+        setTagEditorTarget({ publicationId, anchor });
+        requestFocus();
+    };
+
+    useEffect(() => {
+        if (!tagEditorTarget || visibleTagEditorTarget) return;
+
+        close();
+    }, [tagEditorTarget, visibleTagEditorTarget, close]);
+
+    useActionHandler(
+        Action.FocusTagsEditor,
+        () => open(selectedPublicationId),
+        selectedPublicationId !== '',
+    );
+
+    return {
+        registerAnchor,
+        registerEditorElement,
+        tagEditorTarget: visibleTagEditorTarget,
+        tagEditorText,
+        setTagEditorText,
+        open,
+        close,
+    };
 }
 
 function useFuzzyInputFocus(
@@ -297,7 +575,10 @@ function PublicationList({
     publications,
     selectedPublicationId,
     onSelectPublication,
+    editorMode,
+    onEditorModeChange,
 }: PublicationListProps) {
+    const publicationListRef = useRef<HTMLDivElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
     const [fuzzyFindVisible, setFuzzyFindVisible] = useState(false);
     const { opts: { tagColors } } = useConfig();
@@ -311,6 +592,13 @@ function PublicationList({
             onSelectPublication,
             listRef,
         );
+    const visiblePublicationIds = displayItems.map(({ pub }) => pub.id);
+    const tagEditor = useTagEditor(
+        publications,
+        visiblePublicationIds,
+        selectedPublicationId,
+        onSelectPublication,
+    );
     const { inputRef: fuzzyInputRef, onContainerMouseDown } =
         useFuzzyInputFocus(fuzzyFindVisible);
 
@@ -344,7 +632,7 @@ function PublicationList({
     useActionHandler(Action.Cancel, () => setFuzzyFindVisible(false), fuzzyFindVisible);
 
     return (
-        <div className={styles.publicationList}>
+        <div ref={publicationListRef} className={styles.publicationList}>
             {fuzzyFindVisible && (
                 <div className={styles.fuzzyBar}>
                     <div className={styles.fuzzyField} onMouseDown={onContainerMouseDown}>
@@ -393,12 +681,20 @@ function PublicationList({
                                     <span className={styles.publisher}>
                                         <HighlightedText text={pub.publisher} matchPositions={publisherPositions} />
                                     </span>
-                                    <span className={styles.dateBadge}>
-                                        <TagChips tags={pub.tags} tagColors={tagColors} />
+                                    <div className={styles.dateBadge}>
+                                        <PublicationTags
+                                            publicationId={pub.id}
+                                            selected={selectedPublicationId === pub.id}
+                                            editing={tagEditor.tagEditorTarget?.publicationId === pub.id}
+                                            tags={pub.tags}
+                                            tagColors={tagColors}
+                                            onAnchorChange={tagEditor.registerAnchor}
+                                            onOpen={tagEditor.open}
+                                        />
                                         <span className={styles.year}>
                                             <HighlightedText text={pub.date} matchPositions={datePositions} />
                                         </span>
-                                    </span>
+                                    </div>
                                 </div>
                                 <span className={styles.cardTitle}>
                                     <HighlightedText text={pub.title} matchPositions={titlePositions} />
@@ -417,6 +713,19 @@ function PublicationList({
                     ))}
                 </div>
             </div>
+            {tagEditor.tagEditorTarget && publicationListRef.current && listRef.current ? (
+                <FloatingTagEditor
+                    anchor={tagEditor.tagEditorTarget.anchor}
+                    overlayContainer={publicationListRef.current}
+                    scrollContainer={listRef.current}
+                    tagEditorText={tagEditor.tagEditorText}
+                    editorMode={editorMode}
+                    onEditorModeChange={onEditorModeChange}
+                    editorElementRef={tagEditor.registerEditorElement}
+                    onClose={tagEditor.close}
+                    onTagEditorTextChange={tagEditor.setTagEditorText}
+                />
+            ) : null}
         </div>
     );
 }

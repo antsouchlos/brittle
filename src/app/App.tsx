@@ -233,6 +233,8 @@ function Workspace() {
                                         publications={publicationListItems}
                                         selectedPublicationId={selectedPublicationId ?? ''}
                                         onSelectPublication={setSelectedPublicationId}
+                                        editorMode={editorMode}
+                                        onEditorModeChange={setEditorMode}
                                     />
                                 </div>
                             ),

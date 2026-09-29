@@ -1,4 +1,5 @@
 .publicationList {
+    position: relative;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -108,6 +109,150 @@
     min-width: 0;
     overflow: hidden;
     transform: translateY(calc(-1 * var(--optical-lift)));
+}
+
+.publicationTags {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+}
+
+.publicationTagsPlaceholder {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tagEditButton {
+    flex: none;
+    box-sizing: border-box;
+    height: 1.4em;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transform: translateY(calc(-1 * var(--optical-lift)));
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg2);
+    font-family: inherit;
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: pointer;
+    visibility: hidden;
+}
+
+.card:hover .tagEditButton,
+.card[data-selected="true"] .tagEditButton {
+    visibility: visible;
+}
+
+.publicationTags[data-editing="true"] .publicationTagsPlaceholder,
+.publicationTags[data-editing="true"] .tagEditButton {
+    visibility: hidden;
+}
+
+.publicationTags[data-selected="false"] .tagEditButton {
+    flex-direction: row-reverse;
+}
+
+.tagEditButton:hover {
+    background: var(--bg2);
+    color: var(--fg0);
+}
+
+.publicationTags[data-selected="false"] .tagEditButton:hover {
+    background: transparent;
+}
+
+.tagEditIcon {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    padding: 0 3px;
+    border-radius: 4px;
+}
+
+.publicationTags[data-selected="false"] .tagEditIcon:hover {
+    background: var(--bg2);
+}
+
+.tagEditIcon svg {
+    display: block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    transform: translateY(calc(-0.5 * var(--optical-lift)));
+}
+
+.tagEditShortcut {
+    color: var(--fg4);
+    visibility: hidden;
+}
+
+.publicationTags[data-selected="true"] .tagEditShortcut {
+    visibility: visible;
+}
+
+.floatingTagEditor {
+    --single-line-editor-end-padding: 8rem;
+
+    position: absolute;
+    z-index: 10;
+    box-sizing: border-box;
+    width: 20rem;
+    max-width: calc(100% - 16px);
+    height: calc(var(--line-height) + 2px);
+    transform: translateY(calc(-1 * var(--optical-lift)));
+    visibility: hidden;
+    background: var(--bg0);
+    color: var(--fg0);
+    font-family: var(--font-family);
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.floatingTagEditor[data-positioned="true"] {
+    visibility: visible;
+}
+
+.closeTagEditorButton {
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transform: translateY(-50%);
+    padding: 2px 3px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: var(--bg0);
+    color: var(--accent1);
+    font-family: inherit;
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.closeTagEditorButton:hover {
+    background: var(--bg2);
+}
+
+.closeTagEditorButton svg {
+    display: block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    transform: translateY(calc(-0.5 * var(--optical-lift)));
+}
+
+.closeTagEditorShortcut {
+    color: var(--fg4);
+    font-size: 0.8rem;
 }
 
 .year {
