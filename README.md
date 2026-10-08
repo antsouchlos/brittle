@@ -81,6 +81,14 @@ return {
 }
 ```
 
+Lua modules next to `init.lua` can be loaded by name. The global `config_dir`
+contains the absolute path to that directory for explicit file paths:
+
+```lua
+local connector = require("zotero_connector")
+local file = assert(io.open(config_dir .. "/settings.json", "r"))
+```
+
 For a full list of configuration options consult `src-tauri/src/config.rs`
 or `brittle-api-luals-addon/library/brittle.lua`.
 
