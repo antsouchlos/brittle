@@ -74,5 +74,8 @@
 --- @param msg string
 function log(level, msg) end
 
+---@type string
+config_dir = nil
+
 
 return {}

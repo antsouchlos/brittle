@@ -18,6 +18,8 @@ pub mod config {
     // `load_config`, gets around this
     pub static DEFAULT_DATA_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
+    pub static CONFIG_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
     pub fn expand_tilde(path: &str) -> PathBuf {
         if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~")) {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
@@ -205,6 +207,21 @@ pub mod config {
         }
     }
 
+    #[luaglobal]
+    fn config_dir() -> std::io::Result<String> {
+        CONFIG_DIR
+            .get()
+            .ok_or_else(|| std::io::Error::other("Config directory unavailable"))?
+            .to_str()
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Config directory path is not UTF-8",
+                )
+            })
+    }
+
     //
     // Convenience function
     //
@@ -309,9 +326,6 @@ pub use config::{Command, Config, Opts, RefParser, TagColors, Watch};
 /// reload, so the reload path (which only has an `AppHandle`) can re-evaluate
 /// without needing the mutable `&mut App` startup context.
 pub fn load_config_from(config_path: &std::path::Path) -> Result<Config, Error> {
-    let lua = unsafe { mlua::Lua::unsafe_new() };
-    config::register(&lua)?;
-
     if !config_path.exists() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -322,6 +336,18 @@ pub fn load_config_from(config_path: &std::path::Path) -> Result<Config, Error> 
         )
         .into());
     }
+
+    let lua = unsafe { mlua::Lua::unsafe_new() };
+    config::register(&lua)?;
+
+    // Lua modules should be loaded relative to the config dir
+    let config_dir: String = lua.globals().get("config_dir")?;
+    let package: mlua::Table = lua.globals().get("package")?;
+    let package_path: String = package.get("path")?;
+    package.set(
+        "path",
+        format!("{config_dir}/?.lua;{config_dir}/?/init.lua;{package_path}"),
+    )?;
 
     let src = std::fs::read_to_string(config_path)?;
     let mut config: Config = lua.load(&src).eval()?;
@@ -334,11 +360,12 @@ pub fn load_config(app: &mut App) -> Result<Config, Error> {
     let data_path = app.path().app_local_data_dir()?;
     config::DEFAULT_DATA_PATH.set(data_path.into()).ok();
 
-    let config_path = app
+    let config_dir = app
         .path()
         .app_config_dir()
-        .expect("The config directory should be set by tauri")
-        .join("init.lua");
+        .expect("The config directory should be set by tauri");
+    let config_path = config_dir.join("init.lua");
+    config::CONFIG_DIR.set(config_dir).ok();
 
     load_config_from(&config_path)
 }
@@ -359,6 +386,7 @@ mod tests {
             opts_body,
         );
         std::fs::write(&config_path, source).expect("write init.lua");
+        super::config::CONFIG_DIR.set(dir.path().to_owned()).ok();
 
         let config = super::load_config_from(&config_path).expect("config should load");
 
