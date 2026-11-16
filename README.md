@@ -145,7 +145,7 @@ E.g., for [LuaLS](https://luals.github.io/), reference the addon from
 ```
 {
     "workspace.library": [
-        "/path/to/brittle-v2/brittle-api-luals-addon/library"
+        "/path/to/checkout/brittle-api-luals-addon/library"
     ]
 }
 ```

@@ -364,6 +364,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "brittle"
+version = "0.1.0"
+dependencies = [
+ "brittle-lua",
+ "env_logger",
+ "gtk",
+ "ignore",
+ "log",
+ "log-panics",
+ "mlua",
+ "notify",
+ "open",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-opener",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "brittle-lua"
 version = "0.1.0"
 source = "git+ssh://git@100.123.176.93:2222/an.tsouchlos/brittle-lua-api-def.git#d2cdf1437f68c9ec1a08643117f61dfbec009a39"
@@ -390,31 +415,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "brittle-v2"
-version = "0.1.0"
-dependencies = [
- "brittle-lua",
- "env_logger",
- "gtk",
- "ignore",
- "log",
- "log-panics",
- "mlua",
- "notify",
- "open",
- "parking_lot",
- "serde",
- "serde_json",
- "serde_yaml_ng",
- "tauri",
- "tauri-build",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-opener",
- "tempfile",
- "uuid",
 ]
 
 [[package]]

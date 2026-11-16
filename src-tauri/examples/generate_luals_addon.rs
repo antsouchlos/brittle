@@ -12,7 +12,7 @@ fn main() {
 
     std::fs::write(
         library_dir.join("brittle.lua"),
-        brittle_v2_lib::get_emmy_lua(),
+        brittle_lib::get_emmy_lua(),
     )
     .expect("write brittle.lua");
 
