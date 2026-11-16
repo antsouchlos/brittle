@@ -1,25 +1,74 @@
-# Brittle
+<div align="center">
+    <img src="doc/logo-books-in-text.svg" width="420" alt="Brittle"><br>
+    <!-- <img src="doc/logo.svg" width="420" alt="Brittle"><br> -->
+    <img src="doc/separator.svg" width="520" alt=""><br>
+    A lightweight iterature library manager built with Tauri, Rust, and React.
+</div>
 
-A literature library manager built with Tauri, React, and a Rust.
-UI-wise heavily inspired by [Zotero](https://www.zotero.org/).
+</br>
+
+![image](doc/screenshot.png)
+
+> This project is still in an alpha state. This means that
+> - the usage experience, especially with regard to configuration, can be a bit rough around the edges,
+> - all parts are subject to breaking changes,
+> - more features are under active development.
+
+- Fuzzily search titles, authors, dates, and publishers with [fzf](https://www.npmjs.com/package/fzf)
+- Assign tags with custom colors and make notes in markdown
+- Configure the app via `lua` (see the [configuration section](#usage--configuration) below)
+    - vim-like keymap system, allowing full navigation of the UI via keyboard
+    - support any bibliography format by defining custom parsers
+- Transparent file storage structure (e.g., allowing use of `git` or [`rga`](https://github.com/phiresky/ripgrep-all))
+    ```txt
+    <library directory>
+    │── collection 1
+    │   ├── SAB21.bib
+    │   ├── SAB21.pdf
+    │   ├── KSW+25.bib
+    │   └── KSW+25.pdf
+    │           ...
+    │   ├── notes.yml
+    │   └── tags.yml
+    └── collection 2
+        ├── ALB20.bib
+        ├── ALB20.pdf
+        ├── BCG+24.bib
+        ├── BCG+24.pdf
+                ...
+        ├── notes.yml
+        └── tags.yml
+    ```
+- A host of other features
+    - Edit citation data with live rendered citation preview
+    - Instant UI updates when files change
+    - Use with zotero connector to import publications
+    - ...
 
 <!-- TODO: Logo -->
-<!-- TODO: Give overview of main features / distinguishing characterstics,
-           e.g., from Zotero -->
 <!-- TODO: Screenshots -->
 
-## Usage
+## Development
 
-Currently, no precompiled binaries are distributed. Check the
-[development section](#development) for instructions on how to compile and run
-the app.
+```bash
+$ bun install                                               # Initial setup
+$ cargo tauri dev                                           # Run the app in development mode
+$ cargo tauri build --no-bundle                             # Compile a release binary
+$ cd src-tauri && cargo test                                # Run unit tests
+$ cd src-tauri && cargo run --example generate_luals_addon  # Regenerate LuaLS addon after changin API
+```
+
+## Usage & Configuration
+
+> Currently, no precompiled binaries are distributed. Check the
+> [development section](#development) for instructions on how to compile and run
+> the app.
 
 ### Configuration
 
 Brittle reads its configuration from a Lua file at
 `$XDG_CONFIG_HOME/brittle/init.lua` (on linux usually
 `~/.config/brittle/init.lua`).
-
 Example `init.lua`:
 
 ```
@@ -81,14 +130,6 @@ return {
 }
 ```
 
-Lua modules next to `init.lua` can be loaded by name. The global `config_dir`
-contains the absolute path to that directory for explicit file paths:
-
-```lua
-local connector = require("zotero_connector")
-local file = assert(io.open(config_dir .. "/settings.json", "r"))
-```
-
 For a full list of configuration options consult `src-tauri/src/config.rs`
 or `brittle-api-luals-addon/library/brittle.lua`.
 
@@ -119,27 +160,6 @@ return { ... }
 
 If the UI feels laggy on Linux, try setting
 
-```
+```bash
 $ export WEBKIT_DISABLE_DMABUF_RENDERER=1
 ```
-
-## Development
-
-### Commands
-
-```
-$ bun install                    # Initial setup
-$ cargo tauri dev                # Run the app in development mode
-$ cargo tauri build --no-bundle  # Compile a release binary
-$ cd src-tauri && cargo test     # Run unit tests
-```
-
-### Regenerate LuaLS Addon
-
-Regenerate the addon after changing the API definition:
-
-```
- $ cargo run --example generate_luals_addon
-```
-
-Running `cargo test` verifies that the current API definition and addon match.
